@@ -13,7 +13,7 @@ import (
 )
 
 func newRouterCmd() *cobra.Command {
-	var domain, httpAddr, panel, panelPointer, siteApp, domainsFile, metricsFile string
+	var domain, httpAddr, panel, panelPointer, siteApp, domainsFile, metricsFile, mailFile, smtpAddr string
 	cmd := &cobra.Command{
 		Use:   "router",
 		Short: "Run the edge router (subdomain routing + auto HTTPS) — runs on the server",
@@ -31,6 +31,12 @@ func newRouterCmd() *cobra.Command {
 			if metricsFile == "" {
 				metricsFile = filepath.Join(home, ".skiff", "metrics.json")
 			}
+			if mailFile == "" {
+				mailFile = filepath.Join(home, ".skiff", "mail.json")
+			}
+			if httpAddr != "" && !cmd.Flags().Changed("smtp-addr") {
+				smtpAddr = ""
+			}
 			rt := &router.Router{
 				Domains:      strings.Split(domain, ","),
 				Engine:       docker.Local(),
@@ -39,6 +45,8 @@ func newRouterCmd() *cobra.Command {
 				SiteApp:      siteApp,
 				DomainsFile:  domainsFile,
 				MetricsFile:  metricsFile,
+				MailFile:     mailFile,
+				SMTPAddr:     smtpAddr,
 			}
 
 			ui.Banner(version)
@@ -50,6 +58,9 @@ func newRouterCmd() *cobra.Command {
 				ui.Field("site", "apex + www → "+siteApp)
 			}
 			ui.Field("status", "status.* → live status page")
+			if smtpAddr != "" {
+				ui.Field("mail", "smtp "+smtpAddr+" as "+rt.MailHost()+" → forwarding")
+			}
 			if httpAddr != "" {
 				ui.Note("http-only test mode on " + httpAddr)
 				fmt.Println()
@@ -67,5 +78,7 @@ func newRouterCmd() *cobra.Command {
 	cmd.Flags().StringVar(&siteApp, "site-app", "www", "app that serves the apex + www.<domain>")
 	cmd.Flags().StringVar(&domainsFile, "domains-file", "", "file of custom host→app mappings (default ~/.skiff/domains.json)")
 	cmd.Flags().StringVar(&metricsFile, "metrics-file", "", "file to snapshot request metrics to (default ~/.skiff/metrics.json)")
+	cmd.Flags().StringVar(&mailFile, "mail-file", "", "file of email forwarding rules (default ~/.skiff/mail.json)")
+	cmd.Flags().StringVar(&smtpAddr, "smtp-addr", ":25", "address to receive forwarded email on (empty disables)")
 	return cmd
 }

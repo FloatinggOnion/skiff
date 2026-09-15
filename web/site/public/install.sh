@@ -75,6 +75,7 @@ Description=Skiff edge router
 After=docker.service network-online.target
 Wants=network-online.target
 [Service]
+EnvironmentFile=-/etc/skiff/panel.env
 Environment=HOME=/root
 ExecStart=/usr/local/bin/skiff router --domain $DOMAIN --panel 127.0.0.1:7070 --site-app $SITE_APP
 Restart=always
@@ -112,6 +113,8 @@ cat <<EOF
   1. Point DNS at this server ($ip):
        A   *.$DOMAIN     $ip
        A   $DOMAIN       $ip     (optional — for the apex/marketing site)
+
+     MX  $DOMAIN       mx.$DOMAIN  10  (optional — for email forwarding)
 
   2. Open your dashboard once DNS resolves + the cert issues:
        https://dash.$DOMAIN

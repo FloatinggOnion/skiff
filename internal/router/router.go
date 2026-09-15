@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/mail"
 )
 
 type Router struct {
@@ -30,6 +31,9 @@ type Router struct {
 	DomainsFile string
 	// MetricsFile, when set, is where the router snapshots per-app request metrics for the panel's Analytics page.
 	MetricsFile string
+	// MailFile is the JSON forwarding table (domain → alias → destinations) read live by the SMTP listener on SMTPAddr.
+	MailFile string
+	SMTPAddr string
 
 	metrics       *Metrics
 	mu            sync.Mutex
@@ -38,6 +42,8 @@ type Router struct {
 	cachedDomains map[string]string
 	cachedDomAt   time.Time
 	rr            map[string]uint64 // per-app round-robin cursor across replicas
+	cachedRules   mail.Rules
+	cachedRulesAt time.Time
 
 	// routesMu is separate from mu so the slow Docker fetch never blocks lookups, and concurrent cache misses coalesce into a single `docker ps` instead of one per request.
 	routesMu      sync.Mutex
@@ -221,6 +227,7 @@ func edgeServer(addr string, h http.Handler) *http.Server {
 
 func (rt *Router) ServeHTTPOnly(addr string) error {
 	rt.startMetrics()
+	rt.startMail(nil)
 	return edgeServer(addr, rt).ListenAndServe()
 }
 
@@ -241,6 +248,7 @@ func (rt *Router) ServeTLS(cacheDir string) error {
 			return fmt.Errorf("host not allowed: %s", host)
 		},
 	}
+	rt.startMail(m.GetCertificate)
 	redirect := edgeServer(":80", m.HTTPHandler(nil))
 	go func() {
 		if err := redirect.ListenAndServe(); err != nil {
