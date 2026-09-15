@@ -58,6 +58,8 @@ func TestMailForwardsValidateAndMirrorToRouter(t *testing.T) {
 		"no destinations":          {`{"domain":"acme.com","alias":"x","destinations":[" "]}`, "a", http.StatusBadRequest},
 		"instance domain, member":  {`{"domain":"skiff.test","alias":"hi","destinations":["x@y.dev"]}`, "m", http.StatusForbidden},
 		"instance subdomain, mem.": {`{"domain":"eu.skiff.test","alias":"hi","destinations":["x@y.dev"]}`, "m", http.StatusForbidden},
+		// Anyone can create a team and own it, so owning *a* team mustn't grant the instance's own domain.
+		"instance domain, owner of another team": {`{"domain":"skiff.test","alias":"hi","destinations":["x@y.dev"]}`, "b", http.StatusForbidden},
 	} {
 		if w := mailRequest(p, "POST", "/api/mail", tc.body, tc.session); w.Code != tc.want {
 			t.Errorf("%s: want %d, got %d %s", name, tc.want, w.Code, w.Body.String())
@@ -65,6 +67,20 @@ func TestMailForwardsValidateAndMirrorToRouter(t *testing.T) {
 	}
 	if w := mailRequest(p, "POST", "/api/mail", `{"domain":"skiff.test","alias":"*","destinations":["admin@corp.dev"]}`, "a"); w.Code != http.StatusOK {
 		t.Fatalf("owner catch-all on the instance domain: %d %s", w.Code, w.Body.String())
+	}
+
+	if _, err := sqlDB.Exec(
+		`INSERT INTO domains(host,app,team,parent,branch,created) VALUES('shop.corp.dev','shop',?,'','',0)`, teamB.ID); err != nil {
+		t.Fatalf("insert web domain: %v", err)
+	}
+	for name, body := range map[string]string{
+		"exact web domain":     `{"domain":"shop.corp.dev","alias":"hi","destinations":["x@y.dev"]}`,
+		"parent of web domain": `{"domain":"corp.dev","alias":"hi","destinations":["x@y.dev"]}`,
+		"under a web domain":   `{"domain":"mail.shop.corp.dev","alias":"hi","destinations":["x@y.dev"]}`,
+	} {
+		if w := mailRequest(p, "POST", "/api/mail", body, "a"); w.Code != http.StatusConflict {
+			t.Errorf("%s: want 409, got %d %s", name, w.Code, w.Body.String())
+		}
 	}
 
 	rules, err := mail.LoadRules(mailFilePath())
@@ -95,6 +111,28 @@ func TestMailForwardsValidateAndMirrorToRouter(t *testing.T) {
 	}
 }
 
+func TestInstanceDomainBelongsToTheFoundingOwner(t *testing.T) {
+	openTestDB(t)
+	t.Setenv("HOME", t.TempDir())
+	store := auth.NewStore(sqlDB)
+	founder, founding, _ := store.CreateUser("founder@acme.dev", "Founder", "password123")
+	putSession("f", founder.ID, founding.ID)
+	p := &Panel{auth: store, domain: "skiff.test"}
+
+	if w := mailRequest(p, "POST", "/api/mail", `{"domain":"skiff.test","alias":"hi","destinations":["x@y.dev"]}`, "f"); w.Code != http.StatusOK {
+		t.Fatalf("founding owner refused their own instance domain: %d %s", w.Code, w.Body.String())
+	}
+	// A second team the founder also owns must not change who the instance belongs to.
+	side, err := store.CreateTeam("Side project", founder.ID)
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	putSession("s", founder.ID, side.ID)
+	if w := mailRequest(p, "POST", "/api/mail", `{"domain":"eu.skiff.test","alias":"hi","destinations":["x@y.dev"]}`, "s"); w.Code != http.StatusOK {
+		t.Fatalf("the instance's owner should still qualify from another team: %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestSPFAuthorizes(t *testing.T) {
 	ip := "203.0.113.7"
 	cases := []struct {
@@ -106,6 +144,8 @@ func TestSPFAuthorizes(t *testing.T) {
 		{[]string{"google-site-verification=x", "v=spf1 include:_spf.google.com +ip4:203.0.113.7/32 -all"}, false, true},
 		{[]string{"v=spf1 mx ~all"}, true, true},
 		{[]string{"v=spf1 mx ~all"}, false, false},
+		{[]string{"v=spf1 ip4:203.0.113.0/24 -all"}, false, true},
+		{[]string{"v=spf1 ip4:198.51.100.0/24 -all"}, false, false},
 		{[]string{"v=spf1 ip4:203.0.113.70 ~all"}, false, false},
 		{[]string{"ip4:203.0.113.7"}, false, false},
 	}

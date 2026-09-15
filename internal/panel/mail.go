@@ -3,6 +3,7 @@ package panel
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/auth"
 )
 
 type MailForward struct {
@@ -76,8 +79,13 @@ func writeMailFile() {
 	path := mailFilePath()
 	tmp := path + ".tmp"
 	_ = os.MkdirAll(filepath.Dir(path), 0o700)
-	if os.WriteFile(tmp, b, 0o600) == nil {
-		_ = os.Rename(tmp, path)
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		log.Printf("skiff: writing %s: %v", tmp, err)
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		log.Printf("skiff: publishing %s: %v", path, err)
+		_ = os.Remove(tmp)
 	}
 }
 
@@ -138,6 +146,42 @@ func (p *Panel) isInstanceDomain(domain string) bool {
 	return p.domain != "" && (domain == p.domain || strings.HasSuffix(domain, "."+p.domain))
 }
 
+// isInstanceAdmin identifies whoever set the box up — an owner of the team the first account created at setup. Plain team ownership won't do: anyone can create a team and own it. Ordering is by insertion, since `created` is only second-resolution.
+func (p *Panel) isInstanceAdmin(r *http.Request) bool {
+	s, ok := p.session(r)
+	if !ok {
+		return false
+	}
+	var founding string
+	err := sqlDB.QueryRow(
+		`SELECT team_id FROM memberships WHERE user_id = (SELECT id FROM users ORDER BY rowid LIMIT 1)
+		   AND role = ? ORDER BY rowid LIMIT 1`, auth.RoleOwner).Scan(&founding)
+	if err != nil || founding == "" {
+		return false
+	}
+	role, member := p.auth.Role(s.userID, founding)
+	return member && role == auth.RoleOwner
+}
+
+// servedByAnotherTeam reports whether another team already serves this domain on the web, so its mail can't be claimed out from under them.
+func servedByAnotherTeam(domain, team string) bool {
+	rows, err := sqlDB.Query(`SELECT host FROM domains WHERE team<>?`, team)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var host string
+		if rows.Scan(&host) != nil {
+			continue
+		}
+		if host == domain || strings.HasSuffix(host, "."+domain) || strings.HasSuffix(domain, "."+host) {
+			return true
+		}
+	}
+	return rows.Err() != nil
+}
+
 func (p *Panel) handleMail(w http.ResponseWriter, r *http.Request) {
 	team := p.teamID(r)
 	if team == "" {
@@ -177,9 +221,9 @@ func (p *Panel) handleMail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "use letters, numbers, dots, hyphens, or underscores for the address — or * to catch everything", http.StatusBadRequest)
 			return
 		}
-		// The instance's own domain serves every team, so only an owner may take mail for it.
-		if p.isInstanceDomain(domain) && !p.isOwner(r) {
-			http.Error(w, "only an owner can forward mail for "+p.domain, http.StatusForbidden)
+		// The instance's own domain serves every team, so it belongs to whoever runs the box.
+		if p.isInstanceDomain(domain) && !p.isInstanceAdmin(r) {
+			http.Error(w, "only this instance's owner can forward mail for "+p.domain, http.StatusForbidden)
 			return
 		}
 		var dests []string
@@ -206,20 +250,26 @@ func (p *Panel) handleMail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forward to between 1 and 10 addresses", http.StatusBadRequest)
 			return
 		}
-		var owner string
-		if sqlDB.QueryRow(`SELECT team FROM mail_forwards WHERE domain=? LIMIT 1`, domain).Scan(&owner) == nil && owner != team {
-			http.Error(w, "another team already forwards mail for "+domain, http.StatusConflict)
+		if servedByAnotherTeam(domain, team) {
+			http.Error(w, "another team already uses "+domain, http.StatusConflict)
 			return
 		}
 		f := MailForward{ID: randHex(8), Domain: domain, Alias: alias, Destinations: dests, Created: nowUnix()}
-		if _, err := sqlDB.Exec(
-			`INSERT INTO mail_forwards(id,team,domain,alias,destinations,created) VALUES(?,?,?,?,?,?)`,
-			f.ID, team, f.Domain, f.Alias, strings.Join(dests, ","), f.Created); err != nil {
+		// One statement, so two teams claiming an unclaimed domain at once can't both win.
+		res, err := sqlDB.Exec(
+			`INSERT INTO mail_forwards(id,team,domain,alias,destinations,created)
+			 SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM mail_forwards WHERE domain=? AND team<>?)`,
+			f.ID, team, f.Domain, f.Alias, strings.Join(dests, ","), f.Created, domain, team)
+		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE") {
 				http.Error(w, alias+"@"+domain+" is already forwarded", http.StatusConflict)
 				return
 			}
 			http.Error(w, "could not save the forward", http.StatusInternalServerError)
+			return
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			http.Error(w, "another team already forwards mail for "+domain, http.StatusConflict)
 			return
 		}
 		writeMailFile()
@@ -233,7 +283,10 @@ func (p *Panel) handleMail(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		_, _ = sqlDB.Exec(`DELETE FROM mail_forwards WHERE id=? AND team=?`, id, team)
+		if _, err := sqlDB.Exec(`DELETE FROM mail_forwards WHERE id=? AND team=?`, id, team); err != nil {
+			http.Error(w, "could not remove the forward", http.StatusInternalServerError)
+			return
+		}
 		writeMailFile()
 		p.audit(r, "mail.remove", alias+"@"+domain, "")
 		w.WriteHeader(http.StatusNoContent)
@@ -242,6 +295,8 @@ func (p *Panel) handleMail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
+
+const maxMXProbes = 5
 
 func checkMailDomains(forwards []MailForward, mxHost, serverIP string) []MailDomain {
 	var names []string
@@ -253,30 +308,35 @@ func checkMailDomains(forwards []MailForward, mxHost, serverIP string) []MailDom
 		}
 	}
 	sort.Strings(names)
+	// One budget for the whole request — the dashboard polls this, so it must never hang on slow resolvers.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	out := make([]MailDomain, len(names))
+	slot := make(chan struct{}, 8)
 	var wg sync.WaitGroup
 	for i, name := range names {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			out[i] = checkMailDomain(name, mxHost, serverIP)
+			slot <- struct{}{}
+			defer func() { <-slot }()
+			out[i] = checkMailDomain(ctx, name, mxHost, serverIP)
 		}()
 	}
 	wg.Wait()
 	return out
 }
 
-func checkMailDomain(domain, mxHost, serverIP string) MailDomain {
+func checkMailDomain(ctx context.Context, domain, mxHost, serverIP string) MailDomain {
 	d := MailDomain{Domain: domain}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 	if mxs, err := net.DefaultResolver.LookupMX(ctx, domain); err == nil {
-		for _, mx := range mxs {
+		for i, mx := range mxs {
 			host := strings.TrimSuffix(strings.ToLower(mx.Host), ".")
 			d.MXHosts = append(d.MXHosts, host)
-			if host == mxHost || (serverIP != "" && resolveIPs(host)[serverIP]) {
-				d.MX = true
+			if d.MX || i >= maxMXProbes {
+				continue
 			}
+			d.MX = host == mxHost || (serverIP != "" && hostHasIP(ctx, host, serverIP))
 		}
 	}
 	if txts, err := net.DefaultResolver.LookupTXT(ctx, domain); err == nil {
@@ -285,16 +345,35 @@ func checkMailDomain(domain, mxHost, serverIP string) MailDomain {
 	return d
 }
 
+func hostHasIP(ctx context.Context, host, ip string) bool {
+	addrs, err := net.DefaultResolver.LookupHost(ctx, host)
+	if err != nil {
+		return false
+	}
+	for _, a := range addrs {
+		if a == ip {
+			return true
+		}
+	}
+	return false
+}
+
 // spfAuthorizes reports whether a domain's SPF policy lets this server send for it — directly by IP, or via "mx" once MX points here.
 func spfAuthorizes(txts []string, serverIP string, mxHere bool) bool {
 	for _, t := range txts {
 		if !strings.HasPrefix(strings.ToLower(t), "v=spf1") {
 			continue
 		}
+		ip := net.ParseIP(serverIP)
 		for _, term := range strings.Fields(strings.ToLower(t)) {
 			term = strings.TrimPrefix(term, "+")
-			if serverIP != "" && (term == "ip4:"+serverIP || term == "ip4:"+serverIP+"/32") {
-				return true
+			if v, ok := strings.CutPrefix(term, "ip4:"); ok && ip != nil {
+				if v == serverIP {
+					return true
+				}
+				if _, n, err := net.ParseCIDR(v); err == nil && n.Contains(ip) {
+					return true
+				}
 			}
 			if mxHere && term == "mx" {
 				return true
