@@ -82,6 +82,8 @@ platform in the browser:
 - **Managed databases** — Postgres, MySQL, MongoDB, and Redis, provisioned and
   wired into your apps, with automatic daily backups.
 - **Object storage** — S3-compatible buckets.
+- **Email forwarding** — point a domain's MX at your server and send
+  `hello@yourdomain.com` to any inbox, catch-all included.
 - **Custom domains + automatic HTTPS** — Let's Encrypt certificates, issued and
   renewed for you.
 - **Autoscaling** — add and retire replicas to hold each app near a target CPU.

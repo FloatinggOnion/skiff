@@ -9,6 +9,10 @@ export const DOCS_NAV: DocSection[] = [
       { href: "/docs/self-hosting", label: "Self-hosting" },
     ],
   },
+  {
+    title: "Guides",
+    items: [{ href: "/docs/email-forwarding", label: "Email forwarding" }],
+  },
 ];
 
 // Flat, ordered list for previous/next page navigation.
