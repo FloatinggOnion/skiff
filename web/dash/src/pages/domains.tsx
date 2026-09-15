@@ -1,7 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { errText } from '@/lib/errors'
-import { useCopy } from '@/hooks/use-copy'
 import {
   Globe,
   Plus,
@@ -11,13 +10,12 @@ import {
   Search,
   ShieldCheck,
   X,
-  Copy,
-  Check,
 } from 'lucide-react'
 import { useApps } from '@/hooks/use-apps'
 import { useDomains } from '@/hooks/use-domains'
 import { useConfirm } from '@/providers/confirm-provider'
 import { Button } from '@/components/ui/button'
+import { Copyable } from '@/components/copyable'
 import { FeedSkeleton } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import {
@@ -328,25 +326,6 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
       </p>
       <div className="text-xs">{children}</div>
     </div>
-  )
-}
-
-function Copyable({ text }: { text: string }) {
-  const { copied, copy } = useCopy()
-  return (
-    <button
-      type="button"
-      onClick={() => copy(text)}
-      className="group/copy hover:text-foreground text-foreground/90 flex items-center gap-1.5 truncate text-left transition"
-      title="Copy"
-    >
-      <span className="truncate">{text}</span>
-      {copied ? (
-        <Check className="h-3 w-3 shrink-0 text-emerald-400" />
-      ) : (
-        <Copy className="h-3 w-3 shrink-0 opacity-0 transition group-hover/copy:opacity-60" />
-      )}
-    </button>
   )
 }
 

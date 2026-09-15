@@ -7,6 +7,7 @@ export const queryKeys = {
   system: ['system'] as const,
   server: ['server'] as const,
   domains: ['domains'] as const,
+  mail: ['mail'] as const,
   databases: ['databases'] as const,
   storage: ['storage'] as const,
   members: ['members'] as const,

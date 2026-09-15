@@ -5,6 +5,7 @@ import {
   ScrollText,
   Server,
   Globe,
+  Mail,
   KeyRound,
   Settings,
   Box,
@@ -26,6 +27,7 @@ const NAV = [
   { to: '/logs', label: 'Logs', icon: ScrollText },
   { to: '/server', label: 'Server', icon: Server },
   { to: '/domains', label: 'Domains', icon: Globe },
+  { to: '/email', label: 'Email', icon: Mail },
   { to: '/env', label: 'Environment', icon: KeyRound },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]

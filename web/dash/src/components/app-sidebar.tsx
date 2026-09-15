@@ -9,6 +9,7 @@ import {
   History,
   Server,
   Globe,
+  Mail,
   Database,
   Boxes,
   KeyRound,
@@ -50,6 +51,7 @@ const SECTIONS: NavItem[][] = [
   [
     { to: '/server', label: 'Server', icon: Server },
     { to: '/domains', label: 'Domains', icon: Globe },
+    { to: '/email', label: 'Email', icon: Mail },
     { to: '/databases', label: 'Databases', icon: Database },
     { to: '/storage', label: 'Storage', icon: Boxes },
     { to: '/env', label: 'Environment', icon: KeyRound },
