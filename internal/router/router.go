@@ -42,6 +42,9 @@ type Router struct {
 	cachedDomains map[string]string
 	cachedDomAt   time.Time
 	rr            map[string]uint64 // per-app round-robin cursor across replicas
+
+	// mailMu is separate from mu so reading the forwarding table can't serialize against request routing.
+	mailMu        sync.Mutex
 	cachedRules   mail.Rules
 	cachedRulesAt time.Time
 

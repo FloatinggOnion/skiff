@@ -59,7 +59,7 @@ func newRouterCmd() *cobra.Command {
 			}
 			ui.Field("status", "status.* → live status page")
 			if smtpAddr != "" {
-				ui.Field("mail", "smtp "+smtpAddr+" as "+rt.MailHost()+" → forwarding")
+				ui.Field("mail", "smtp "+smtpAddr+" as "+rt.MailHost()+" once forwarding is set up")
 			}
 			if httpAddr != "" {
 				ui.Note("http-only test mode on " + httpAddr)
