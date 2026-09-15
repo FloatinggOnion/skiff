@@ -242,4 +242,14 @@ CREATE TABLE IF NOT EXISTS workers (
   UNIQUE (app, name)
 );
 CREATE INDEX IF NOT EXISTS idx_workers_app ON workers(app);
+CREATE TABLE IF NOT EXISTS mail_forwards (
+  id           TEXT PRIMARY KEY,
+  team         TEXT NOT NULL,
+  domain       TEXT NOT NULL,
+  alias        TEXT NOT NULL,
+  destinations TEXT NOT NULL,
+  created      INTEGER NOT NULL,
+  UNIQUE (domain, alias)
+);
+CREATE INDEX IF NOT EXISTS idx_mail_forwards_team ON mail_forwards(team);
 `

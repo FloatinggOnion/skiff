@@ -41,6 +41,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	}
 	sqlDB = database
 	reconcileStuckDeploys()
+	writeMailFile()
 	home, _ := os.UserHomeDir()
 	branch := os.Getenv("SKIFF_SELF_BRANCH")
 	if branch == "" {
@@ -132,6 +133,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/workers", p.protected(p.handleWorkers))
 	mux.HandleFunc("/api/db/exec", p.protected(p.handleDBShell))
 	mux.HandleFunc("/api/domains", p.protected(p.handleDomains))
+	mux.HandleFunc("/api/mail", p.protected(p.handleMail))
 	mux.HandleFunc("/api/preview", p.protected(p.handleCreatePreview))
 	mux.HandleFunc("/api/shared-env", p.protected(p.handleSharedEnv))
 	mux.HandleFunc("/api/analytics", p.protected(p.handleAnalytics))

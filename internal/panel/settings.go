@@ -110,6 +110,7 @@ func (p *Panel) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 
 	for _, tid := range soloTeams {
 		_, _ = sqlDB.Exec(`DELETE FROM shared_env WHERE team = ?`, tid)
+		deleteTeamMail(tid)
 		_ = p.auth.DeleteTeam(tid)
 	}
 	if err := p.auth.DeleteUser(s.userID); err != nil {
@@ -162,6 +163,7 @@ func (p *Panel) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = sqlDB.Exec(`DELETE FROM shared_env WHERE team = ?`, s.teamID)
+	deleteTeamMail(s.teamID)
 	if err := p.auth.DeleteTeam(s.teamID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
