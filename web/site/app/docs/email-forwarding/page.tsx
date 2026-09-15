@@ -83,7 +83,7 @@ export default function EmailForwarding() {
         the server. You can either ask your provider to unblock it, or send through an SMTP relay —
         the same settings Skiff uses for alert emails:
       </p>
-      <CodeBlock label="/etc/skiff/panel.env">{`SKIFF_SMTP_HOST=smtp.provider.com
+      <CodeBlock label="/etc/skiff/skiff.env">{`SKIFF_SMTP_HOST=smtp.provider.com
 SKIFF_SMTP_PORT=587
 SKIFF_SMTP_USER=...
 SKIFF_SMTP_PASS=...

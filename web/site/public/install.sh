@@ -68,6 +68,12 @@ else
   chmod 600 /etc/skiff/panel.env
 fi
 
+# Shared settings for both services (SMTP relay for alerts + email forwarding).
+if [ ! -f /etc/skiff/skiff.env ]; then
+  echo '# SKIFF_SMTP_HOST= SKIFF_SMTP_PORT= SKIFF_SMTP_USER= SKIFF_SMTP_PASS= SKIFF_SMTP_FROM=' >/etc/skiff/skiff.env
+  chmod 600 /etc/skiff/skiff.env
+fi
+
 # 5. systemd units — the edge router (:80/:443, auto-HTTPS) and a blue-green panel
 cat >/etc/systemd/system/skiff-router.service <<EOF
 [Unit]
@@ -75,7 +81,7 @@ Description=Skiff edge router
 After=docker.service network-online.target
 Wants=network-online.target
 [Service]
-EnvironmentFile=-/etc/skiff/panel.env
+EnvironmentFile=-/etc/skiff/skiff.env
 Environment=HOME=/root
 ExecStart=/usr/local/bin/skiff router --domain $DOMAIN --panel 127.0.0.1:7070 --site-app $SITE_APP
 Restart=always
@@ -90,6 +96,7 @@ Description=Skiff control panel on :%i
 After=docker.service
 [Service]
 EnvironmentFile=/etc/skiff/panel.env
+EnvironmentFile=-/etc/skiff/skiff.env
 Environment=HOME=/root
 ExecStart=/usr/local/bin/skiff panel --addr 127.0.0.1:%i --domain $DOMAIN
 Restart=always
@@ -114,7 +121,7 @@ cat <<EOF
        A   *.$DOMAIN     $ip
        A   $DOMAIN       $ip     (optional — for the apex/marketing site)
 
-     MX  $DOMAIN       mx.$DOMAIN  10  (optional — for email forwarding)
+     MX  $DOMAIN       10 mx.$DOMAIN  (optional — for email forwarding)
 
   2. Open your dashboard once DNS resolves + the cert issues:
        https://dash.$DOMAIN
