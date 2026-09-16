@@ -469,6 +469,52 @@ func TestRequiresHeloAndClosesAfterRepeatedErrors(t *testing.T) {
 	}
 }
 
+func TestHostileInputCannotInjectIntoTheForwardedMessage(t *testing.T) {
+	down := newSink(t)
+	addr := startServer(t, testRules, directTo(down), nil)
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	r := bufio.NewReader(conn)
+	say := func(line string) string {
+		_, _ = conn.Write([]byte(line + "\r\n"))
+		reply, _ := r.ReadString('\n')
+		return reply
+	}
+	_, _ = r.ReadString('\n')
+	say("EHLO evil\rReceived: from trusted.test")
+	for {
+		line, _ := r.ReadString('\n')
+		if len(line) < 4 || line[3] == ' ' {
+			break
+		}
+	}
+	if reply := say("RCPT TO:<hello\r@example.com>"); !strings.HasPrefix(reply, "503") {
+		t.Fatalf("RCPT before MAIL should be refused: %q", reply)
+	}
+	say("MAIL FROM:<jane@origin.test>")
+	if reply := say("RCPT TO:<hello\r@example.com>"); !strings.HasPrefix(reply, "501") {
+		t.Fatalf("an address with a bare CR must be rejected, got %q", reply)
+	}
+	say("RCPT TO:<hello@example.com>")
+	say("DATA")
+	_, _ = conn.Write([]byte(testMsg + ".\r\n"))
+	if reply, _ := r.ReadString('\n'); !strings.HasPrefix(reply, "250") {
+		t.Fatalf("message not accepted: %q", reply)
+	}
+
+	msgs := down.got()
+	if len(msgs) != 1 {
+		t.Fatalf("want 1 forwarded message, got %d", len(msgs))
+	}
+	head, _, _ := strings.Cut(msgs[0].data, "\n\n")
+	if strings.Count(head, "Received:") != 2 {
+		t.Fatalf("a header was injected through EHLO:\n%s", head)
+	}
+}
+
 func selfSigned(t *testing.T) tls.Certificate {
 	t.Helper()
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

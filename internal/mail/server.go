@@ -269,7 +269,7 @@ func parsePath(arg, prefix string) (addr string, params []string, ok bool) {
 	if i := strings.IndexByte(addr, ':'); strings.HasPrefix(addr, "@") && i >= 0 {
 		addr = addr[i+1:]
 	}
-	if strings.ContainsAny(addr, " \t<>") {
+	if strings.ContainsAny(addr, " \t<>\r\n") {
 		return "", nil, false
 	}
 	return addr, strings.Fields(rest), true
