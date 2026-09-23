@@ -151,6 +151,9 @@ func handleDown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = docker.For(app.Host).Remove(app.Container)
+	if app.Host != "" {
+		_ = registry.DeleteRemote(app.Host, name)
+	}
 	_, _ = registry.Delete(name)
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -220,14 +220,24 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	}
 	ui.Done("Healthy")
 
-	if err := registry.Put(registry.App{
+	entry := registry.App{
 		Name:      cfg.Name,
 		Container: reps[0].Container,
 		Port:      cfg.Build.Port,
 		HostPort:  reps[0].HostPort,
-		Host:      cfg.RemoteHost(),
 		Replicas:  reps,
-	}); err != nil {
+	}
+	if eng.IsRemote() {
+		// The server reconciles its containers against its own registry, so an
+		// app recorded only here would be treated as an orphan there.
+		if err := registry.PutRemote(cfg.RemoteHost(), entry); err != nil {
+			rollback()
+			ui.Fail("Couldn't record the app on the server — rolled back, old version still serving")
+			return err
+		}
+		entry.Host = cfg.RemoteHost()
+	}
+	if err := registry.Put(entry); err != nil {
 		ui.Fail("Couldn't update the registry")
 		return err
 	}

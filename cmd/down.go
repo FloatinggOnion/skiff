@@ -34,6 +34,11 @@ func newDownCmd() *cobra.Command {
 			} else {
 				ui.Done("Stopped " + name)
 			}
+			if host != "" {
+				if err := registry.DeleteRemote(host, name); err != nil {
+					ui.Note("server registry not updated: " + err.Error())
+				}
+			}
 
 			existed, err := registry.Delete(name)
 			if err != nil {
