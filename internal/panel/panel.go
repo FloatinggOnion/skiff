@@ -14,7 +14,7 @@ import (
 	"github.com/nuelScript/skiff/internal/auth"
 	"github.com/nuelScript/skiff/internal/db"
 	"github.com/nuelScript/skiff/internal/docker"
-	"github.com/nuelScript/skiff/internal/registry"
+	"github.com/nuelScript/skiff/internal/reconcile"
 )
 
 type sess struct {
@@ -70,28 +70,15 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	return p, nil
 }
 
-// reapOrphanContainers removes skiff containers not backing any current app, skipping recent ones so an in-progress deploy isn't hit.
+// reapOrphanContainers clears leftover skiff containers and re-registers running
+// apps the registry lost track of, skipping recent ones so an in-progress deploy isn't hit.
 func (p *Panel) reapOrphanContainers() {
-	apps, err := registry.Load()
+	res, err := reconcile.Reap(p.eng, time.Now().Add(-10*time.Minute))
 	if err != nil {
-		return
+		log.Printf("skiff: reaping orphan containers: %v", err)
 	}
-	current := make(map[string]bool, len(apps))
-	for _, a := range apps {
-		current[a.Container] = true
-		for _, rp := range a.Replicas {
-			current[rp.Container] = true
-		}
-	}
-	cutoff := time.Now().Add(-10 * time.Minute)
-	for _, c := range p.eng.SkiffContainers() {
-		if current[c.Name] {
-			continue
-		}
-		if c.Created.IsZero() || c.Created.Before(cutoff) {
-			_ = p.eng.Stop(c.Name)
-			_ = p.eng.Remove(c.Name)
-		}
+	for _, app := range res.Adopted {
+		log.Printf("skiff: adopted running app %q the registry had lost track of", app)
 	}
 }
 

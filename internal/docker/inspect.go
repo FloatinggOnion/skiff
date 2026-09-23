@@ -48,21 +48,35 @@ func (e *Engine) AppContainers(app string) []string {
 type ContainerInfo struct {
 	Name    string
 	Created time.Time
+	App     string // skiff.app label; "" for containers not tied to an app
+	Port    int    // skiff.port label
+	Running bool
 }
 
 func (e *Engine) SkiffContainers() []ContainerInfo {
-	out, err := e.command("ps", "-a", "--filter", "label=skiff=1", "--format", "{{.Names}}|{{.CreatedAt}}").Output()
+	out, err := e.command("ps", "-a", "--filter", "label=skiff=1", "--format",
+		`{{.Names}}|{{.CreatedAt}}|{{.Label "skiff.app"}}|{{.Label "skiff.port"}}|{{.State}}`).Output()
 	if err != nil {
 		return nil
 	}
+	return parseSkiffContainers(out)
+}
+
+func parseSkiffContainers(out []byte) []ContainerInfo {
 	var cs []ContainerInfo
 	for _, line := range splitLines(out) {
-		name, created, ok := strings.Cut(line, "|")
-		if !ok || name == "" {
+		f := strings.Split(line, "|")
+		if len(f) < 2 || f[0] == "" {
 			continue
 		}
-		t, _ := time.Parse("2006-01-02 15:04:05 -0700 MST", strings.TrimSpace(created))
-		cs = append(cs, ContainerInfo{Name: name, Created: t})
+		c := ContainerInfo{Name: f[0]}
+		c.Created, _ = time.Parse("2006-01-02 15:04:05 -0700 MST", strings.TrimSpace(f[1]))
+		if len(f) >= 5 {
+			c.App = strings.TrimSpace(f[2])
+			c.Port, _ = strconv.Atoi(strings.TrimSpace(f[3]))
+			c.Running = strings.TrimSpace(f[4]) == "running"
+		}
+		cs = append(cs, c)
 	}
 	return cs
 }

@@ -37,3 +37,23 @@ func TestParseSize(t *testing.T) {
 		t.Errorf("trailing space not trimmed: %d", got)
 	}
 }
+
+func TestParseSkiffContainers(t *testing.T) {
+	out := []byte("portfolio-v1-f9d05b|2026-07-05 10:56:01 +0000 UTC|portfolio-v1|3000|running\n" +
+		"pg-main|2026-07-04 22:30:00 +0000 UTC|||exited\n" +
+		"\n")
+	cs := parseSkiffContainers(out)
+	if len(cs) != 2 {
+		t.Fatalf("got %d containers, want 2: %+v", len(cs), cs)
+	}
+	app := cs[0]
+	if app.Name != "portfolio-v1-f9d05b" || app.App != "portfolio-v1" || app.Port != 3000 || !app.Running {
+		t.Errorf("app container parsed wrong: %+v", app)
+	}
+	if app.Created.IsZero() {
+		t.Errorf("created time not parsed")
+	}
+	if db := cs[1]; db.App != "" || db.Port != 0 || db.Running {
+		t.Errorf("unlabelled stopped container parsed wrong: %+v", db)
+	}
+}
