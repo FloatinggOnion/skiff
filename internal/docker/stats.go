@@ -15,19 +15,35 @@ type ContainerResource struct {
 }
 
 func (e *Engine) AppResourceStats() ([]ContainerResource, error) {
+	appOf, err := e.AppContainerKeys()
+	if err != nil {
+		return nil, err
+	}
+	return e.StatsFor(appOf)
+}
+
+// AppContainerKeys maps each running app container to its app.
+func (e *Engine) AppContainerKeys() (map[string]string, error) {
 	out, err := e.command("ps", "--filter", "label=skiff.app", "--format", `{{.Names}} {{.Label "skiff.app"}}`).Output()
 	if err != nil {
 		return nil, err
 	}
 	appOf := map[string]string{}
-	var names []string
 	for _, line := range splitLines(out) {
 		f := strings.Fields(line)
 		if len(f) < 2 {
 			continue
 		}
 		appOf[f[0]] = f[1]
-		names = append(names, f[0])
+	}
+	return appOf, nil
+}
+
+// StatsFor samples the named containers once, reporting each under the key it maps to.
+func (e *Engine) StatsFor(appOf map[string]string) ([]ContainerResource, error) {
+	names := make([]string, 0, len(appOf))
+	for n := range appOf {
+		names = append(names, n)
 	}
 	if len(names) == 0 {
 		return nil, nil

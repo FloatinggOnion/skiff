@@ -55,6 +55,24 @@ func getBucket(id string) (bucketRow, bool) {
 		`SELECT id,team,name,container,access_key,secret_key,created FROM buckets WHERE id=?`, id))
 }
 
+func allBuckets() []bucketRow {
+	rows, err := sqlDB.Query(`SELECT id,team,name,container,access_key,secret_key,created FROM buckets`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []bucketRow
+	for rows.Next() {
+		if b, ok := scanBucket(rows); ok {
+			out = append(out, b)
+		}
+	}
+	if rows.Err() != nil {
+		return nil
+	}
+	return out
+}
+
 func listBuckets(team string) []bucketRow {
 	rows, err := sqlDB.Query(
 		`SELECT id,team,name,container,access_key,secret_key,created FROM buckets WHERE team=? ORDER BY created DESC`, team)

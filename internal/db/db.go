@@ -290,6 +290,16 @@ CREATE TABLE IF NOT EXISTS request_ingest (
   file   TEXT PRIMARY KEY,
   pos    INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS instance_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS disk_samples (
+  t     INTEGER NOT NULL,
+  used  INTEGER NOT NULL,
+  total INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_disk_samples_t ON disk_samples(t);
 CREATE TABLE IF NOT EXISTS offsite_objects (
   db_id   TEXT NOT NULL,
   key     TEXT NOT NULL,

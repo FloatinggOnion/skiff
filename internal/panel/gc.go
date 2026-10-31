@@ -88,6 +88,7 @@ func (p *Panel) gcLoop() {
 	var last time.Time
 	for {
 		guard("gcLoop", func() {
+			recordDiskSample(time.Now())
 			d := diskUsage()
 			pressure := d.Total > 0 && float64(d.Used)/float64(d.Total) >= gcDiskPressure
 			if time.Since(last) < gcInterval && !pressure {

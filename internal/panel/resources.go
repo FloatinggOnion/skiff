@@ -167,13 +167,39 @@ func (p *Panel) resourceLoop() {
 	defer tick.Stop()
 	for {
 		guard("resourceLoop", func() {
-			if samples, err := p.eng.AppResourceStats(); err == nil && len(samples) > 0 {
+			if samples, err := p.eng.StatsFor(p.resourceTargets()); err == nil && len(samples) > 0 {
 				resStats.record(samples)
 			}
 			resStats.snapshot()
 		})
 		<-tick.C
 	}
+}
+
+// resourceTargets is every container worth sampling: apps under their name, managed databases and buckets under db:<id> and bucket:<id>.
+func (p *Panel) resourceTargets() map[string]string {
+	keys, err := p.eng.AppContainerKeys()
+	if err != nil {
+		keys = map[string]string{}
+	}
+	// docker stats fails outright on a missing container, so only add ones that are running.
+	running := map[string]bool{}
+	if names, err := p.eng.RunningContainers(); err == nil {
+		for _, n := range names {
+			running[n] = true
+		}
+	}
+	for _, d := range allDatabases() {
+		if running[d.Container] {
+			keys[d.Container] = "db:" + d.ID
+		}
+	}
+	for _, b := range allBuckets() {
+		if running[b.Container] {
+			keys[b.Container] = "bucket:" + b.ID
+		}
+	}
+	return keys
 }
 
 type resourcesSeries struct {
