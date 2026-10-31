@@ -485,6 +485,11 @@ function BackupsDialog({
                   <p className="text-muted-foreground mt-0.5 text-[11px]">
                     {fmtBytes(b.size)}
                     {b.trigger === 'scheduled' && ' · auto'}
+                    {b.offsite === 'ok' && <span className="text-emerald-300/80"> · offsite</span>}
+                    {b.offsite === 'pending' && ' · copying offsite…'}
+                    {b.offsite === 'failed' && (
+                      <span className="text-rose-300"> · offsite copy failed</span>
+                    )}
                   </p>
                 </div>
                 <a

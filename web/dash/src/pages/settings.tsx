@@ -7,6 +7,7 @@ import { PasswordSection } from './settings/password-section'
 import { TeamSection } from './settings/team-section'
 import { MembersSection } from './settings/members-section'
 import { AlertsSection } from './settings/alerts-section'
+import { OffsiteSection } from './settings/offsite-section'
 import { TokensSection } from './settings/tokens-section'
 import { ConnectionsSection } from './settings/connections-section'
 import { DangerSection } from './settings/danger-section'
@@ -45,6 +46,7 @@ export default function SettingsPage() {
           onChange={reloadMembers}
         />
         <AlertsSection />
+        <OffsiteSection isOwner={isOwner} />
         <TokensSection />
         <ConnectionsSection gh={gh} />
         <DangerSection />

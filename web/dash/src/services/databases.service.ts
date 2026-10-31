@@ -7,6 +7,17 @@ export type Backup = {
   size: number
   trigger: string
   created: number
+  offsite?: 'pending' | 'ok' | 'failed'
+}
+
+export type OffsiteTarget = {
+  endpoint: string
+  region: string
+  bucket: string
+  prefix: string
+  accessKey: string
+  secretKey?: string
+  hasSecret?: boolean
 }
 
 export type UnmanagedDatabase = {
@@ -63,6 +74,22 @@ class DatabasesService extends BaseService {
 
   detach(id: string, app: string) {
     return this.delete<Database>('/databases/attach', { params: { id, app } })
+  }
+
+  offsite() {
+    return this.get<OffsiteTarget>('/backups/offsite')
+  }
+
+  saveOffsite(t: OffsiteTarget) {
+    return this.put('/backups/offsite', t)
+  }
+
+  testOffsite(t: OffsiteTarget) {
+    return this.post('/backups/offsite', t)
+  }
+
+  disableOffsite() {
+    return this.delete('/backups/offsite')
   }
 
   listBackups(dbId: string) {
