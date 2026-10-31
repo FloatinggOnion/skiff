@@ -19,6 +19,7 @@ import { JobsPanel } from './project/jobs-panel'
 import { WorkersPanel } from './project/workers-panel'
 import { SettingsForm } from './project/settings-form'
 import { PreviewsPanel } from './project/previews-panel'
+import { ObservabilityPanel } from './project/observability-panel'
 import { runningPill, deployDot } from './project/status'
 
 export default function ProjectDetailPage() {
@@ -129,6 +130,7 @@ export default function ProjectDetailPage() {
           className="mb-6 w-full justify-start gap-6 border-b border-white/8"
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="observability">Observability</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
           {!cli && (
             <TabsTrigger value="previews">
@@ -280,6 +282,10 @@ export default function ProjectDetailPage() {
               )}
             </section>
           </div>
+        </TabsContent>
+
+        <TabsContent value="observability" className="pb-[46vh]">
+          <ObservabilityPanel app={project.name} />
         </TabsContent>
 
         {/* Deployments */}
