@@ -152,15 +152,21 @@ func (p *Panel) isInstanceAdmin(r *http.Request) bool {
 	if !ok {
 		return false
 	}
-	var founding string
-	err := sqlDB.QueryRow(
-		`SELECT team_id FROM memberships WHERE user_id = (SELECT id FROM users ORDER BY rowid LIMIT 1)
-		   AND role = ? ORDER BY rowid LIMIT 1`, auth.RoleOwner).Scan(&founding)
-	if err != nil || founding == "" {
+	founding := foundingTeam()
+	if founding == "" {
 		return false
 	}
 	role, member := p.auth.Role(s.userID, founding)
 	return member && role == auth.RoleOwner
+}
+
+// foundingTeam is the team the first account created at setup, ordered by insertion since `created` is only second-resolution.
+func foundingTeam() string {
+	var team string
+	_ = sqlDB.QueryRow(
+		`SELECT team_id FROM memberships WHERE user_id = (SELECT id FROM users ORDER BY rowid LIMIT 1)
+		   AND role = ? ORDER BY rowid LIMIT 1`, auth.RoleOwner).Scan(&team)
+	return team
 }
 
 // servedByAnotherTeam reports whether another team already serves this domain on the web, so its mail can't be claimed out from under them.

@@ -68,6 +68,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go p.autoscaleLoop()
 	go p.alertLoop()
 	go p.gcLoop()
+	go p.cliAppLoop()
 	return p, nil
 }
 

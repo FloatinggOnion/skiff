@@ -62,6 +62,7 @@ var migrations = []string{
 	`ALTER TABLE sources ADD COLUMN scale_cpu INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE domains ADD COLUMN parent TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE domains ADD COLUMN branch TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN origin TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -107,7 +108,8 @@ CREATE TABLE IF NOT EXISTS sources (
   autoscale    INTEGER NOT NULL DEFAULT 0,
   scale_min    INTEGER NOT NULL DEFAULT 1,
   scale_max    INTEGER NOT NULL DEFAULT 1,
-  scale_cpu    INTEGER NOT NULL DEFAULT 0
+  scale_cpu    INTEGER NOT NULL DEFAULT 0,
+  origin       TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,

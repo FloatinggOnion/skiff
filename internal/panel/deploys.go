@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -138,7 +139,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		return
 	}
 	tomlPath := filepath.Join(ctxDir, "skiff.toml")
-	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src))), 0o644)
+	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src), teamNetwork(src.Team))), 0o644)
 
 	logln("→ building & deploying")
 	self, _ := os.Executable()
@@ -195,12 +196,14 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 		return
 	}
 	tomlPath := filepath.Join(work, "skiff.toml")
-	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src))), 0o644)
+	env, net := p.appRuntime(src)
+	_ = os.WriteFile(tomlPath, []byte(projectToml(src, envList(env), net)), 0o644)
 
 	image := fmt.Sprintf("skiff-%s:%s", src.App, targetID)
 	logln("→ rolling back to " + image)
 	self, _ := os.Executable()
 	cmd := exec.CommandContext(ctx, self, "rollback", "--image", image, "-c", tomlPath)
+	cmd.Env = append(os.Environ(), "SKIFF_DEPLOY_ID="+id)
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 10 * time.Second
 	pr, pw := io.Pipe()
@@ -355,7 +358,7 @@ func orRoot(d string) string {
 }
 
 // projectToml renders the deploy skiff.toml; env vars split into [env] (build+runtime) vs [secrets] (runtime-only, never baked into the image).
-func projectToml(src Source, env []EnvVar) string {
+func projectToml(src Source, env []EnvVar, network string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "name = %q\n", src.App)
 	if src.Replicas > 1 {
@@ -363,7 +366,7 @@ func projectToml(src Source, env []EnvVar) string {
 	}
 	fmt.Fprintf(&b, "\n[build]\nport = %s\n", src.Port)
 	b.WriteString("\n[deploy]\n")
-	fmt.Fprintf(&b, "network = %q\n", teamNetwork(src.Team))
+	fmt.Fprintf(&b, "network = %q\n", network)
 	if strings.TrimSpace(src.Release) != "" {
 		fmt.Fprintf(&b, "release = %q\n", src.Release)
 	}
@@ -388,4 +391,13 @@ func projectToml(src Source, env []EnvVar) string {
 		}
 	}
 	return b.String()
+}
+
+func envList(m map[string]string) []EnvVar {
+	out := make([]EnvVar, 0, len(m))
+	for k, v := range m {
+		out = append(out, EnvVar{Key: k, Value: v})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
 }

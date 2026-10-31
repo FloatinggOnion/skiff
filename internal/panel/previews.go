@@ -94,6 +94,10 @@ func (p *Panel) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown project", http.StatusNotFound)
 		return
 	}
+	if src.Origin == originCLI {
+		http.Error(w, cliOnlyMsg, http.StatusConflict)
+		return
+	}
 	if branch == "" {
 		http.Error(w, "a branch is required", http.StatusBadRequest)
 		return

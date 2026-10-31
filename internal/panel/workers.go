@@ -92,11 +92,7 @@ func (p *Panel) reconcileWorkers(app string) {
 	if !p.eng.ImageExists(image) {
 		return
 	}
-	env := map[string]string{}
-	for _, e := range deployEnv(src) {
-		env[e.Key] = e.Value
-	}
-	net := teamNetwork(src.Team)
+	env, net := p.appRuntime(src)
 	_ = p.eng.EnsureNetwork(net)
 	for _, w := range listWorkers(app) {
 		reps := w.Replicas

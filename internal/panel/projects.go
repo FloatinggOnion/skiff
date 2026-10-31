@@ -29,6 +29,7 @@ type appView struct {
 	Commit  string `json:"commit,omitempty"`
 	Message string `json:"message,omitempty"`
 	Updated int64  `json:"updated,omitempty"`
+	Origin  string `json:"origin,omitempty"`
 }
 
 func (p *Panel) handleSystem(w http.ResponseWriter, _ *http.Request) {
@@ -64,6 +65,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			Repo:   src.Repo,
 			Branch: src.Branch,
 			Auto:   src.Auto,
+			Origin: src.Origin,
 		}
 		if ds := appDeploys(a.Name); len(ds) > 0 {
 			av.Commit = ds[0].Commit
@@ -95,6 +97,7 @@ type projectView struct {
 	ScaleCPU    int           `json:"scaleCpu"`
 	Deploys     []Deploy      `json:"deploys"`
 	Previews    []previewView `json:"previews"`
+	Origin      string        `json:"origin,omitempty"`
 }
 
 func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +128,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			Repo: src.Repo, Branch: src.Branch, RootDir: src.RootDir, Port: src.Port,
 			Auto: src.Auto, PreviewAuto: src.PreviewAuto, Replicas: src.Replicas, Running: running,
 			Release: src.Release, Autoscale: src.Autoscale, ScaleMin: src.ScaleMin, ScaleMax: src.ScaleMax, ScaleCPU: src.ScaleCPU,
-			Deploys: deploys, Previews: p.buildPreviews(app),
+			Deploys: deploys, Previews: p.buildPreviews(app), Origin: src.Origin,
 		})
 	case http.MethodPut:
 		var body struct {
@@ -188,6 +191,10 @@ func (p *Panel) handleRedeploy(w http.ResponseWriter, r *http.Request) {
 	src, ok := getSource(app)
 	if !ok {
 		http.Error(w, "unknown project", http.StatusNotFound)
+		return
+	}
+	if src.Origin == originCLI {
+		http.Error(w, cliOnlyMsg, http.StatusConflict)
 		return
 	}
 	id := newDeployID()

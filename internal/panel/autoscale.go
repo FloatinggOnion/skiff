@@ -134,11 +134,7 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 	if !p.eng.ImageExists(image) {
 		return 0
 	}
-	env := map[string]string{}
-	for _, e := range deployEnv(src) {
-		env[e.Key] = e.Value
-	}
-	net := teamNetwork(src.Team)
+	env, net := p.appRuntime(src)
 	_ = p.eng.EnsureNetwork(net)
 
 	added := 0

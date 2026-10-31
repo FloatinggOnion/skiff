@@ -124,11 +124,7 @@ func (p *Panel) execJob(j jobRow) (string, error) {
 	if !p.eng.ImageExists(image) {
 		return "", fmt.Errorf("deploy the app before running jobs")
 	}
-	env := map[string]string{}
-	for _, e := range deployEnv(src) {
-		env[e.Key] = e.Value
-	}
-	net := teamNetwork(src.Team)
+	env, net := p.appRuntime(src)
 	_ = p.eng.EnsureNetwork(net)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
