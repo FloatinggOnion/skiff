@@ -1,6 +1,7 @@
 package router
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,5 +57,33 @@ func TestServeOnlyCountsRealApps(t *testing.T) {
 	w := httptest.NewRecorder()
 	if label := rt.serve(w, r); label != "" || w.Code != http.StatusNotFound {
 		t.Fatalf("unknown subdomain counted as %q (status %d)", label, w.Code)
+	}
+}
+
+func TestAnswersNeedsAnHTTPReply(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	// Like docker's port proxy before the app is up: accept, then hang up without a reply.
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	if answers(port) {
+		t.Fatal("a bare TCP accept counted as ready")
+	}
+	ln.Close()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) }))
+	defer srv.Close()
+	if !answers(srv.Listener.Addr().(*net.TCPAddr).Port) {
+		t.Fatal("an app answering 404 should count as ready")
 	}
 }

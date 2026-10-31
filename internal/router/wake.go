@@ -2,7 +2,8 @@ package router
 
 import (
 	"fmt"
-	"net"
+	"io"
+	"net/http"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/sleep"
@@ -41,8 +42,7 @@ func (rt *Router) wake(app string) []int {
 		rt.routesMu.Unlock()
 		if ports := rt.portsFor(app); len(ports) > 0 {
 			for _, port := range ports {
-				if conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second); err == nil {
-					conn.Close()
+				if answers(port) {
 					return ports
 				}
 			}
@@ -50,6 +50,22 @@ func (rt *Router) wake(app string) []int {
 		time.Sleep(300 * time.Millisecond)
 	}
 	return nil
+}
+
+var readyClient = &http.Client{
+	Timeout:       2 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
+// answers reports whether the app itself responded. A TCP connect isn't enough: docker's port proxy accepts connections before the app is listening.
+func answers(port int) bool {
+	resp, err := readyClient.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
+	if err != nil {
+		return false
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	resp.Body.Close()
+	return true
 }
 
 func (rt *Router) portsFor(app string) []int {
