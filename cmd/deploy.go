@@ -78,6 +78,12 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 
 	ui.Field("target", cfg.TargetLabel())
 	ui.Field("build", b.Name())
+	panel, signedIn := panelFor(cfg)
+	if signedIn {
+		if n := pullDashboardEnv(panel, cfg, contextDir); n > 0 {
+			ui.Field("env", fmt.Sprintf("%d from the dashboard", n))
+		}
+	}
 	fmt.Println()
 
 	if err := eng.Available(); err != nil {
@@ -130,6 +136,9 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 	}
 
 	retainRollbackImage(eng, cfg.Name, image, deployID)
+	if signedIn {
+		reportDeploy(panel, cfg, deployID, labels)
+	}
 	return nil
 }
 

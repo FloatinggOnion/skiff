@@ -22,13 +22,16 @@ func newMCPCmd() *cobra.Command {
 		Long: `Runs a Model Context Protocol server on stdin/stdout so an agent can list
 projects, deploy, read logs and traffic, edit env vars and roll back.
 
-Needs SKIFF_URL (your dashboard, e.g. https://dash.example.com) and
-SKIFF_TOKEN (an API token from Settings → API tokens).`,
+Uses the dashboard you signed in to with skiff login, or SKIFF_URL (e.g.
+https://dash.example.com) and SKIFF_TOKEN (Settings → API tokens).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			base := strings.TrimSuffix(os.Getenv("SKIFF_URL"), "/")
 			token := os.Getenv("SKIFF_TOKEN")
+			if c, ok := loadCredentials(); ok && base == "" && token == "" {
+				base, token = c.URL, c.Token
+			}
 			if base == "" || token == "" {
-				return fmt.Errorf("set SKIFF_URL and SKIFF_TOKEN")
+				return fmt.Errorf("run `skiff login <dashboard-url>`, or set SKIFF_URL and SKIFF_TOKEN")
 			}
 			c := &apiClient{base: base, token: token, http: &http.Client{Timeout: 60 * time.Second}}
 			srv := &mcp.Server{Name: "skiff", Version: version, Tools: mcpTools(c)}

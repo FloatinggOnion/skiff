@@ -122,6 +122,7 @@ logs, metrics and rollback.
 | `skiff sync` | prune orphans / dead entries |
 | `skiff proxy` | local `*.localhost` router |
 | `skiff server setup <user@host>` | bootstrap Docker on a fresh box over SSH |
+| `skiff login <dashboard>` / `logout` / `whoami` | sign the CLI in, so deploys land in your team and use dashboard env vars |
 | `skiff mcp` | serve your projects to AI agents over MCP |
 | `skiff server restore <file>` | rebuild Skiff's state on a new server from a backup |
 
