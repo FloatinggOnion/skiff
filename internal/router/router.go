@@ -129,7 +129,9 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) serve(w http.ResponseWriter, r *http.Request) string {
 	// A custom domain pointed at one of the apps wins over subdomain routing.
 	if app, ok := rt.customDomains()[hostOnly(r.Host)]; ok {
-		rt.proxyToApp(w, r, app)
+		if !rt.proxyToApp(w, r, app) {
+			return ""
+		}
 		return app
 	}
 
@@ -158,7 +160,10 @@ func (rt *Router) serve(w http.ResponseWriter, r *http.Request) string {
 		http.Error(w, "skiff: no app for "+r.Host, http.StatusNotFound)
 		return ""
 	}
-	rt.proxyToApp(w, r, app)
+	// Scanners probe random subdomains; only a real app gets requests counted against it.
+	if !rt.proxyToApp(w, r, app) {
+		return ""
+	}
 	return app
 }
 
@@ -177,11 +182,11 @@ func (rt *Router) routes() ([]docker.Route, error) {
 	return routes, nil
 }
 
-func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string) {
+func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string) bool {
 	routes, err := rt.routes()
 	if err != nil {
 		http.Error(w, "skiff: "+err.Error(), http.StatusInternalServerError)
-		return
+		return true
 	}
 	var ports []int
 	for _, rr := range routes {
@@ -191,7 +196,7 @@ func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string)
 	}
 	if len(ports) == 0 {
 		http.Error(w, "skiff: no app named "+app, http.StatusNotFound)
-		return
+		return false
 	}
 	rt.mu.Lock()
 	if rt.rr == nil {
@@ -201,6 +206,7 @@ func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string)
 	rt.rr[app]++
 	rt.mu.Unlock()
 	proxyTo(w, r, fmt.Sprintf("127.0.0.1:%d", port))
+	return true
 }
 
 func proxyTo(w http.ResponseWriter, r *http.Request, hostport string) {

@@ -1,6 +1,13 @@
 package router
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/nuelScript/skiff/internal/docker"
+)
 
 func TestSubFor(t *testing.T) {
 	rt := &Router{Domains: []string{"useskiff.xyz", "example.com"}}
@@ -37,5 +44,17 @@ func TestHostOnly(t *testing.T) {
 		if got := hostOnly(in); got != want {
 			t.Errorf("hostOnly(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestServeOnlyCountsRealApps(t *testing.T) {
+	rt := &Router{Domains: []string{"example.com"}, SiteApp: "www"}
+	rt.cachedRoutes = []docker.Route{{App: "shop", HostPort: 1}}
+	rt.cachedRouteAt = time.Now().Add(time.Hour)
+
+	r := httptest.NewRequest("GET", "https://www.www.x7k2.dash.example.com/", nil)
+	w := httptest.NewRecorder()
+	if label := rt.serve(w, r); label != "" || w.Code != http.StatusNotFound {
+		t.Fatalf("unknown subdomain counted as %q (status %d)", label, w.Code)
 	}
 }
