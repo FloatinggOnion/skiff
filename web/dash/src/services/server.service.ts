@@ -23,9 +23,21 @@ export type ServerInfo = {
   containers: ContainerStat[]
 }
 
+export type GCReport = {
+  removed: string[]
+  freed: number
+  diskUsed: number
+  diskTotal: number
+  ran: number
+}
+
 class ServerService extends BaseService {
   info() {
     return this.get<ServerInfo>('/server')
+  }
+
+  reclaim() {
+    return this.post<GCReport>('/server/gc')
   }
 }
 

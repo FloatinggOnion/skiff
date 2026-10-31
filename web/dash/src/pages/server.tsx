@@ -1,5 +1,8 @@
+import type { ReactNode } from 'react'
 import { fmtBytes } from '@/lib/format'
-import { useServer } from '@/hooks/use-server'
+import { errText } from '@/lib/errors'
+import { useReclaimSpace, useServer } from '@/hooks/use-server'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FeedSkeleton } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
@@ -17,7 +20,19 @@ function fmtUptime(sec: number): string {
 const barColor = (pct: number): string =>
   pct >= 90 ? 'bg-rose-400' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
 
-function Meter({ label, big, pct, sub }: { label: string; big: string; pct: number; sub: string }) {
+function Meter({
+  label,
+  big,
+  pct,
+  sub,
+  children,
+}: {
+  label: string
+  big: string
+  pct: number
+  sub: string
+  children?: ReactNode
+}) {
   return (
     <section className="rounded-xl border border-white/8 bg-linear-to-b from-white/2.5 to-transparent p-5">
       <h2 className="text-muted-foreground font-mono text-[11px] tracking-wider uppercase">
@@ -34,11 +49,39 @@ function Meter({ label, big, pct, sub }: { label: string; big: string; pct: numb
         />
       </div>
       <p className="text-muted-foreground mt-2 text-xs">{sub}</p>
+      {children}
     </section>
   )
 }
 
 const Dot = () => <span className="text-white/20">·</span>
+
+function ReclaimSpace() {
+  const reclaim = useReclaimSpace()
+  const r = reclaim.data
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-white/6 pt-3">
+      <Button
+        size="sm"
+        variant="outline"
+        loading={reclaim.isPending}
+        onClick={() => reclaim.mutate()}
+      >
+        Reclaim space
+      </Button>
+      <span className="text-muted-foreground text-xs">
+        {reclaim.isError
+          ? errText(reclaim.error)
+          : r
+            ? `Freed ${fmtBytes(r.freed)}` +
+              (r.removed.length
+                ? ` · removed ${r.removed.length} unused image${r.removed.length === 1 ? '' : 's'}`
+                : '')
+            : 'Unused images and old build cache. Runs daily on its own.'}
+      </span>
+    </div>
+  )
+}
 
 export default function ServerPage() {
   const { data: s, isPending } = useServer()
@@ -116,7 +159,9 @@ export default function ServerPage() {
           big={`${fmtBytes(s.disk.used)} / ${fmtBytes(s.disk.total)}`}
           pct={diskPct}
           sub={s.disk.total ? `${fmtBytes(s.disk.total - s.disk.used)} free` : 'unavailable'}
-        />
+        >
+          <ReclaimSpace />
+        </Meter>
       </div>
 
       <section className="mt-6">

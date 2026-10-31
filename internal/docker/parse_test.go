@@ -57,3 +57,10 @@ func TestParseSkiffContainers(t *testing.T) {
 		t.Errorf("unlabelled stopped container parsed wrong: %+v", db)
 	}
 }
+
+func TestParseCreatedAt(t *testing.T) {
+	got := parseCreatedAt("2026-09-23 19:54:00 +0000 UTC")
+	if got.Year() != 2026 || got.Month() != 9 || got.Hour() != 19 || got.Minute() != 54 {
+		t.Fatalf("parsed %v", got)
+	}
+}

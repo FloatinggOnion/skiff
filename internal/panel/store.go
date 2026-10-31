@@ -109,6 +109,24 @@ func productionAppsForRepo(repo string) []Source {
 	return out
 }
 
+func allSources() []Source {
+	rows, err := sqlDB.Query(`SELECT ` + sourceCols + ` FROM sources`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []Source
+	for rows.Next() {
+		if s, ok := scanSource(rows); ok {
+			out = append(out, s)
+		}
+	}
+	if rows.Err() != nil {
+		return nil
+	}
+	return out
+}
+
 func getSource(app string) (Source, bool) {
 	return scanSource(sqlDB.QueryRow(`SELECT `+sourceCols+` FROM sources WHERE app=?`, app))
 }
