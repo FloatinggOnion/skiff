@@ -27,6 +27,7 @@ export function SettingsForm({
   onSaved,
   onDeleted,
   onRedeploy,
+  cli = false,
 }: {
   name: string
   branch: string
@@ -44,6 +45,7 @@ export function SettingsForm({
   onSaved: () => void
   onDeleted: () => void
   onRedeploy: () => void
+  cli?: boolean
 }) {
   const [saved, setSaved] = useState(false)
   const confirm = useConfirm()
@@ -100,14 +102,23 @@ export function SettingsForm({
       <section className="rounded-xl border border-white/8 p-5">
         <h2 className="mb-4 text-sm font-semibold">Build &amp; deploy</h2>
         <FieldGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <Field>
-            <FieldLabel htmlFor="s-branch">Branch</FieldLabel>
-            <Input id="s-branch" placeholder="main" className="font-mono" {...register('branch')} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="s-root">Root directory</FieldLabel>
-            <Input id="s-root" placeholder="/" className="font-mono" {...register('rootDir')} />
-          </Field>
+          {!cli && (
+            <>
+              <Field>
+                <FieldLabel htmlFor="s-branch">Branch</FieldLabel>
+                <Input
+                  id="s-branch"
+                  placeholder="main"
+                  className="font-mono"
+                  {...register('branch')}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s-root">Root directory</FieldLabel>
+                <Input id="s-root" placeholder="/" className="font-mono" {...register('rootDir')} />
+              </Field>
+            </>
+          )}
           <Field data-invalid={!!formState.errors.port}>
             <FieldLabel htmlFor="s-port">Port</FieldLabel>
             <Input
@@ -119,28 +130,34 @@ export function SettingsForm({
             />
             <FieldError errors={[formState.errors.port]} />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="s-auto">Auto-deploy on push</FieldLabel>
-            <button
-              id="s-auto"
-              type="button"
-              onClick={() => setValue('auto', !values.auto, { shouldDirty: true })}
-              className={toggleClass(values.auto)}
-            >
-              {values.auto ? 'On' : 'Off'}
-            </button>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="s-preview">Preview deployments</FieldLabel>
-            <button
-              id="s-preview"
-              type="button"
-              onClick={() => setValue('previewAuto', !values.previewAuto, { shouldDirty: true })}
-              className={toggleClass(values.previewAuto)}
-            >
-              {values.previewAuto ? 'On' : 'Off'}
-            </button>
-          </Field>
+          {!cli && (
+            <>
+              <Field>
+                <FieldLabel htmlFor="s-auto">Auto-deploy on push</FieldLabel>
+                <button
+                  id="s-auto"
+                  type="button"
+                  onClick={() => setValue('auto', !values.auto, { shouldDirty: true })}
+                  className={toggleClass(values.auto)}
+                >
+                  {values.auto ? 'On' : 'Off'}
+                </button>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="s-preview">Preview deployments</FieldLabel>
+                <button
+                  id="s-preview"
+                  type="button"
+                  onClick={() =>
+                    setValue('previewAuto', !values.previewAuto, { shouldDirty: true })
+                  }
+                  className={toggleClass(values.previewAuto)}
+                >
+                  {values.previewAuto ? 'On' : 'Off'}
+                </button>
+              </Field>
+            </>
+          )}
           {!values.autoscale && (
             <Field>
               <FieldLabel>Replicas</FieldLabel>
@@ -153,9 +170,22 @@ export function SettingsForm({
           )}
         </FieldGroup>
         <p className="text-muted-foreground mt-3 text-xs">
-          Replicas run identical copies of the app behind the router, sharing traffic. Preview
-          deployments spin up an environment automatically for any push to a branch other than{' '}
-          <span className="text-foreground/70 font-mono">{values.branch || 'main'}</span>.
+          Replicas run identical copies of the app behind the router, sharing traffic.
+          {cli ? (
+            <>
+              {' '}
+              The next <span className="text-foreground/70 font-mono">skiff deploy</span> uses the{' '}
+              <span className="text-foreground/70 font-mono">replicas</span> in its{' '}
+              <span className="text-foreground/70 font-mono">skiff.toml</span>.
+            </>
+          ) : (
+            <>
+              {' '}
+              Preview deployments spin up an environment automatically for any push to a branch
+              other than{' '}
+              <span className="text-foreground/70 font-mono">{values.branch || 'main'}</span>.
+            </>
+          )}
         </p>
 
         <div className="mt-4 rounded-lg border border-white/8 p-4">
@@ -217,25 +247,29 @@ export function SettingsForm({
             </FieldGroup>
           )}
         </div>
-        <Field className="mt-4">
-          <FieldLabel htmlFor="s-release">Release command</FieldLabel>
-          <Input
-            id="s-release"
-            placeholder="e.g. npm run migrate"
-            className="font-mono"
-            {...register('release')}
-          />
-          <FieldDescription>
-            Runs once in a one-off container before each new version goes live — a non-zero exit
-            aborts the deploy, so the old version keeps serving.
-          </FieldDescription>
-        </Field>
+        {!cli && (
+          <Field className="mt-4">
+            <FieldLabel htmlFor="s-release">Release command</FieldLabel>
+            <Input
+              id="s-release"
+              placeholder="e.g. npm run migrate"
+              className="font-mono"
+              {...register('release')}
+            />
+            <FieldDescription>
+              Runs once in a one-off container before each new version goes live — a non-zero exit
+              aborts the deploy, so the old version keeps serving.
+            </FieldDescription>
+          </Field>
+        )}
         <div className="mt-5 flex items-center justify-end gap-3">
           {saved && <span className="text-muted-foreground text-xs">Saved.</span>}
-          <Button size="sm" variant="outline" onClick={onRedeploy}>
-            <RotateCw />
-            Redeploy
-          </Button>
+          {!cli && (
+            <Button size="sm" variant="outline" onClick={onRedeploy}>
+              <RotateCw />
+              Redeploy
+            </Button>
+          )}
           <Button size="sm" onClick={save}>
             Save changes
           </Button>

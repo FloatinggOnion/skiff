@@ -66,6 +66,7 @@ export default function ProjectDetailPage() {
   }
 
   const latest = project.deploys[0]
+  const cli = project.origin === 'cli'
   const host = project.url.replace(/^https?:\/\//, '')
 
   return (
@@ -107,10 +108,12 @@ export default function ProjectDetailPage() {
               </a>
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => term.redeploy(project.name)}>
-            <RotateCw />
-            Redeploy
-          </Button>
+          {!cli && (
+            <Button size="sm" variant="outline" onClick={() => term.redeploy(project.name)}>
+              <RotateCw />
+              Redeploy
+            </Button>
+          )}
           <Button size="sm" asChild>
             <a href={project.url} target="_blank" rel="noreferrer">
               <ExternalLink />
@@ -127,14 +130,16 @@ export default function ProjectDetailPage() {
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
-          <TabsTrigger value="previews">
-            Previews
-            {project.previews.length > 0 && (
-              <span className="text-muted-foreground ml-1.5 rounded-full bg-white/8 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
-                {project.previews.length}
-              </span>
-            )}
-          </TabsTrigger>
+          {!cli && (
+            <TabsTrigger value="previews">
+              Previews
+              {project.previews.length > 0 && (
+                <span className="text-muted-foreground ml-1.5 rounded-full bg-white/8 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
+                  {project.previews.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="console">Console</TabsTrigger>
           <TabsTrigger value="jobs">Jobs</TabsTrigger>
           <TabsTrigger value="workers">Workers</TabsTrigger>
@@ -192,7 +197,8 @@ export default function ProjectDetailPage() {
                         <span className="font-mono text-sm">{latest.commit || '—'}</span>
                       )}
                       <span className="text-muted-foreground font-mono text-xs">
-                        on {project.branch || 'main'} · {latest.trigger} · {relTime(latest.started)}
+                        {cli ? '' : `on ${project.branch || 'main'} · `}
+                        {latest.trigger} · {relTime(latest.started)}
                       </span>
                     </div>
                     {latest.message && (
@@ -202,8 +208,17 @@ export default function ProjectDetailPage() {
                 </div>
               ) : (
                 <p className="text-muted-foreground text-sm">
-                  No deployments yet — push to{' '}
-                  <span className="font-mono">{project.branch || 'main'}</span> or hit Redeploy.
+                  {cli ? (
+                    <>
+                      No deployments recorded yet — the next{' '}
+                      <span className="font-mono">skiff deploy</span> shows up here.
+                    </>
+                  ) : (
+                    <>
+                      No deployments yet — push to{' '}
+                      <span className="font-mono">{project.branch || 'main'}</span> or hit Redeploy.
+                    </>
+                  )}
                 </p>
               )}
             </section>
@@ -212,41 +227,57 @@ export default function ProjectDetailPage() {
               <h2 className="text-muted-foreground mb-2 font-mono text-[11px] tracking-wider uppercase">
                 Source
               </h2>
-              <dl className="divide-y divide-white/5">
-                <Row label="Repository">
-                  {project.repo ? (
-                    <a
-                      href={'https://github.com/' + project.repo}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono text-xs hover:underline"
+              {cli ? (
+                <dl className="divide-y divide-white/5">
+                  <Row label="Deployed with">
+                    <span className="font-mono text-xs">skiff deploy</span>
+                  </Row>
+                  <Row label="Port">
+                    <span className="font-mono text-xs">{project.port}</span>
+                  </Row>
+                  <p className="text-muted-foreground pt-3 text-xs leading-relaxed">
+                    Builds run on the machine that deploys, and config comes from its{' '}
+                    <span className="font-mono">skiff.toml</span>. Logs, metrics, domains, scaling
+                    and rollback work from here.
+                  </p>
+                </dl>
+              ) : (
+                <dl className="divide-y divide-white/5">
+                  <Row label="Repository">
+                    {project.repo ? (
+                      <a
+                        href={'https://github.com/' + project.repo}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-xs hover:underline"
+                      >
+                        {project.repo}
+                      </a>
+                    ) : (
+                      <span className="font-mono text-xs">—</span>
+                    )}
+                  </Row>
+                  <Row label="Branch">
+                    <span className="font-mono text-xs">{project.branch || 'main'}</span>
+                  </Row>
+                  <Row label="Root directory">
+                    <span className="font-mono text-xs">{project.rootDir || '/'}</span>
+                  </Row>
+                  <Row label="Port">
+                    <span className="font-mono text-xs">{project.port}</span>
+                  </Row>
+                  <Row label="Auto-deploy">
+                    <span
+                      className={
+                        'font-mono text-xs ' +
+                        (project.auto ? 'text-emerald-300' : 'text-muted-foreground')
+                      }
                     >
-                      {project.repo}
-                    </a>
-                  ) : (
-                    <span className="font-mono text-xs">—</span>
-                  )}
-                </Row>
-                <Row label="Branch">
-                  <span className="font-mono text-xs">{project.branch || 'main'}</span>
-                </Row>
-                <Row label="Root directory">
-                  <span className="font-mono text-xs">{project.rootDir || '/'}</span>
-                </Row>
-                <Row label="Port">
-                  <span className="font-mono text-xs">{project.port}</span>
-                </Row>
-                <Row label="Auto-deploy">
-                  <span
-                    className={
-                      'font-mono text-xs ' +
-                      (project.auto ? 'text-emerald-300' : 'text-muted-foreground')
-                    }
-                  >
-                    {project.auto ? 'On' : 'Off'}
-                  </span>
-                </Row>
-              </dl>
+                      {project.auto ? 'On' : 'Off'}
+                    </span>
+                  </Row>
+                </dl>
+              )}
             </section>
           </div>
         </TabsContent>
@@ -353,7 +384,16 @@ export default function ProjectDetailPage() {
 
         {/* Environment */}
         <TabsContent value="environment" className="pb-[46vh]">
-          <EnvEditor app={project.name} />
+          {cli ? (
+            <p className="text-muted-foreground rounded-xl border border-white/8 p-5 text-sm">
+              This app gets its environment from <span className="font-mono">[env]</span> and{' '}
+              <span className="font-mono">[secrets]</span> in the{' '}
+              <span className="font-mono">skiff.toml</span> it's deployed with, so edit it there and
+              run <span className="font-mono">skiff deploy</span>.
+            </p>
+          ) : (
+            <EnvEditor app={project.name} />
+          )}
         </TabsContent>
 
         {/* Jobs */}
@@ -384,6 +424,7 @@ export default function ProjectDetailPage() {
             onSaved={reload}
             onDeleted={() => navigate('/')}
             onRedeploy={() => term.redeploy(project.name)}
+            cli={cli}
           />
         </TabsContent>
       </Tabs>

@@ -6,6 +6,7 @@ import {
   KeyRound,
   Square,
   MoreHorizontal,
+  Terminal,
 } from 'lucide-react'
 import { Link } from 'react-router'
 import type { App } from '@/services/api.service'
@@ -116,10 +117,12 @@ export function AppCard({
                 <History className="h-3.5 w-3.5" />
                 History
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEnv(app.name)} className="gap-2">
-                <KeyRound className="h-3.5 w-3.5" />
-                Environment
-              </DropdownMenuItem>
+              {app.origin !== 'cli' && (
+                <DropdownMenuItem onClick={() => onEnv(app.name)} className="gap-2">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Environment
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem asChild className="gap-2">
                 <a href={app.url} target="_blank" rel="noreferrer">
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -138,6 +141,13 @@ export function AppCard({
           </DropdownMenu>
         </div>
       </div>
+
+      {app.origin === 'cli' && (
+        <span className="text-muted-foreground inline-flex w-fit items-center gap-1.5 rounded-md border border-white/8 bg-white/2 px-2 py-1 font-mono text-[11px]">
+          <Terminal className="h-3 w-3 shrink-0" />
+          skiff deploy
+        </span>
+      )}
 
       {app.repo && (
         <span className="text-muted-foreground inline-flex w-fit items-center gap-1.5 rounded-md border border-white/8 bg-white/2 px-2 py-1 font-mono text-[11px]">

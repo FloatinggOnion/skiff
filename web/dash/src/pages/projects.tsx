@@ -52,8 +52,8 @@ export default function ProjectsPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            {isPending ? '…' : `${apps.length} ${apps.length === 1 ? 'app' : 'apps'}`} deployed from
-            Git in <span className="text-foreground/70">{teamName}</span>.
+            {isPending ? '…' : `${apps.length} ${apps.length === 1 ? 'app' : 'apps'}`} in{' '}
+            <span className="text-foreground/70">{teamName}</span>.
           </p>
         </div>
         <div className="flex items-center gap-2">

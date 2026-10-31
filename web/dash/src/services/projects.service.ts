@@ -11,6 +11,7 @@ export type App = {
   commit?: string
   message?: string
   updated?: number
+  origin?: 'cli'
 }
 
 export type ProjectDetail = {
@@ -32,6 +33,7 @@ export type ProjectDetail = {
   scaleCpu: number
   deploys: Deploy[]
   previews: Preview[]
+  origin?: 'cli'
 }
 
 export type Job = {
