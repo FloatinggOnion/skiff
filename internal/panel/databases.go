@@ -21,10 +21,10 @@ type dbEngine struct {
 	hasDB      bool
 	container  func(user, pass, dbname string) (map[string]string, []string)
 	url        func(host string, port int, user, pass, dbname string, tls bool) string
-	shell      func(pass, dbname string) []string
+	shell      func(user, pass, dbname string) []string
 	backupExt  string
-	dumpCmd    func(pass, dbname string) []string
-	restoreCmd func(pass, dbname string) []string
+	dumpCmd    func(user, pass, dbname string) []string
+	restoreCmd func(user, pass, dbname string) []string
 	tls        *dbTLS
 }
 
@@ -49,12 +49,12 @@ var dbEngines = map[string]dbEngine{
 			}
 			return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", user, pass, host, port, dbname, mode)
 		},
-		shell: func(pass, dbname string) []string {
-			return []string{"sh", "-c", fmt.Sprintf("PGPASSWORD=%s exec psql -U skiff -d %s", pass, dbname)}
+		shell: func(user, pass, dbname string) []string {
+			return []string{"sh", "-c", fmt.Sprintf("PGPASSWORD=%s exec psql -U %s -d %s", pass, user, dbname)}
 		},
 		backupExt:  ".sql",
-		dumpCmd:    func(_, dbname string) []string { return []string{"pg_dump", "-U", "skiff", "-d", dbname} },
-		restoreCmd: func(_, dbname string) []string { return []string{"psql", "-U", "skiff", "-d", dbname} },
+		dumpCmd:    func(user, _, dbname string) []string { return []string{"pg_dump", "-U", user, "-d", dbname} },
+		restoreCmd: func(user, _, dbname string) []string { return []string{"psql", "-U", user, "-d", dbname} },
 		// Fix key perms as root, then hand off to the normal entrypoint with ssl on.
 		tls: &dbTLS{
 			hasCerts:   true,
@@ -82,16 +82,16 @@ var dbEngines = map[string]dbEngine{
 			}
 			return u
 		},
-		shell: func(pass, dbname string) []string {
+		shell: func(user, pass, dbname string) []string {
 			// MYSQL_PWD avoids the password-on-argv warning the -p flag prints.
-			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s exec mysql -u skiff %s", pass, dbname)}
+			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s exec mysql -u %s %s", pass, user, dbname)}
 		},
 		backupExt: ".sql",
-		dumpCmd: func(pass, dbname string) []string {
-			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysqldump -u skiff %s", pass, dbname)}
+		dumpCmd: func(user, pass, dbname string) []string {
+			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysqldump -u %s %s", pass, user, dbname)}
 		},
-		restoreCmd: func(pass, dbname string) []string {
-			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysql -u skiff %s", pass, dbname)}
+		restoreCmd: func(user, pass, dbname string) []string {
+			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysql -u %s %s", pass, user, dbname)}
 		},
 		// MySQL 8 auto-generates certs and serves TLS with no config — the public URL just needs to ask for it.
 		tls: &dbTLS{},
@@ -113,15 +113,15 @@ var dbEngines = map[string]dbEngine{
 			}
 			return u
 		},
-		shell: func(pass, dbname string) []string {
-			return []string{"sh", "-c", fmt.Sprintf("exec mongosh --quiet -u skiff -p %s --authenticationDatabase admin %s", pass, dbname)}
+		shell: func(user, pass, dbname string) []string {
+			return []string{"sh", "-c", fmt.Sprintf("exec mongosh --quiet -u %s -p %s --authenticationDatabase admin %s", user, pass, dbname)}
 		},
 		backupExt: ".archive.gz",
-		dumpCmd: func(pass, dbname string) []string {
-			return []string{"mongodump", "-u", "skiff", "-p", pass, "--authenticationDatabase", "admin", "--db", dbname, "--archive", "--gzip"}
+		dumpCmd: func(user, pass, dbname string) []string {
+			return []string{"mongodump", "-u", user, "-p", pass, "--authenticationDatabase", "admin", "--db", dbname, "--archive", "--gzip"}
 		},
-		restoreCmd: func(pass, _ string) []string {
-			return []string{"mongorestore", "-u", "skiff", "-p", pass, "--authenticationDatabase", "admin", "--archive", "--gzip", "--drop"}
+		restoreCmd: func(user, pass, _ string) []string {
+			return []string{"mongorestore", "-u", user, "-p", pass, "--authenticationDatabase", "admin", "--archive", "--gzip", "--drop"}
 		},
 		// preferTLS lets the entrypoint's localhost init connect in the clear while offering TLS to public clients.
 		tls: &dbTLS{
@@ -145,7 +145,10 @@ var dbEngines = map[string]dbEngine{
 			// The "default" ACL user is what requirepass sets the password for; the empty-username form (redis://:pass@) is rejected as WRONGPASS on Redis 7.
 			return fmt.Sprintf("redis://default:%s@%s:%d", pass, host, port)
 		},
-		shell: func(pass, _ string) []string {
+		shell: func(_, pass, _ string) []string {
+			if pass == "" {
+				return []string{"redis-cli"}
+			}
 			return []string{"sh", "-c", fmt.Sprintf("exec redis-cli -a %s", pass)}
 		},
 	},
@@ -172,15 +175,31 @@ type dbRow struct {
 	Created                                 int64
 	Public                                  bool
 	PublicPort                              int
+	Image, Volume                           string // set for adopted databases; else the engine's image and <container>-data
+	Cmd                                     string // adopted databases: the JSON command they were started with
 }
 
-const dbCols = `id,team,name,engine,container,host,port,username,password,dbname,created,public,public_port`
+func (d dbRow) image() string {
+	if d.Image != "" {
+		return d.Image
+	}
+	return dbEngines[d.Engine].image
+}
+
+func (d dbRow) volume() string {
+	if d.Volume != "" {
+		return d.Volume
+	}
+	return d.Container + "-data"
+}
+
+const dbCols = `id,team,name,engine,container,host,port,username,password,dbname,created,public,public_port,image,volume,cmd`
 
 func scanDB(row interface{ Scan(...any) error }) (dbRow, bool) {
 	var d dbRow
 	var public int
 	if row.Scan(&d.ID, &d.Team, &d.Name, &d.Engine, &d.Container, &d.Host, &d.Port,
-		&d.Username, &d.Password, &d.DBName, &d.Created, &public, &d.PublicPort) != nil {
+		&d.Username, &d.Password, &d.DBName, &d.Created, &public, &d.PublicPort, &d.Image, &d.Volume, &d.Cmd) != nil {
 		return dbRow{}, false
 	}
 	d.Public = public != 0
@@ -210,9 +229,9 @@ func listDBs(team string) []dbRow {
 }
 
 func putDB(d dbRow) error {
-	_, err := sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		d.ID, d.Team, d.Name, d.Engine, d.Container, d.Host, d.Port, d.Username, d.Password,
-		d.DBName, d.Created, b2i(d.Public), d.PublicPort)
+		d.DBName, d.Created, b2i(d.Public), d.PublicPort, d.Image, d.Volume, d.Cmd)
 	return err
 }
 
@@ -397,7 +416,7 @@ func (p *Panel) handleDatabases(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = p.eng.Stop(d.Container)
 		_ = p.eng.Remove(d.Container)
-		_ = p.eng.RemoveVolume(d.Container + "-data")
+		_ = p.eng.RemoveVolume(d.volume())
 		deleteDBRow(id)
 		p.audit(r, "database.delete", d.Name, d.Engine)
 		w.WriteHeader(http.StatusNoContent)
@@ -453,12 +472,28 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 	}
 	on := r.URL.Query().Get("on") == "1"
 	e := dbEngines[d.Engine]
+	adopted := d.Image != ""
+	if adopted && d.Volume == "" {
+		http.Error(w, "this database's data isn't in a named volume, so it can't be recreated safely", http.StatusConflict)
+		return
+	}
 	env, cmd := e.container(d.Username, d.Password, d.DBName)
 	net := teamNetwork(d.Team)
 	_ = p.eng.EnsureNetwork(net)
+	prevNets := []string{}
+	if rt, err := p.eng.Runtime(d.Container); err == nil {
+		prevNets = rt.Networks
+		if adopted {
+			env, cmd = rt.Env, nil
+			_ = json.Unmarshal([]byte(d.Cmd), &cmd)
+		}
+	} else if adopted {
+		http.Error(w, "couldn't read the database container", http.StatusInternalServerError)
+		return
+	}
 	spec := docker.DBRunSpec{
-		Name: d.Container, Image: e.image, Network: net,
-		Volume: d.Container + "-data", MountAt: e.mountAt, Env: env, Cmd: cmd,
+		Name: d.Container, Image: d.image(), Network: net,
+		Volume: d.volume(), MountAt: e.mountAt, Env: env, Cmd: cmd,
 		Labels: map[string]string{"skiff.kind": "database", "skiff.db": d.ID, "skiff.team": d.Team},
 		Port:   e.port, Publish: on,
 	}
@@ -478,6 +513,12 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Recreating drops the container's other networks; rejoin them so apps that reached it there still can.
+	for _, n := range append(prevNets, dbNetwork) {
+		if n != net {
+			_ = p.eng.ConnectNetwork(n, d.Container)
+		}
+	}
 	if _, err := sqlDB.Exec(`UPDATE databases SET public = ?, public_port = ? WHERE id = ?`,
 		b2i(on), port, d.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -495,5 +536,5 @@ func (p *Panel) handleDBShell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e := dbEngines[d.Engine]
-	p.serveContainerShell(w, r, d.Container, e.shell(d.Password, d.DBName))
+	p.serveContainerShell(w, r, d.Container, e.shell(d.Username, d.Password, d.DBName))
 }

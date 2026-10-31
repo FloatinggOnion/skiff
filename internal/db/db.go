@@ -63,6 +63,9 @@ var migrations = []string{
 	`ALTER TABLE domains ADD COLUMN parent TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE domains ADD COLUMN branch TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN origin TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE databases ADD COLUMN image TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE databases ADD COLUMN volume TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE databases ADD COLUMN cmd TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -163,7 +166,10 @@ CREATE TABLE IF NOT EXISTS databases (
   dbname    TEXT NOT NULL DEFAULT '',
   created   INTEGER NOT NULL,
   public      INTEGER NOT NULL DEFAULT 0,
-  public_port INTEGER NOT NULL DEFAULT 0
+  public_port INTEGER NOT NULL DEFAULT 0,
+  image       TEXT NOT NULL DEFAULT '',
+  volume      TEXT NOT NULL DEFAULT '',
+  cmd         TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS db_attachments (
   db_id TEXT NOT NULL,

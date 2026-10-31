@@ -3,6 +3,7 @@ package docker
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -142,26 +143,75 @@ func (e *Engine) ContainerMeta(name string) (ContainerMeta, error) {
 	return m, nil
 }
 
-type ContainerRuntime struct {
-	Env      map[string]string
-	Networks []string
+type Mount struct {
+	Name        string
+	Destination string
 }
 
-// Runtime reads the environment and networks a container was started with.
+type ContainerRuntime struct {
+	Image    string
+	Env      map[string]string
+	Cmd      []string
+	Networks []string
+	Mounts   []Mount
+	Labels   map[string]string
+	Running  bool
+}
+
+// Runtime reads how a container was started: image, environment, command, networks and volumes.
 func (e *Engine) Runtime(name string) (ContainerRuntime, error) {
-	out, err := e.command("inspect", "--format",
-		"{{json .Config.Env}}\t{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}", name).Output()
+	out, err := e.command("inspect", name).Output()
 	if err != nil {
 		return ContainerRuntime{}, err
 	}
-	envJSON, nets, _ := strings.Cut(strings.TrimSpace(string(out)), "\t")
-	var kv []string
-	_ = json.Unmarshal([]byte(envJSON), &kv)
-	rt := ContainerRuntime{Env: map[string]string{}, Networks: strings.Fields(nets)}
-	for _, pair := range kv {
+	return parseRuntime(out)
+}
+
+func parseRuntime(out []byte) (ContainerRuntime, error) {
+	var raw []struct {
+		Config struct {
+			Image  string
+			Env    []string
+			Cmd    []string
+			Labels map[string]string
+		}
+		State           struct{ Running bool }
+		Mounts          []struct{ Type, Name, Destination string }
+		NetworkSettings struct{ Networks map[string]json.RawMessage }
+	}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		return ContainerRuntime{}, err
+	}
+	if len(raw) == 0 {
+		return ContainerRuntime{}, fmt.Errorf("no such container")
+	}
+	c := raw[0]
+	rt := ContainerRuntime{
+		Image: c.Config.Image, Cmd: c.Config.Cmd, Labels: c.Config.Labels,
+		Running: c.State.Running, Env: map[string]string{},
+	}
+	for _, pair := range c.Config.Env {
 		if k, v, ok := strings.Cut(pair, "="); ok {
 			rt.Env[k] = v
 		}
 	}
+	for n := range c.NetworkSettings.Networks {
+		rt.Networks = append(rt.Networks, n)
+	}
+	sort.Strings(rt.Networks)
+	for _, m := range c.Mounts {
+		if m.Type == "volume" {
+			rt.Mounts = append(rt.Mounts, Mount{Name: m.Name, Destination: m.Destination})
+		}
+	}
 	return rt, nil
+}
+
+// RunningContainers names every running container.
+func (e *Engine) RunningContainers() ([]string, error) {
+	out, err := e.command("ps", "--format", "{{.Names}}").Output()
+	if err != nil {
+		return nil, err
+	}
+	return splitLines(out), nil
 }

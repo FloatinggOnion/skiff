@@ -126,7 +126,7 @@ func (p *Panel) runBackup(d dbRow, trigger string) (backupRow, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	derr := p.eng.Exec(ctx, d.Container, e.dumpCmd(d.Password, d.DBName), nil, f)
+	derr := p.eng.Exec(ctx, d.Container, e.dumpCmd(d.Username, d.Password, d.DBName), nil, f)
 	_ = f.Close()
 	if derr != nil {
 		_ = os.Remove(path)
@@ -229,7 +229,7 @@ func (p *Panel) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	if err := p.eng.Exec(ctx, d.Container, e.restoreCmd(d.Password, d.DBName), f, io.Discard); err != nil {
+	if err := p.eng.Exec(ctx, d.Container, e.restoreCmd(d.Username, d.Password, d.DBName), f, io.Discard); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
