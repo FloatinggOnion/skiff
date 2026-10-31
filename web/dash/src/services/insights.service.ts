@@ -51,3 +51,27 @@ class InsightsService extends BaseService {
 }
 
 export const insightsService = new InsightsService()
+
+export type UptimeDay = { day: number; pct: number; checks: number }
+
+export type Incident = { id: number; started: number; ended: number; cause: string }
+
+export type Uptime = {
+  up: boolean
+  checked: number
+  code: number
+  ms: number
+  pct24h: number
+  pct7d: number
+  pct30d: number
+  days: UptimeDay[]
+  incidents: Incident[]
+}
+
+class UptimeService extends BaseService {
+  project(app: string) {
+    return this.get<Uptime>('/uptime', { params: { app } })
+  }
+}
+
+export const uptimeService = new UptimeService()

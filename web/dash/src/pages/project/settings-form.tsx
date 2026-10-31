@@ -10,6 +10,13 @@ import { projectsService } from '@/services/api.service'
 import { projectSettingsSchema, type ProjectSettingsInput } from '@/validations/project-settings'
 import { Stepper } from './stepper'
 
+const SLEEP_OPTIONS = [
+  { v: 0, label: 'Never' },
+  { v: 15, label: '15m' },
+  { v: 60, label: '1h' },
+  { v: 360, label: '6h' },
+]
+
 export function SettingsForm({
   name,
   branch,
@@ -24,6 +31,7 @@ export function SettingsForm({
   scaleMin,
   scaleMax,
   scaleCpu,
+  sleepAfter,
   onSaved,
   onDeleted,
   onRedeploy,
@@ -42,6 +50,7 @@ export function SettingsForm({
   scaleMin: number
   scaleMax: number
   scaleCpu: number
+  sleepAfter: number
   onSaved: () => void
   onDeleted: () => void
   onRedeploy: () => void
@@ -63,6 +72,7 @@ export function SettingsForm({
       scaleMin: scaleMin || 1,
       scaleMax: scaleMax || Math.max(scaleMin || 1, replicas || 2),
       scaleCpu: scaleCpu || 70,
+      sleepAfter: sleepAfter || 0,
     },
   })
   const { register, handleSubmit, watch, setValue, formState } = form
@@ -246,6 +256,34 @@ export function SettingsForm({
               </Field>
             </FieldGroup>
           )}
+        </div>
+        <div className="mt-4 flex items-start justify-between gap-4 rounded-lg border border-white/8 p-4">
+          <div>
+            <h3 className="text-sm font-medium">Sleep when idle</h3>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              {values.autoscale
+                ? 'Not available while autoscaling is on.'
+                : 'Stop the app after a stretch with no visitors, freeing its memory. The next visit wakes it — that first request waits a few seconds while it starts.'}
+            </p>
+          </div>
+          <div className="flex shrink-0 rounded-md border border-white/12 p-0.5">
+            {SLEEP_OPTIONS.map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                disabled={values.autoscale}
+                onClick={() => setValue('sleepAfter', o.v, { shouldDirty: true })}
+                className={
+                  'rounded px-2.5 py-1 font-mono text-[11px] transition-colors disabled:opacity-40 ' +
+                  (values.sleepAfter === o.v
+                    ? 'bg-white/10 text-white'
+                    : 'text-muted-foreground hover:text-foreground')
+                }
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
         </div>
         {!cli && (
           <Field className="mt-4">

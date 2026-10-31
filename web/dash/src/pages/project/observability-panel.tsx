@@ -14,6 +14,7 @@ import {
 } from 'recharts'
 import { fmtBytes, fmtMoney } from '@/lib/format'
 import { useCost } from '@/hooks/use-cost'
+import { UptimeStrip } from './uptime-strip'
 import { useInsights } from '@/hooks/use-insights'
 import { useResources } from '@/hooks/use-resources'
 import { ChartGridSkeleton } from '@/components/skeletons'
@@ -87,6 +88,8 @@ export function ObservabilityPanel({ app }: { app: string }) {
           ))}
         </div>
       </div>
+
+      <UptimeStrip app={app} />
 
       {isPending ? (
         <ChartGridSkeleton />

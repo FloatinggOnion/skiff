@@ -94,7 +94,11 @@ export default function ProjectDetailPage() {
             <span
               className={
                 'h-1.5 w-1.5 rounded-full ' +
-                (project.state === 'running' ? 'bg-emerald-400' : 'bg-rose-400')
+                (project.state === 'running'
+                  ? 'bg-emerald-400'
+                  : project.state === 'sleeping'
+                    ? 'bg-sky-300/70'
+                    : 'bg-rose-400')
               }
             />
             {project.state}
@@ -427,6 +431,7 @@ export default function ProjectDetailPage() {
             scaleMin={project.scaleMin}
             scaleMax={project.scaleMax}
             scaleCpu={project.scaleCpu}
+            sleepAfter={project.sleepAfter}
             onSaved={reload}
             onDeleted={() => navigate('/')}
             onRedeploy={() => term.redeploy(project.name)}

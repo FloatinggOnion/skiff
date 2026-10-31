@@ -33,6 +33,8 @@ function statusStyle(state: string): StatusStyle {
     case 'exited':
     case 'missing':
       return { dot: 'bg-rose-400', ring: 'bg-rose-400/15', edge: 'bg-rose-400/50', pulse: false }
+    case 'sleeping':
+      return { dot: 'bg-sky-300/70', ring: 'bg-sky-300/10', edge: 'bg-sky-300/30', pulse: false }
     case 'building':
     case 'starting':
     case 'created':

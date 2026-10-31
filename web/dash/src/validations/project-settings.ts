@@ -16,6 +16,7 @@ export const projectSettingsSchema = z
     scaleMin: z.number().int().min(1).max(10),
     scaleMax: z.number().int().min(1).max(10),
     scaleCpu: z.number().int().min(10, 'Target must be 10–100%').max(100, 'Target must be 10–100%'),
+    sleepAfter: z.number().int().min(0),
   })
   .refine((v) => !v.autoscale || v.scaleMax >= v.scaleMin, {
     message: 'Max replicas must be at least the minimum',

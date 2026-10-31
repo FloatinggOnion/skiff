@@ -34,6 +34,8 @@ export type ProjectDetail = {
   deploys: Deploy[]
   previews: Preview[]
   origin?: 'cli'
+  sleepAfter: number
+  sleeping: boolean
 }
 
 export type Job = {
@@ -79,6 +81,7 @@ export type ProjectSettings = {
   scaleMin: number
   scaleMax: number
   scaleCpu: number
+  sleepAfter: number
 }
 
 class ProjectsService extends BaseService {

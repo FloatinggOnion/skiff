@@ -20,6 +20,7 @@ export const queryKeys = {
   resources: (range: number, app: string) => ['resources', range, app] as const,
   insights: (app: string, range: string) => ['insights', app, range] as const,
   cost: ['cost'] as const,
+  uptime: (app: string) => ['uptime', app] as const,
   jobs: (app: string) => ['jobs', app] as const,
   workers: (app: string) => ['workers', app] as const,
   backups: (dbId: string) => ['backups', dbId] as const,
