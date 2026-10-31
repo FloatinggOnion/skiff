@@ -29,7 +29,15 @@ func (t OffsiteTarget) configured() bool {
 	return t.Endpoint != "" && t.Bucket != "" && t.AccessKey != "" && t.SecretKey != ""
 }
 
-var offsiteHTTP = publicHTTPClient(30 * time.Minute)
+var offsiteHTTP = offsiteClient()
+
+// offsiteClient only reaches public addresses unless the box's owner opts in with SKIFF_ALLOW_PRIVATE_ENDPOINTS=1, e.g. for storage on their own network.
+func offsiteClient() *http.Client {
+	if os.Getenv("SKIFF_ALLOW_PRIVATE_ENDPOINTS") == "1" {
+		return &http.Client{Timeout: 30 * time.Minute}
+	}
+	return publicHTTPClient(30 * time.Minute)
+}
 
 func (t OffsiteTarget) client() *s3.Client {
 	return &s3.Client{

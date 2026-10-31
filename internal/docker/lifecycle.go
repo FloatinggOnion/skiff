@@ -55,3 +55,7 @@ func (e *Engine) Start(container string) error {
 	}
 	return nil
 }
+
+func (e *Engine) VolumeExists(name string) bool {
+	return e.command("volume", "inspect", name).Run() == nil
+}

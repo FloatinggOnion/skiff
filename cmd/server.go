@@ -15,6 +15,7 @@ func newServerCmd() *cobra.Command {
 		Short: "Manage deploy servers",
 	}
 	c.AddCommand(newServerSetupCmd())
+	c.AddCommand(newServerRestoreCmd())
 	return c
 }
 

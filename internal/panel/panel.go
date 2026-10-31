@@ -60,6 +60,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go guard("reapOrphanContainers", p.reapOrphanContainers)
 	go func() { _ = eng.EnsureNetwork(dbNetwork) }()
 	go guard("reconcileNetworks", p.reconcileNetworks)
+	go guard("recoverDatabases", p.recoverDatabases)
 	go guard("prewarmDatabaseImages", p.prewarmDatabaseImages)
 	go guard("prewarmStorageImages", p.prewarmStorageImages)
 	go p.backupLoop()
@@ -72,6 +73,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go p.requestsLoop()
 	go p.uptimeLoop()
 	go p.sleepLoop()
+	go p.cpBackupLoop()
 	return p, nil
 }
 
@@ -107,6 +109,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/system", p.protected(p.handleSystem))
 	mux.HandleFunc("/api/server", p.protected(p.handleServer))
 	mux.HandleFunc("/api/server/gc", p.protected(p.handleServerGC))
+	mux.HandleFunc("/api/control-plane", p.protected(p.handleControlPlane))
 	mux.HandleFunc("/api/apps", p.protected(p.handleApps))
 	mux.HandleFunc("/api/project", p.protected(p.handleProject))
 	mux.HandleFunc("/api/redeploy", p.protected(p.handleRedeploy))

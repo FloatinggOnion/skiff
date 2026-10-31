@@ -325,6 +325,11 @@ CREATE TABLE IF NOT EXISTS pr_comments (
   comment_id INTEGER NOT NULL,
   PRIMARY KEY (app, pr)
 );
+CREATE TABLE IF NOT EXISTS cp_backups (
+  key     TEXT PRIMARY KEY,
+  size    INTEGER NOT NULL,
+  created INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS offsite_objects (
   db_id   TEXT NOT NULL,
   key     TEXT NOT NULL,

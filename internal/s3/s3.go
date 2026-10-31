@@ -34,6 +34,28 @@ func (c *Client) Put(ctx context.Context, key string, body io.Reader, size int64
 	return c.do(req, http.StatusOK)
 }
 
+// Get opens an object for reading; the caller closes it.
+func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	req, err := c.request(ctx, http.MethodGet, key, nil)
+	if err != nil {
+		return nil, err
+	}
+	hc := c.HTTP
+	if hc == nil {
+		hc = &http.Client{Timeout: 30 * time.Minute}
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		resp.Body.Close()
+		return nil, fmt.Errorf("GET %s: %s %s", key, resp.Status, errorCode(string(msg)))
+	}
+	return resp.Body, nil
+}
+
 func (c *Client) Delete(ctx context.Context, key string) error {
 	req, err := c.request(ctx, http.MethodDelete, key, nil)
 	if err != nil {
