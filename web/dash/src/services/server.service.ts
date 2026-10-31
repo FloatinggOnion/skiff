@@ -31,6 +31,14 @@ export type GCReport = {
   ran: number
 }
 
+export type ControlPlaneBackup = { key: string; size: number; created: number }
+
+export type ControlPlane = {
+  bucket: string
+  backups: ControlPlaneBackup[]
+  recoveryKey?: string
+}
+
 class ServerService extends BaseService {
   info() {
     return this.get<ServerInfo>('/server')
@@ -38,6 +46,22 @@ class ServerService extends BaseService {
 
   reclaim() {
     return this.post<GCReport>('/server/gc')
+  }
+
+  controlPlane() {
+    return this.get<ControlPlane>('/control-plane')
+  }
+
+  revealRecoveryKey() {
+    return this.get<ControlPlane>('/control-plane', { params: { reveal: 1 } })
+  }
+
+  backupControlPlane() {
+    return this.post<ControlPlaneBackup>('/control-plane')
+  }
+
+  controlPlaneDownloadUrl() {
+    return '/api/control-plane?download=1'
   }
 }
 
