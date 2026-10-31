@@ -17,6 +17,15 @@ const SLEEP_OPTIONS = [
   { v: 360, label: '6h' },
 ]
 
+// A value set through the API that isn't a preset still shows, selected.
+const sleepOptions = (current: number) =>
+  SLEEP_OPTIONS.some((o) => o.v === current)
+    ? SLEEP_OPTIONS
+    : [
+        ...SLEEP_OPTIONS,
+        { v: current, label: current % 60 ? `${current}m` : `${current / 60}h` },
+      ].sort((a, b) => a.v - b.v)
+
 export function SettingsForm({
   name,
   branch,
@@ -267,7 +276,7 @@ export function SettingsForm({
             </p>
           </div>
           <div className="flex shrink-0 rounded-md border border-white/12 p-0.5">
-            {SLEEP_OPTIONS.map((o) => (
+            {sleepOptions(values.sleepAfter).map((o) => (
               <button
                 key={o.v}
                 type="button"
