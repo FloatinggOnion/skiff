@@ -8,6 +8,7 @@ import (
 
 	"github.com/nuelScript/skiff/internal/docker"
 	"github.com/nuelScript/skiff/internal/router"
+	"github.com/nuelScript/skiff/internal/sleep"
 	"github.com/nuelScript/skiff/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -49,6 +50,7 @@ func newRouterCmd() *cobra.Command {
 				DomainsFile:  domainsFile,
 				MetricsFile:  metricsFile,
 				RequestsDir:  requestsDir,
+				SleepFile:    sleep.DefaultFile(),
 				MailFile:     mailFile,
 				SMTPAddr:     smtpAddr,
 			}

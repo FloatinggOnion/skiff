@@ -25,7 +25,8 @@ type Source struct {
 	ScaleMin    int    `json:"scaleMin,omitempty"`
 	ScaleMax    int    `json:"scaleMax,omitempty"`
 	ScaleCPU    int    `json:"scaleCpu,omitempty"`
-	Origin      string `json:"origin,omitempty"` // "" = deployed by the panel from git, "cli" = by `skiff deploy`
+	Origin      string `json:"origin,omitempty"`     // "" = deployed by the panel from git, "cli" = by `skiff deploy`
+	SleepAfter  int    `json:"sleepAfter,omitempty"` // minutes without visitors before the app is stopped; 0 = never
 }
 
 type Deploy struct {
@@ -56,24 +57,24 @@ func logPath(app, id string) string {
 	return filepath.Join(skiffDir(), "deploys", sanitizeName(app), sanitizeID(id)+".log")
 }
 
-const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin`
+const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after`
 
 func putSource(s Source) error {
 	if s.Replicas < 1 {
 		s.Replicas = 1
 	}
 	_, err := sqlDB.Exec(`
-		INSERT INTO sources(app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		INSERT INTO sources(app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(app) DO UPDATE SET
 			team=excluded.team, repo=excluded.repo, branch=excluded.branch,
 			root_dir=excluded.root_dir, port=excluded.port,
 			clone_url=excluded.clone_url, auto=excluded.auto, parent=excluded.parent,
 			preview_auto=excluded.preview_auto, replicas=excluded.replicas, release=excluded.release,
 			autoscale=excluded.autoscale, scale_min=excluded.scale_min, scale_max=excluded.scale_max, scale_cpu=excluded.scale_cpu,
-			origin=excluded.origin`,
+			origin=excluded.origin, sleep_after=excluded.sleep_after`,
 		s.App, s.Team, s.Repo, s.Branch, s.RootDir, s.Port, s.CloneURL, b2i(s.Auto), s.Parent, b2i(s.PreviewAuto), s.Replicas, s.Release,
-		b2i(s.Autoscale), s.ScaleMin, s.ScaleMax, s.ScaleCPU, s.Origin)
+		b2i(s.Autoscale), s.ScaleMin, s.ScaleMax, s.ScaleCPU, s.Origin, s.SleepAfter)
 	return err
 }
 
@@ -81,7 +82,7 @@ func scanSource(row interface{ Scan(...any) error }) (Source, bool) {
 	var s Source
 	var auto, previewAuto, autoscale int
 	if row.Scan(&s.App, &s.Team, &s.Repo, &s.Branch, &s.RootDir, &s.Port, &s.CloneURL, &auto, &s.Parent, &previewAuto, &s.Replicas, &s.Release,
-		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin) != nil {
+		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin, &s.SleepAfter) != nil {
 		return Source{}, false
 	}
 	s.Auto = auto != 0

@@ -30,11 +30,16 @@ func (rt *Router) serveStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 	sort.Strings(names)
 
+	asleep := rt.sleepingApps()
 	up := 0
 	svcs := make([]serviceView, 0, len(names))
 	for _, n := range names {
 		v := serviceView{Name: n}
-		switch states[n] {
+		state := states[n]
+		if _, ok := asleep[n]; ok {
+			state = "running" // stopped while idle; the next visit starts it
+		}
+		switch state {
 		case "running":
 			v.Label, v.Class = "Operational", "op"
 			up++

@@ -47,3 +47,11 @@ func (e *Engine) ImageExists(tag string) bool {
 func (e *Engine) RemoveImage(tag string) error {
 	return e.command("rmi", tag).Run()
 }
+
+func (e *Engine) Start(container string) error {
+	out, err := e.command("start", container).CombinedOutput()
+	if err != nil {
+		return cmdErr(out, err)
+	}
+	return nil
+}

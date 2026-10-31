@@ -277,7 +277,7 @@ func (p *Panel) checkHealth() {
 		if !ok {
 			continue
 		}
-		if isInflight(name) {
+		if isInflight(name) || isSleeping(name) {
 			healthDown[name] = 0
 			continue
 		}

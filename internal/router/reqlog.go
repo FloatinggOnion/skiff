@@ -66,7 +66,7 @@ func visitorKey(path string) []byte {
 }
 
 func (l *ReqLog) Record(app string, r *http.Request, status int, bytes int64, dur time.Duration) {
-	if l == nil {
+	if l == nil || strings.HasPrefix(r.UserAgent(), "skiff-uptime/") {
 		return
 	}
 	now := time.Now()

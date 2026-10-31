@@ -67,6 +67,7 @@ var migrations = []string{
 	`ALTER TABLE databases ADD COLUMN volume TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE databases ADD COLUMN cmd TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE backups ADD COLUMN offsite TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN sleep_after INTEGER NOT NULL DEFAULT 0`,
 }
 
 const schema = `
@@ -113,7 +114,8 @@ CREATE TABLE IF NOT EXISTS sources (
   scale_min    INTEGER NOT NULL DEFAULT 1,
   scale_max    INTEGER NOT NULL DEFAULT 1,
   scale_cpu    INTEGER NOT NULL DEFAULT 0,
-  origin       TEXT NOT NULL DEFAULT ''
+  origin       TEXT NOT NULL DEFAULT '',
+  sleep_after  INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,
@@ -300,6 +302,23 @@ CREATE TABLE IF NOT EXISTS disk_samples (
   total INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_disk_samples_t ON disk_samples(t);
+CREATE TABLE IF NOT EXISTS uptime_checks (
+  app  TEXT NOT NULL,
+  t    INTEGER NOT NULL,
+  ok   INTEGER NOT NULL,
+  code INTEGER NOT NULL DEFAULT 0,
+  ms   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_uptime_app_t ON uptime_checks(app, t);
+CREATE TABLE IF NOT EXISTS incidents (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  app     TEXT NOT NULL,
+  team    TEXT NOT NULL DEFAULT '',
+  started INTEGER NOT NULL,
+  ended   INTEGER NOT NULL DEFAULT 0,
+  cause   TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_app ON incidents(app, started DESC);
 CREATE TABLE IF NOT EXISTS offsite_objects (
   db_id   TEXT NOT NULL,
   key     TEXT NOT NULL,

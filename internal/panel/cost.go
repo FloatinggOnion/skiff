@@ -57,7 +57,8 @@ func setSetting(key, value string) error {
 
 // usage averages each sampled container's CPU and memory over the window.
 func usage(window time.Duration) (map[string]costItem, int) {
-	cutoff := time.Now().Add(-window).Unix()
+	now := time.Now().Unix()
+	cutoff := now - int64(window/time.Second)
 	out := map[string]costItem{}
 	samples := 0
 	resStats.mu.Lock()
@@ -65,7 +66,8 @@ func usage(window time.Duration) (map[string]costItem, int) {
 	for key, buckets := range resStats.apps {
 		var cpu float64
 		var mem int64
-		n := 0
+		n, present := 0, 0
+		first := now
 		for t, b := range buckets {
 			if t < cutoff || b.N == 0 {
 				continue
@@ -73,12 +75,18 @@ func usage(window time.Duration) (map[string]costItem, int) {
 			cpu += b.CPUSum
 			mem += b.MemSum
 			n += b.N
+			present++
+			if t < first {
+				first = t
+			}
 		}
 		if n == 0 {
 			continue
 		}
 		samples += n
-		out[key] = costItem{Key: key, CPU: cpu / float64(n), Mem: mem / int64(n)}
+		// Minutes with no sample are minutes it wasn't running (asleep or stopped), so they count as zero.
+		coverage := math.Min(1, float64(present)/math.Max(1, float64((now-first)/resBucketSecs+1)))
+		out[key] = costItem{Key: key, CPU: cpu / float64(n) * coverage, Mem: int64(float64(mem/int64(n)) * coverage)}
 	}
 	return out, samples
 }

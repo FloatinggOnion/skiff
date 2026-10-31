@@ -32,6 +32,14 @@ type appView struct {
 	Origin  string `json:"origin,omitempty"`
 }
 
+// displayState reports a sleeping app as asleep rather than as a stopped container.
+func (p *Panel) displayState(app, container string) string {
+	if isSleeping(app) {
+		return "sleeping"
+	}
+	return p.eng.State(container)
+}
+
 func (p *Panel) handleSystem(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -60,7 +68,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 		}
 		av := appView{
 			Name:   a.Name,
-			State:  p.eng.State(a.Container),
+			State:  p.displayState(a.Name, a.Container),
 			URL:    "https://" + a.Name + "." + p.domain,
 			Repo:   src.Repo,
 			Branch: src.Branch,
@@ -98,6 +106,8 @@ type projectView struct {
 	Deploys     []Deploy      `json:"deploys"`
 	Previews    []previewView `json:"previews"`
 	Origin      string        `json:"origin,omitempty"`
+	SleepAfter  int           `json:"sleepAfter"`
+	Sleeping    bool          `json:"sleeping"`
 }
 
 func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +123,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 		running := 0
 		if apps, err := registry.Load(); err == nil {
 			if a, ok := apps[app]; ok {
-				state = p.eng.State(a.Container)
+				state = p.displayState(app, a.Container)
 				running = len(a.Replicas)
 				if running == 0 {
 					running = 1
@@ -129,6 +139,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			Auto: src.Auto, PreviewAuto: src.PreviewAuto, Replicas: src.Replicas, Running: running,
 			Release: src.Release, Autoscale: src.Autoscale, ScaleMin: src.ScaleMin, ScaleMax: src.ScaleMax, ScaleCPU: src.ScaleCPU,
 			Deploys: deploys, Previews: p.buildPreviews(app), Origin: src.Origin,
+			SleepAfter: src.SleepAfter, Sleeping: isSleeping(app),
 		})
 	case http.MethodPut:
 		var body struct {
@@ -143,6 +154,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			ScaleMin    int    `json:"scaleMin"`
 			ScaleMax    int    `json:"scaleMax"`
 			ScaleCPU    int    `json:"scaleCpu"`
+			SleepAfter  int    `json:"sleepAfter"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		src, ok := getSource(app)
@@ -173,6 +185,9 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 		}
 		if body.ScaleCPU >= 10 && body.ScaleCPU <= 100 {
 			src.ScaleCPU = body.ScaleCPU
+		}
+		if body.SleepAfter == 0 || (body.SleepAfter >= 5 && body.SleepAfter <= 24*60) {
+			src.SleepAfter = body.SleepAfter
 		}
 		_ = putSource(src)
 		p.audit(r, "settings.update", app, "")

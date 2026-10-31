@@ -18,6 +18,7 @@ import (
 
 	"github.com/nuelScript/skiff/internal/docker"
 	"github.com/nuelScript/skiff/internal/mail"
+	"github.com/nuelScript/skiff/internal/sleep"
 )
 
 type Router struct {
@@ -33,6 +34,8 @@ type Router struct {
 	MetricsFile string
 	// RequestsDir, when set, receives a daily JSONL log of each request to an app, which the panel reads for per-project insights.
 	RequestsDir string
+	// SleepFile lists apps the panel stopped for being idle; a visit to one starts it again.
+	SleepFile string
 	// MailFile is the JSON forwarding table (domain → alias → destinations) read live by the SMTP listener on SMTPAddr.
 	MailFile string
 	SMTPAddr string
@@ -45,6 +48,9 @@ type Router struct {
 	cachedDomains map[string]string
 	cachedDomAt   time.Time
 	rr            map[string]uint64 // per-app round-robin cursor across replicas
+	cachedSleep   sleep.Apps
+	cachedSleepAt time.Time
+	wakeMu        sync.Mutex
 
 	// mailMu is separate from mu so reading the forwarding table can't serialize against request routing.
 	mailMu        sync.Mutex
@@ -183,16 +189,13 @@ func (rt *Router) routes() ([]docker.Route, error) {
 }
 
 func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string) bool {
-	routes, err := rt.routes()
-	if err != nil {
+	if _, err := rt.routes(); err != nil {
 		http.Error(w, "skiff: "+err.Error(), http.StatusInternalServerError)
 		return true
 	}
-	var ports []int
-	for _, rr := range routes {
-		if rr.App == app {
-			ports = append(ports, rr.HostPort)
-		}
+	ports := rt.portsFor(app)
+	if len(ports) == 0 {
+		ports = rt.wake(app)
 	}
 	if len(ports) == 0 {
 		http.Error(w, "skiff: no app named "+app, http.StatusNotFound)
