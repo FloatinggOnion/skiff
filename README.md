@@ -123,6 +123,7 @@ logs, metrics and rollback.
 | `skiff proxy` | local `*.localhost` router |
 | `skiff server setup <user@host>` | bootstrap Docker on a fresh box over SSH |
 | `skiff mcp` | serve your projects to AI agents over MCP |
+| `skiff server restore <file>` | rebuild Skiff's state on a new server from a backup |
 
 The control plane itself — the web console (`skiff panel`) and edge router
 (`skiff router`) — is normally run for you by the [server installer](#run-it-on-your-own-server).
@@ -171,6 +172,18 @@ the setup key it prints. The full walkthrough is in the
 
 Prefer the CLI? `skiff server setup user@host` bootstraps Docker on a box so you
 can `skiff deploy` to it over SSH.
+
+### Moving to a new server
+
+Skiff backs up its own state every day to your offsite bucket, sealed with a
+recovery key you can view on the Server page. On the new box, install Skiff, then:
+
+```bash
+skiff server restore skiff-<date>.skiffbak --key <recovery key>
+```
+
+Projects, settings, domains and tokens come back as they were, and each managed
+database is recreated and loaded from its newest offsite backup.
 
 ## Contributing
 
