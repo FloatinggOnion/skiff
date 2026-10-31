@@ -44,11 +44,12 @@ func TestObjectStorage(t *testing.T) {
 	}
 	network := strings.Fields(string(netOut))[0]
 
+	run(t, "", nil, "docker", "pull", "-q", "curlimages/curl:8.10.1")
 	curl := func(user string, args ...string) string {
 		t.Helper()
 		full := append([]string{"run", "--rm", "--network", network, "curlimages/curl:8.10.1", "-s", "-o", "/dev/null", "-w", "%{http_code}",
 			"--aws-sigv4", "aws:amz:us-east-1:s3", "--user", user}, args...)
-		out, err := exec.Command("docker", full...).CombinedOutput()
+		out, err := exec.Command("docker", full...).Output()
 		if err != nil {
 			t.Fatalf("curl: %v %s", err, out)
 		}
