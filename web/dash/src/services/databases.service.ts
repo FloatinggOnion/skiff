@@ -9,6 +9,13 @@ export type Backup = {
   created: number
 }
 
+export type UnmanagedDatabase = {
+  container: string
+  engine: DbEngine
+  image: string
+  volume: string
+}
+
 export type Database = {
   id: string
   name: string
@@ -26,6 +33,14 @@ export type Database = {
 class DatabasesService extends BaseService {
   list() {
     return this.get<Database[]>('/databases')
+  }
+
+  unmanaged() {
+    return this.get<UnmanagedDatabase[]>('/databases/unmanaged')
+  }
+
+  adopt(container: string, name: string) {
+    return this.post<Database>('/databases/unmanaged', undefined, { params: { container, name } })
   }
 
   create(engine: DbEngine, name: string) {

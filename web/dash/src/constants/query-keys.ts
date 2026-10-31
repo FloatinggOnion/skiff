@@ -9,6 +9,7 @@ export const queryKeys = {
   domains: ['domains'] as const,
   mail: ['mail'] as const,
   databases: ['databases'] as const,
+  databasesUnmanaged: ['databases', 'unmanaged'] as const,
   storage: ['storage'] as const,
   members: ['members'] as const,
   alerts: ['alerts'] as const,

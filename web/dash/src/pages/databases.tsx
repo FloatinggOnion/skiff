@@ -23,6 +23,7 @@ import {
 import { useApps } from '@/hooks/use-apps'
 import { useDatabases } from '@/hooks/use-databases'
 import { ConsoleTerminal } from '@/components/console-terminal'
+import { UnmanagedDatabases } from '@/components/unmanaged-databases'
 import { databasesService, type Backup } from '@/services/api.service'
 import { useConfirm } from '@/providers/confirm-provider'
 import { Button } from '@/components/ui/button'
@@ -85,6 +86,8 @@ export default function DatabasesPage() {
           </Button>
         )}
       </header>
+
+      <UnmanagedDatabases dot={(e) => engineMeta(e).dot} />
 
       {isPending && <CardListSkeleton count={3} />}
       {!isPending && isError && databases.length === 0 && (

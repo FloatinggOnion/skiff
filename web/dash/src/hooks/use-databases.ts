@@ -1,6 +1,11 @@
 import { useCallback } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { databasesService, type Database, type DbEngine } from '@/services/api.service'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  databasesService,
+  type Database,
+  type DbEngine,
+  type UnmanagedDatabase,
+} from '@/services/api.service'
 import { queryKeys } from '@/constants/query-keys'
 
 export function useDatabases() {
@@ -58,4 +63,22 @@ export function useDatabases() {
   )
 
   return { databases, isPending, isError, create, remove, attach, detach, setPublic }
+}
+
+// Database containers running on the box that weren't created through Skiff (owner-only; empty for everyone else).
+export function useUnmanagedDatabases() {
+  const qc = useQueryClient()
+  const { data: found = [] } = useQuery<UnmanagedDatabase[]>({
+    queryKey: queryKeys.databasesUnmanaged,
+    queryFn: () => databasesService.unmanaged(),
+    refetchInterval: 30000,
+  })
+  const adopt = useMutation({
+    mutationFn: ({ container, name }: { container: string; name: string }) =>
+      databasesService.adopt(container, name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.databases })
+    },
+  })
+  return { found, adopt }
 }
