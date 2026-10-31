@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Trash2, ScrollText } from 'lucide-react'
+import { LogHistory } from '@/components/log-history'
 import { useApps } from '@/hooks/use-apps'
 import { useLogStream } from '@/hooks/use-log-stream'
 import { useAutoScroll } from '@/hooks/use-auto-scroll'
@@ -13,7 +15,14 @@ const runningDot = (state: string): string =>
 
 export default function LogsPage() {
   const { apps } = useApps()
-  const [selected, setSelected] = useState<string | null>(null)
+  const [params] = useSearchParams()
+  const [selected, setSelected] = useState<string | null>(params.get('app'))
+  const window = useMemo(() => {
+    const since = Number(params.get('since')),
+      until = Number(params.get('until'))
+    return since > 0 && until > since ? { since, until } : undefined
+  }, [params])
+  const [mode, setMode] = useState<'live' | 'history'>(window ? 'history' : 'live')
 
   // Default to the first app once they load; keep the selection valid.
   useEffect(() => {
@@ -21,7 +30,7 @@ export default function LogsPage() {
     setSelected((cur) => (cur && apps.some((a) => a.name === cur) ? cur : apps[0].name))
   }, [apps])
 
-  const { lines, live, clear } = useLogStream(selected)
+  const { lines, live, clear } = useLogStream(mode === 'live' ? selected : null)
   const scrollRef = useAutoScroll<HTMLDivElement>(lines.length)
 
   return (
@@ -29,7 +38,7 @@ export default function LogsPage() {
       <header className="mb-6 shrink-0">
         <h1 className="text-xl font-semibold tracking-tight">Logs</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Live runtime output streamed straight from the container.
+          Live output straight from the container, and the last 7 days saved and searchable.
         </p>
       </header>
 
@@ -73,7 +82,21 @@ export default function LogsPage() {
             <span className="text-muted-foreground font-mono text-xs">
               {selected ? selected : 'no app selected'}
             </span>
-            {selected && (
+            <div className="flex rounded-[5px] border border-white/10 p-0.5">
+              {(['live', 'history'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={
+                    'rounded-[3px] px-2 py-0.5 font-mono text-[11px] ' +
+                    (mode === m ? 'bg-white/10 text-white' : 'text-muted-foreground')
+                  }
+                >
+                  {m === 'live' ? 'Live' : 'History'}
+                </button>
+              ))}
+            </div>
+            {selected && mode === 'live' && (
               <span className="flex items-center gap-1.5 font-mono text-[11px]">
                 <span
                   className={
@@ -86,7 +109,7 @@ export default function LogsPage() {
                 </span>
               </span>
             )}
-            <div className="ml-auto flex items-center gap-3">
+            <div className={'ml-auto flex items-center gap-3 ' + (mode === 'live' ? '' : 'hidden')}>
               <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
                 {lines.length} lines
               </span>
@@ -101,8 +124,10 @@ export default function LogsPage() {
             </div>
           </div>
 
+          {mode === 'history' && selected && <LogHistory app={selected} window={window} />}
           <div
             ref={scrollRef}
+            hidden={mode === 'history' && !!selected}
             className="term-scroll min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-relaxed"
           >
             {!selected ? (

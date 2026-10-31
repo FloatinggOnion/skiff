@@ -1,4 +1,11 @@
-import { ChevronRight, ExternalLink, GitBranch, RotateCcw, RotateCw } from 'lucide-react'
+import {
+  ChevronRight,
+  ExternalLink,
+  GitBranch,
+  RotateCcw,
+  RotateCw,
+  ScrollText,
+} from 'lucide-react'
 import { useMemo, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ConsoleTerminal } from '@/components/console-terminal'
@@ -323,6 +330,16 @@ export default function ProjectDetailPage() {
                       {relTime(d.started)}
                     </span>
                   </button>
+                  {d.status === 'live' && (
+                    <Link
+                      to={`/logs?app=${encodeURIComponent(project.name)}&since=${d.started}&until=${d.started + 1800}`}
+                      title="Runtime logs from the 30 minutes after this deploy"
+                      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 rounded-[6px] border border-white/10 px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 hover:border-white/20"
+                    >
+                      <ScrollText className="h-3 w-3" />
+                      Logs
+                    </Link>
+                  )}
                   {d.rollbackable && (
                     <button
                       onClick={async () => {
