@@ -74,6 +74,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go p.uptimeLoop()
 	go p.sleepLoop()
 	go p.cpBackupLoop()
+	go p.appLogLoop()
 	return p, nil
 }
 
@@ -157,6 +158,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/apps/{name}/insights", p.apiAuth(p.apiInsights))
 	mux.HandleFunc("/api/deploy", p.protected(p.handleDeploy))
 	mux.HandleFunc("/api/logs", p.protected(p.handleLogs))
+	mux.HandleFunc("/api/logs/history", p.protected(p.handleLogHistory))
 	mux.HandleFunc("/api/down", p.protected(p.handleDown))
 	mux.HandleFunc("/api/env", p.protected(p.handleEnv))
 	mux.HandleFunc("/api/deploys", p.protected(p.handleDeploys))

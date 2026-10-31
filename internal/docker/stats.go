@@ -129,3 +129,18 @@ func parseSize(s string) int64 {
 	}
 	return int64(num * mult)
 }
+
+// WorkerContainerKeys maps each running worker container to its app.
+func (e *Engine) WorkerContainerKeys() (map[string]string, error) {
+	out, err := e.command("ps", "--filter", "label=skiff.worker.app", "--format", `{{.Names}} {{.Label "skiff.worker.app"}}`).Output()
+	if err != nil {
+		return nil, err
+	}
+	keys := map[string]string{}
+	for _, line := range splitLines(out) {
+		if f := strings.Fields(line); len(f) == 2 {
+			keys[f[0]] = f[1]
+		}
+	}
+	return keys, nil
+}
