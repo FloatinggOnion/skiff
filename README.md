@@ -78,9 +78,19 @@ platform in the browser:
 
 - **Push-to-deploy** — connect GitHub and every push builds and ships, with
   zero-downtime rollout and instant rollback.
-- **Preview environments** — every branch gets its own live URL and certificate.
+- **Preview environments** — every branch gets its own live URL and certificate,
+  posted on its pull request.
+- **Observability** — per-project requests, errors, latency, visitors, top pages
+  and referrers, with deploys marked on the charts, plus uptime checks and
+  incidents.
+- **Cost** — what each app, database and bucket costs per month out of your
+  server's price, and how much room is left.
+- **Sleep when idle** — stop quiet apps to free their memory; the next visit
+  wakes them.
 - **Managed databases** — Postgres, MySQL, MongoDB, and Redis, provisioned and
-  wired into your apps, with automatic daily backups.
+  wired into your apps, with automatic daily backups (optionally copied to any
+  S3-compatible bucket). Databases you started by hand can be brought under
+  management too.
 - **Object storage** — S3-compatible buckets.
 - **Email forwarding** — point a domain's MX at your server and send
   `hello@yourdomain.com` to any inbox, catch-all included.
@@ -92,6 +102,11 @@ platform in the browser:
   5xx errors spike.
 - **Teams, audit log, and API tokens** — collaborators, an activity trail, and a
   token-authenticated API for CI.
+- **Agents** — `skiff mcp` lets an AI assistant list projects, deploy, read logs
+  and traffic, change env vars and roll back.
+
+Apps shipped with `skiff deploy` show up in the console too, with their history,
+logs, metrics and rollback.
 
 ## Commands
 
@@ -107,6 +122,7 @@ platform in the browser:
 | `skiff sync` | prune orphans / dead entries |
 | `skiff proxy` | local `*.localhost` router |
 | `skiff server setup <user@host>` | bootstrap Docker on a fresh box over SSH |
+| `skiff mcp` | serve your projects to AI agents over MCP |
 
 The control plane itself — the web console (`skiff panel`) and edge router
 (`skiff router`) — is normally run for you by the [server installer](#run-it-on-your-own-server).

@@ -11,7 +11,10 @@ export const DOCS_NAV: DocSection[] = [
   },
   {
     title: "Guides",
-    items: [{ href: "/docs/email-forwarding", label: "Email forwarding" }],
+    items: [
+      { href: "/docs/email-forwarding", label: "Email forwarding" },
+      { href: "/docs/agents", label: "AI agents (MCP)" },
+    ],
   },
 ];
 
