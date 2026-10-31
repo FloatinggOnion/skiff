@@ -119,6 +119,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/backups", p.protected(p.handleBackups))
 	mux.HandleFunc("/api/backups/restore", p.protected(p.handleBackupRestore))
 	mux.HandleFunc("/api/backups/download", p.protected(p.handleBackupDownload))
+	mux.HandleFunc("/api/backups/offsite", p.protected(p.handleOffsite))
 	mux.HandleFunc("/api/jobs", p.protected(p.handleJobs))
 	mux.HandleFunc("/api/jobs/run", p.protected(p.handleJobRun))
 	mux.HandleFunc("/api/workers", p.protected(p.handleWorkers))

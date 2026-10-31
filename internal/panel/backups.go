@@ -21,6 +21,7 @@ type Backup struct {
 	Size    int64  `json:"size"`
 	Trigger string `json:"trigger"` // manual | scheduled
 	Created int64  `json:"created"`
+	Offsite string `json:"offsite,omitempty"` // "" not sent, pending, ok or failed
 }
 
 type backupRow struct {
@@ -28,13 +29,14 @@ type backupRow struct {
 	Size                         int64
 	Trigger                      string
 	Created                      int64
+	Offsite                      string
 }
 
-const backupCols = `id,db_id,team,engine,file,size,trigger,created`
+const backupCols = `id,db_id,team,engine,file,size,trigger,created,offsite`
 
 func scanBackup(row interface{ Scan(...any) error }) (backupRow, bool) {
 	var b backupRow
-	if row.Scan(&b.ID, &b.DbID, &b.Team, &b.Engine, &b.File, &b.Size, &b.Trigger, &b.Created) != nil {
+	if row.Scan(&b.ID, &b.DbID, &b.Team, &b.Engine, &b.File, &b.Size, &b.Trigger, &b.Created, &b.Offsite) != nil {
 		return backupRow{}, false
 	}
 	return b, true
@@ -63,8 +65,8 @@ func listBackupRows(dbID string) []backupRow {
 }
 
 func putBackup(b backupRow) error {
-	_, err := sqlDB.Exec(`INSERT INTO backups(`+backupCols+`) VALUES(?,?,?,?,?,?,?,?)`,
-		b.ID, b.DbID, b.Team, b.Engine, b.File, b.Size, b.Trigger, b.Created)
+	_, err := sqlDB.Exec(`INSERT INTO backups(`+backupCols+`) VALUES(?,?,?,?,?,?,?,?,?)`,
+		b.ID, b.DbID, b.Team, b.Engine, b.File, b.Size, b.Trigger, b.Created, b.Offsite)
 	return err
 }
 
@@ -145,11 +147,16 @@ func (p *Panel) runBackup(d dbRow, trigger string) (backupRow, error) {
 		return backupRow{}, err
 	}
 	pruneBackups(d.ID, backupRetention)
+	if getOffsite(d.Team).configured() {
+		b.Offsite = "pending"
+		setBackupOffsite(b.ID, b.Offsite)
+		uploadOffsiteAsync(d, b)
+	}
 	return b, nil
 }
 
 func toBackup(b backupRow) Backup {
-	return Backup{ID: b.ID, Size: b.Size, Trigger: b.Trigger, Created: b.Created}
+	return Backup{ID: b.ID, Size: b.Size, Trigger: b.Trigger, Created: b.Created, Offsite: b.Offsite}
 }
 
 func (p *Panel) handleBackups(w http.ResponseWriter, r *http.Request) {

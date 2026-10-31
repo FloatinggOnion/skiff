@@ -66,6 +66,7 @@ var migrations = []string{
 	`ALTER TABLE databases ADD COLUMN image TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE databases ADD COLUMN volume TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE databases ADD COLUMN cmd TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE backups ADD COLUMN offsite TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -185,7 +186,8 @@ CREATE TABLE IF NOT EXISTS backups (
   file    TEXT NOT NULL,
   size    INTEGER NOT NULL DEFAULT 0,
   trigger TEXT NOT NULL DEFAULT 'manual',
-  created INTEGER NOT NULL
+  created INTEGER NOT NULL,
+  offsite TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_backups_db ON backups(db_id, created DESC);
 CREATE TABLE IF NOT EXISTS jobs (
@@ -260,4 +262,20 @@ CREATE TABLE IF NOT EXISTS mail_forwards (
   UNIQUE (domain, alias)
 );
 CREATE INDEX IF NOT EXISTS idx_mail_forwards_team ON mail_forwards(team);
+CREATE TABLE IF NOT EXISTS backup_targets (
+  team       TEXT PRIMARY KEY,
+  endpoint   TEXT NOT NULL,
+  region     TEXT NOT NULL DEFAULT '',
+  bucket     TEXT NOT NULL,
+  prefix     TEXT NOT NULL DEFAULT '',
+  access_key TEXT NOT NULL,
+  secret_key TEXT NOT NULL,
+  updated    INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS offsite_objects (
+  db_id   TEXT NOT NULL,
+  key     TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  PRIMARY KEY (db_id, key)
+);
 `

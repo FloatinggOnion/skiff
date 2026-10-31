@@ -136,23 +136,28 @@ func postWebhook(url string, ev alertEvent) error {
 }
 
 // alertHTTPClient refuses to dial private/loopback/link-local addresses; the check runs at dial time on the resolved IP, so it also stops DNS-rebinding SSRF via user-supplied webhook URLs.
-var alertHTTPClient = &http.Client{
-	Timeout: 8 * time.Second,
-	Transport: &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: 5 * time.Second,
-			Control: func(_, address string, _ syscall.RawConn) error {
-				host, _, err := net.SplitHostPort(address)
-				if err != nil {
-					return err
-				}
-				if ip := net.ParseIP(host); isBlockedDialIP(ip) {
-					return fmt.Errorf("refusing to connect to non-public address %s", host)
-				}
-				return nil
-			},
-		}).DialContext,
-	},
+var alertHTTPClient = publicHTTPClient(8 * time.Second)
+
+// publicHTTPClient only dials public addresses, for requests to URLs a user typed in.
+func publicHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 5 * time.Second,
+				Control: func(_, address string, _ syscall.RawConn) error {
+					host, _, err := net.SplitHostPort(address)
+					if err != nil {
+						return err
+					}
+					if ip := net.ParseIP(host); isBlockedDialIP(ip) {
+						return fmt.Errorf("refusing to connect to non-public address %s", host)
+					}
+					return nil
+				},
+			}).DialContext,
+		},
+	}
 }
 
 func isBlockedDialIP(ip net.IP) bool {
