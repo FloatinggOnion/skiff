@@ -69,6 +69,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go p.alertLoop()
 	go p.gcLoop()
 	go p.cliAppLoop()
+	go p.requestsLoop()
 	return p, nil
 }
 
@@ -130,6 +131,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/shared-env", p.protected(p.handleSharedEnv))
 	mux.HandleFunc("/api/analytics", p.protected(p.handleAnalytics))
 	mux.HandleFunc("/api/resources", p.protected(p.handleResources))
+	mux.HandleFunc("/api/insights", p.protected(p.handleInsights))
 	mux.HandleFunc("/api/alerts", p.protected(p.handleAlerts))
 	mux.HandleFunc("/api/alerts/test", p.protected(p.handleAlertTest))
 	mux.HandleFunc("/api/audit", p.protected(p.handleAudit))

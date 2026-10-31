@@ -272,6 +272,24 @@ CREATE TABLE IF NOT EXISTS backup_targets (
   secret_key TEXT NOT NULL,
   updated    INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS requests (
+  t       INTEGER NOT NULL,
+  app     TEXT NOT NULL,
+  method  TEXT NOT NULL DEFAULT '',
+  path    TEXT NOT NULL DEFAULT '',
+  status  INTEGER NOT NULL DEFAULT 0,
+  dur     INTEGER NOT NULL DEFAULT 0,
+  bytes   INTEGER NOT NULL DEFAULT 0,
+  ref     TEXT NOT NULL DEFAULT '',
+  visitor TEXT NOT NULL DEFAULT '',
+  bot     INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_requests_app_t ON requests(app, t);
+CREATE INDEX IF NOT EXISTS idx_requests_t ON requests(t);
+CREATE TABLE IF NOT EXISTS request_ingest (
+  file   TEXT PRIMARY KEY,
+  pos    INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS offsite_objects (
   db_id   TEXT NOT NULL,
   key     TEXT NOT NULL,
