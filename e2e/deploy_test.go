@@ -68,9 +68,93 @@ func TestGitDeployLifecycle(t *testing.T) {
 	stream(t, c, "http://"+panelAddr+"/api/rollback?app="+app+"&id="+project.Deploys[1].ID)
 	expectServed(t, routerAddr, "v1")
 
+	checkMCP(t, c, bin, panelAddr, routerAddr, project.Deploys[0].ID)
+
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("containers left after teardown: %s", out)
+	}
+}
+
+// checkMCP drives `skiff mcp` the way an agent would, through the token API on the live panel.
+func checkMCP(t *testing.T, c *http.Client, bin, panelAddr, routerAddr, v2Deploy string) {
+	t.Helper()
+	resp, err := c.Post("http://"+panelAddr+"/api/tokens", "application/json", strings.NewReader(`{"name":"e2e-agent"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tok struct {
+		Token string `json:"token"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&tok)
+	resp.Body.Close()
+	if tok.Token == "" {
+		t.Fatal("no API token")
+	}
+
+	cmd := exec.Command(bin, "mcp")
+	cmd.Env = append(os.Environ(), "SKIFF_URL=http://"+panelAddr, "SKIFF_TOKEN="+tok.Token)
+	stdin, _ := cmd.StdinPipe()
+	stdout, _ := cmd.StdoutPipe()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stdin.Close(); _ = cmd.Wait() }()
+	out := bufio.NewScanner(stdout)
+	out.Buffer(make([]byte, 0, 64*1024), 8<<20)
+	id := 0
+	call := func(method string, params any) map[string]any {
+		t.Helper()
+		id++
+		b, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+		_, _ = stdin.Write(append(b, '\n'))
+		if !out.Scan() {
+			t.Fatalf("mcp closed during %s", method)
+		}
+		var r map[string]any
+		_ = json.Unmarshal(out.Bytes(), &r)
+		return r
+	}
+	tool := func(name string, args map[string]any) (string, bool) {
+		t.Helper()
+		r, _ := call("tools/call", map[string]any{"name": name, "arguments": args})["result"].(map[string]any)
+		if r == nil {
+			t.Fatalf("%s: no result", name)
+		}
+		text := r["content"].([]any)[0].(map[string]any)["text"].(string)
+		return text, r["isError"].(bool)
+	}
+
+	call("initialize", map[string]any{"protocolVersion": "2025-06-18"})
+	tools := call("tools/list", nil)["result"].(map[string]any)["tools"].([]any)
+	if len(tools) < 8 {
+		t.Fatalf("only %d tools", len(tools))
+	}
+	if text, isErr := tool("list_projects", nil); isErr || !strings.Contains(text, app) {
+		t.Fatalf("list_projects: %s", text)
+	}
+	if text, isErr := tool("list_deploys", map[string]any{"name": app}); isErr || !strings.Contains(text, "rollbackable") {
+		t.Fatalf("list_deploys: %s", text)
+	}
+	if text, isErr := tool("app_logs", map[string]any{"name": app, "lines": 20}); isErr {
+		t.Fatalf("app_logs: %s", text)
+	}
+	if text, isErr := tool("app_traffic", map[string]any{"name": app, "range": "1h"}); isErr || !strings.Contains(text, "uptime") {
+		t.Fatalf("app_traffic: %s", text)
+	}
+	if text, isErr := tool("set_env", map[string]any{"name": app, "set": map[string]any{"GREETING": "hi"}}); isErr {
+		t.Fatalf("set_env: %s", text)
+	}
+	tool("set_env", map[string]any{"name": app, "set": map[string]any{"OTHER": "x"}})
+	if text, _ := tool("get_env", map[string]any{"name": app}); !strings.Contains(text, "GREETING") || !strings.Contains(text, "OTHER") {
+		t.Fatalf("set_env should merge, not replace: %s", text)
+	}
+	if text, isErr := tool("rollback", map[string]any{"name": app, "deploy": v2Deploy}); isErr || !strings.Contains(text, "live") {
+		t.Fatalf("rollback via mcp: %s", text)
+	}
+	expectServed(t, routerAddr, "v2")
+	if text, isErr := tool("get_project", map[string]any{"name": "not-mine"}); !isErr || !strings.Contains(text, "not found") {
+		t.Fatalf("unknown project should be an error result: %s", text)
 	}
 }
 
