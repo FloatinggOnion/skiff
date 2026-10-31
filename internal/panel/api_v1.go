@@ -1,10 +1,14 @@
 package panel
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nuelScript/skiff/internal/registry"
 )
@@ -73,7 +77,7 @@ type apiApp struct {
 
 func (p *Panel) apiAppView(a registry.App, src Source) apiApp {
 	v := apiApp{
-		Name: a.Name, State: p.eng.State(a.Container),
+		Name: a.Name, State: p.displayState(a.Name, a.Container),
 		URL:  "https://" + a.Name + "." + p.domain,
 		Repo: src.Repo, Branch: src.Branch,
 		Replicas: src.Replicas, Running: len(a.Replicas), Autoscale: src.Autoscale,
@@ -123,6 +127,10 @@ func (p *Panel) apiDeploy(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusNotFound, "app not found")
 		return
 	}
+	if src.Origin == originCLI {
+		apiErr(w, http.StatusConflict, cliOnlyMsg)
+		return
+	}
 	id := newDeployID()
 	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "deploy", Target: name, Detail: "via api"})
 	go p.runDeploy(src, "", "", "", "api", id)
@@ -166,4 +174,108 @@ func (p *Panel) apiEnv(w http.ResponseWriter, r *http.Request) {
 		recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "env.update", Target: name, Detail: "via api"})
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func (p *Panel) apiDeploys(w http.ResponseWriter, r *http.Request) {
+	name := sanitizeName(r.PathValue("name"))
+	if _, ok := apiSource(r, name); !ok {
+		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	deploys := appDeploys(name)
+	p.markRollbackable(name, deploys)
+	apiJSON(w, http.StatusOK, deploys)
+}
+
+// apiDeployLog returns the last lines of a deploy's build log.
+func (p *Panel) apiDeployLog(w http.ResponseWriter, r *http.Request) {
+	d, ok := getDeployByID(sanitizeID(r.PathValue("id")))
+	if !ok {
+		apiErr(w, http.StatusNotFound, "deploy not found")
+		return
+	}
+	if _, ok := apiSource(r, d.App); !ok {
+		apiErr(w, http.StatusNotFound, "deploy not found")
+		return
+	}
+	b, _ := os.ReadFile(logPath(d.App, d.ID))
+	apiJSON(w, http.StatusOK, map[string]any{"deploy": d, "log": tailLines(string(b), 200)})
+}
+
+func (p *Panel) apiLogs(w http.ResponseWriter, r *http.Request) {
+	name := sanitizeName(r.PathValue("name"))
+	if _, ok := apiSource(r, name); !ok {
+		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	apps, _ := registry.Load()
+	a, ok := apps[name]
+	if !ok {
+		apiErr(w, http.StatusNotFound, "app isn't running")
+		return
+	}
+	lines := 200
+	if n, err := strconv.Atoi(r.URL.Query().Get("lines")); err == nil && n > 0 && n <= 2000 {
+		lines = n
+	}
+	var buf bytes.Buffer
+	_ = p.eng.Logs(a.Container, false, strconv.Itoa(lines), &buf)
+	apiJSON(w, http.StatusOK, map[string]string{"app": name, "logs": buf.String()})
+}
+
+func (p *Panel) apiRollback(w http.ResponseWriter, r *http.Request) {
+	name := sanitizeName(r.PathValue("name"))
+	src, ok := apiSource(r, name)
+	if !ok {
+		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	var body struct {
+		Deploy string `json:"deploy"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	target := sanitizeID(body.Deploy)
+	deploys := appDeploys(name)
+	p.markRollbackable(name, deploys)
+	var to *Deploy
+	for i := range deploys {
+		if deploys[i].ID == target && deploys[i].Rollbackable {
+			to = &deploys[i]
+		}
+	}
+	if to == nil {
+		apiErr(w, http.StatusBadRequest, "that deploy can't be rolled back to; list deploys and pick one marked rollbackable")
+		return
+	}
+	id := newDeployID()
+	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "rollback", Target: name, Detail: "to " + to.Commit + " via api"})
+	go p.runRollback(src, to.ID, to.Commit, to.Message, id)
+	apiJSON(w, http.StatusAccepted, map[string]string{"id": id, "app": name, "status": "building"})
+}
+
+func (p *Panel) apiInsights(w http.ResponseWriter, r *http.Request) {
+	name := sanitizeName(r.PathValue("name"))
+	if _, ok := apiSource(r, name); !ok {
+		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	in, err := buildInsights(name, r.URL.Query().Get("range"), time.Now())
+	if err != nil {
+		apiErr(w, http.StatusInternalServerError, "couldn't read requests")
+		return
+	}
+	up := buildUptime(name, time.Now())
+	in.Series = nil
+	apiJSON(w, http.StatusOK, map[string]any{
+		"traffic": in,
+		"uptime":  map[string]any{"up": up.Up, "pct24h": up.Pct24h, "pct7d": up.Pct7d, "incidents": up.Incidents},
+	})
+}
+
+func tailLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }
