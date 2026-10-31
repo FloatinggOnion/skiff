@@ -411,16 +411,14 @@ export default function ProjectDetailPage() {
 
         {/* Environment */}
         <TabsContent value="environment" className="pb-[46vh]">
-          {cli ? (
-            <p className="text-muted-foreground rounded-xl border border-white/8 p-5 text-sm">
-              This app gets its environment from <span className="font-mono">[env]</span> and{' '}
-              <span className="font-mono">[secrets]</span> in the{' '}
-              <span className="font-mono">skiff.toml</span> it's deployed with, so edit it there and
-              run <span className="font-mono">skiff deploy</span>.
+          {cli && (
+            <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
+              These apply on the next <span className="font-mono">skiff deploy</span> from a CLI
+              signed in with <span className="font-mono">skiff login</span>. Anything its{' '}
+              <span className="font-mono">skiff.toml</span> also sets keeps the toml&apos;s value.
             </p>
-          ) : (
-            <EnvEditor app={project.name} />
           )}
+          <EnvEditor app={project.name} />
         </TabsContent>
 
         {/* Jobs */}

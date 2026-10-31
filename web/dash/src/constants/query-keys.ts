@@ -21,6 +21,7 @@ export const queryKeys = {
   insights: (app: string, range: string) => ['insights', app, range] as const,
   cost: ['cost'] as const,
   controlPlane: ['control-plane'] as const,
+  cliLogin: (code: string) => ['cli-login', code] as const,
   logHistory: (app: string, q: string, errors: boolean, since: number, until: number) =>
     ['logs', 'history', app, q, errors, since, until] as const,
   uptime: (app: string) => ['uptime', app] as const,

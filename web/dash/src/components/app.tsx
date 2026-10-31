@@ -17,6 +17,7 @@ import DatabasesPage from '@/pages/databases'
 import StoragePage from '@/pages/storage'
 import EnvPage from '@/pages/env'
 import SettingsPage from '@/pages/settings'
+import CliLoginPage from '@/pages/cli-login'
 import { AnalyticsSkeleton } from '@/components/skeletons'
 
 const AnalyticsPage = lazy(() => import('@/pages/analytics'))
@@ -64,6 +65,7 @@ export default function App() {
               <Route path="storage" element={<StoragePage />} />
               <Route path="env" element={<EnvPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="cli-login" element={<CliLoginPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
