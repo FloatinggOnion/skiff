@@ -83,6 +83,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 
 	ctx, superseded, done := beginBuild(src.App, id)
 	defer done()
+	go p.commentOnPR(src, shortCommit(commit), "building")
 	// finish maps a supersede (canceled by a newer deploy) to "canceled", not "failed" — no failure alert.
 	finish := func(failMsg string) {
 		if superseded() {
@@ -92,6 +93,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		}
 		logln(failMsg)
 		setDeployStatus(src.App, id, "failed")
+		go p.commentOnPR(src, shortCommit(commit), "failed")
 		go dispatchAlert(alertEvent{
 			Team: src.Team, Kind: "deploy.failed", App: src.App,
 			Title:  "Deploy failed: " + src.App,
@@ -166,6 +168,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	logln("✓ live")
 	setDeployStatus(src.App, id, "live")
 	p.reconcileWorkers(src.App)
+	go p.commentOnPR(src, shortCommit(commit), "live")
 }
 
 func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {

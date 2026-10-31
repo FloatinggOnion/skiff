@@ -28,6 +28,9 @@ func (p *Panel) handleGithubStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 	if cfg.Configured() {
 		out["slug"] = cfg.Slug
+		if prCommentsNeedGrant() {
+			out["permissionsUrl"] = "https://github.com/settings/apps/" + cfg.Slug + "/permissions"
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)

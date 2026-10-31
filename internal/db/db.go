@@ -319,6 +319,12 @@ CREATE TABLE IF NOT EXISTS incidents (
   cause   TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_incidents_app ON incidents(app, started DESC);
+CREATE TABLE IF NOT EXISTS pr_comments (
+  app        TEXT NOT NULL,
+  pr         INTEGER NOT NULL,
+  comment_id INTEGER NOT NULL,
+  PRIMARY KEY (app, pr)
+);
 CREATE TABLE IF NOT EXISTS offsite_objects (
   db_id   TEXT NOT NULL,
   key     TEXT NOT NULL,

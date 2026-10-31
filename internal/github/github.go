@@ -2,6 +2,7 @@
 package github
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/hmac"
 	"crypto/rand"
@@ -12,9 +13,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,7 +77,7 @@ func Manifest(baseURL, name string) string {
 		"setup_url":           baseURL + "/api/github/installed",
 		"setup_on_update":     true,
 		"public":              false,
-		"default_permissions": map[string]string{"contents": "read", "metadata": "read"},
+		"default_permissions": map[string]string{"contents": "read", "metadata": "read", "pull_requests": "write"},
 		"default_events":      []string{"push"},
 	}
 	b, _ := json.Marshal(m)
@@ -299,4 +302,79 @@ func ParsePush(body []byte) (Push, bool) {
 		Message: msg,
 		Paths:   paths,
 	}, true
+}
+
+// apiBase is GitHub's REST root; tests point it at a fake.
+var apiBase = "https://api.github.com"
+
+// ErrForbidden means the app isn't allowed to do this, usually a permission it was never granted.
+var ErrForbidden = errors.New("github app lacks permission")
+
+var errNotFound = errors.New("not found on github")
+
+func (c *Config) call(method, endpoint string, body, out any) error {
+	token, err := c.InstallationToken()
+	if err != nil {
+		return err
+	}
+	var rd io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, endpoint, rd)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusForbidden:
+		return ErrForbidden
+	case resp.StatusCode == http.StatusNotFound:
+		return errNotFound
+	case resp.StatusCode >= 300:
+		return fmt.Errorf("github returned %s", resp.Status)
+	}
+	if out != nil {
+		return json.NewDecoder(resp.Body).Decode(out)
+	}
+	return nil
+}
+
+// OpenPullRequest finds the open pull request whose head is branch in repo ("owner/name"); 0 when there is none.
+func (c *Config) OpenPullRequest(repo, branch string) (int, error) {
+	owner, _, _ := strings.Cut(repo, "/")
+	var prs []struct {
+		Number int `json:"number"`
+	}
+	u := fmt.Sprintf(apiBase+"/repos/%s/pulls?state=open&head=%s", repo, url.QueryEscape(owner+":"+branch))
+	if err := c.call(http.MethodGet, u, nil, &prs); err != nil || len(prs) == 0 {
+		return 0, err
+	}
+	return prs[0].Number, nil
+}
+
+// UpsertComment edits the comment if it still exists, otherwise posts a new one, returning the comment's id.
+func (c *Config) UpsertComment(repo string, pr int, commentID int64, body string) (int64, error) {
+	msg := map[string]string{"body": body}
+	if commentID != 0 {
+		err := c.call(http.MethodPatch, fmt.Sprintf(apiBase+"/repos/%s/issues/comments/%d", repo, commentID), msg, nil)
+		if !errors.Is(err, errNotFound) {
+			return commentID, err
+		}
+	}
+	var out struct {
+		ID int64 `json:"id"`
+	}
+	err := c.call(http.MethodPost, fmt.Sprintf(apiBase+"/repos/%s/issues/%d/comments", repo, pr), msg, &out)
+	return out.ID, err
 }
