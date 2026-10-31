@@ -8,7 +8,12 @@ export type Repo = {
   clone_url: string
 }
 
-export type GithubStatus = { configured: boolean; installed: boolean; slug?: string }
+export type GithubStatus = {
+  configured: boolean
+  installed: boolean
+  slug?: string
+  permissionsUrl?: string // set when preview comments need "Pull requests: write"
+}
 
 class GithubService extends BaseService {
   status() {
