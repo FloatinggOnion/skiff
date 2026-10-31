@@ -1,6 +1,7 @@
 name: test
 
-# Vet and test on every push to main and every pull request. The dashboard is
+# Vet and test on every push to main and every pull request; e2e deploys a repo
+# through the real binary with Docker. The dashboard is
 # already embedded (internal/panel/dist is committed), so no Node build is needed
 # to compile the Go packages.
 
@@ -28,3 +29,16 @@ jobs:
       - run: go vet ./...
 
       - run: go test ./...
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: deploy, redeploy, rollback and teardown through the real binary
+        run: go test -tags e2e -count=1 -v ./e2e/...

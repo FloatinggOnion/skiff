@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,7 +36,11 @@ func newPanelCmd() *cobra.Command {
 			}
 
 			ui.Banner(version)
-			ui.Field("panel", "http://localhost"+addr)
+			shown := addr
+			if strings.HasPrefix(shown, ":") {
+				shown = "localhost" + shown
+			}
+			ui.Field("panel", "http://"+shown)
 			ui.Field("domain", domain)
 			ui.Note("control panel — deploy + manage from the browser (ctrl-c to stop)")
 			fmt.Println()

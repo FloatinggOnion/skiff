@@ -1,8 +1,12 @@
-.PHONY: test vet lint fmt fmt-check build dash install
+.PHONY: test e2e vet lint fmt fmt-check build dash install
 
 # Run the Go test suite.
 test:
 	go test ./...
+
+# Deploy a git repo end to end through the real binary (needs Docker).
+e2e:
+	go test -tags e2e -count=1 -v ./e2e/...
 
 vet:
 	go vet ./...
