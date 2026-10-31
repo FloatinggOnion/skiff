@@ -131,7 +131,7 @@ func (p *Panel) checkUptime() {
 	var wg sync.WaitGroup
 	for name, a := range apps {
 		src, ok := getSource(name)
-		if !ok || src.Parent != "" || isInflight(name) || a.Host != "" || isSleeping(name) {
+		if !ok || !uptimeWatched(src, a) || isInflight(name) || isSleeping(name) {
 			continue
 		}
 		wg.Add(1)
@@ -155,6 +155,11 @@ func (p *Panel) checkUptime() {
 	}
 	wg.Wait()
 	_, _ = sqlDB.Exec(`DELETE FROM uptime_checks WHERE t < ?`, time.Now().Add(-uptimeKeep).Unix())
+}
+
+// uptimeWatched says which apps the uptime probe covers; container-health alerts handle the rest, so one outage alerts once.
+func uptimeWatched(src Source, a registry.App) bool {
+	return src.Parent == "" && a.Host == ""
 }
 
 func roundDur(d time.Duration) string {

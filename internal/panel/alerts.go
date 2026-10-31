@@ -272,9 +272,9 @@ func (p *Panel) checkHealth() {
 	if err != nil {
 		return
 	}
-	for name := range apps {
+	for name, a := range apps {
 		src, ok := getSource(name)
-		if !ok {
+		if !ok || uptimeWatched(src, a) {
 			continue
 		}
 		if isInflight(name) || isSleeping(name) {
