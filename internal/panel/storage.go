@@ -1,6 +1,8 @@
 package panel
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,16 +12,16 @@ import (
 	"github.com/nuelScript/skiff/internal/docker"
 )
 
-// Object storage: a team can provision an S3-compatible bucket, backed by a
-// per-bucket MinIO container on the team's private network — managed exactly
+// Object storage: a team can provision an S3-compatible bucket, backed by its own
+// store container on the team's private network — managed exactly
 // like a database (provision, attach, delete). Attaching wires the S3 endpoint
-// and credentials into an app's environment; the app reaches MinIO by name over
+// and credentials into an app's environment; the app reaches the store by name over
 // the isolated team net.
 
 const (
-	minioImage = "minio/minio:latest"
-	mcImage    = "minio/mc:latest"
-	s3Region   = "us-east-1"
+	storageImage = "chrislusf/seaweedfs:4.50"
+	storagePort  = "8333"
+	s3Region     = "us-east-1"
 )
 
 var s3EnvKeys = []string{"S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_REGION"}
@@ -134,7 +136,7 @@ func bucketAttachments(id string) []string {
 // bucketEnv is the S3 environment an attached app receives.
 func bucketEnv(b bucketRow) map[string]string {
 	return map[string]string{
-		"S3_ENDPOINT":   "http://" + b.Container + ":9000",
+		"S3_ENDPOINT":   "http://" + b.Container + ":" + storagePort,
 		"S3_BUCKET":     b.Name,
 		"S3_ACCESS_KEY": b.AccessKey,
 		"S3_SECRET_KEY": b.SecretKey,
@@ -145,7 +147,7 @@ func bucketEnv(b bucketRow) map[string]string {
 func (p *Panel) toBucket(b bucketRow) Bucket {
 	return Bucket{
 		ID: b.ID, Name: b.Name,
-		Endpoint:  "http://" + b.Container + ":9000",
+		Endpoint:  "http://" + b.Container + ":" + storagePort,
 		Region:    s3Region,
 		AccessKey: b.AccessKey, SecretKey: b.SecretKey,
 		State:    p.eng.State(b.Container),
@@ -169,8 +171,7 @@ func (p *Panel) canAccessBucket(r *http.Request, id string) (bucketRow, bool) {
 	return b, true
 }
 
-// createBucket runs a MinIO container for the team and creates the initial
-// bucket inside it with a throwaway mc container, retrying until MinIO is up.
+// createBucket runs an S3-compatible store for the team and creates the initial bucket inside it, retrying until the store is up.
 func (p *Panel) createBucket(team, name string) (bucketRow, error) {
 	id := randToken()[:12]
 	container := "skiff-s3-" + id
@@ -181,17 +182,18 @@ func (p *Panel) createBucket(team, name string) (bucketRow, error) {
 		return bucketRow{}, err
 	}
 	if _, err := p.eng.RunDatabase(docker.DBRunSpec{
-		Name: container, Image: minioImage, Network: net,
+		Name: container, Image: storageImage, Network: net,
 		Volume: container + "-data", MountAt: "/data",
-		Env:    map[string]string{"MINIO_ROOT_USER": accessKey, "MINIO_ROOT_PASSWORD": secretKey},
-		Cmd:    []string{"server", "/data", "--console-address", ":9001"},
+		Env: map[string]string{"AWS_ACCESS_KEY_ID": accessKey, "AWS_SECRET_ACCESS_KEY": secretKey},
+		// Everything but the S3 port stays on loopback: the store's internal admin ports have no auth.
+		Cmd: []string{"server", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=127.0.0.1",
+			"-s3", "-s3.port=" + storagePort, "-s3.ip.bind=0.0.0.0"},
 		Labels: map[string]string{"skiff.kind": "storage", "skiff.bucket": id, "skiff.team": team},
-		Port:   9000,
 	}); err != nil {
 		return bucketRow{}, err
 	}
 
-	if err := p.makeBucket(net, container, accessKey, secretKey, name); err != nil {
+	if err := p.makeBucket(container, name); err != nil {
 		_ = p.eng.Stop(container)
 		_ = p.eng.Remove(container)
 		_ = p.eng.RemoveVolume(container + "-data")
@@ -208,23 +210,25 @@ func (p *Panel) createBucket(team, name string) (bucketRow, error) {
 	return b, nil
 }
 
-func (p *Panel) makeBucket(net, container, key, secret, bucket string) error {
-	env := map[string]string{"MC_HOST_skiff": fmt.Sprintf("http://%s:%s@%s:9000", key, secret, container)}
+func (p *Panel) makeBucket(container, bucket string) error {
 	var last string
-	for range 20 {
-		out, err := p.eng.RunTool(net, env, mcImage, "mb", "--ignore-existing", "skiff/"+bucket)
-		if err == nil {
+	for range 30 {
+		var out bytes.Buffer
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := p.eng.Exec(ctx, container, []string{"weed", "shell"}, strings.NewReader("s3.bucket.create -name "+bucket+"\n"), &out)
+		cancel()
+		last = strings.TrimSpace(out.String())
+		if err == nil && strings.Contains(last, "created bucket") {
 			return nil
 		}
-		last = strings.TrimSpace(out)
-		time.Sleep(time.Second)
+		time.Sleep(2 * time.Second)
 	}
 	return fmt.Errorf("%s", last)
 }
 
-// prewarmStorageImages pulls the MinIO images so the first bucket doesn't stall.
+// prewarmStorageImages pulls the storage image so the first bucket doesn't stall.
 func (p *Panel) prewarmStorageImages() {
-	p.prewarmImages(minioImage, mcImage)
+	p.prewarmImages(storageImage)
 }
 
 func (p *Panel) handleStorage(w http.ResponseWriter, r *http.Request) {

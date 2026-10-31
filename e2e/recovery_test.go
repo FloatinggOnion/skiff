@@ -26,11 +26,14 @@ func TestDisasterRecovery(t *testing.T) {
 	run(t, "", nil, "go", "build", "-o", bin, "..")
 
 	s3Port := freeAddr(t)[len("127.0.0.1:"):]
-	run(t, "", nil, "docker", "run", "-d", "--name", "skiff-e2e-s3", "-p", "127.0.0.1:"+s3Port+":9000",
-		"-e", "MINIO_ROOT_USER=e2euser", "-e", "MINIO_ROOT_PASSWORD=e2epass12345", "minio/minio", "server", "/data")
+	run(t, "", nil, "docker", "run", "-d", "--name", "skiff-e2e-s3", "-p", "127.0.0.1:"+s3Port+":8333",
+		"-e", "AWS_ACCESS_KEY_ID=e2euser", "-e", "AWS_SECRET_ACCESS_KEY=e2epass12345",
+		"chrislusf/seaweedfs:4.50", "server", "-dir=/data", "-s3", "-s3.port=8333")
 	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", "skiff-e2e-s3").Run() })
-	waitHTTP(t, "http://127.0.0.1:"+s3Port+"/minio/health/live")
-	run(t, "", nil, "docker", "exec", "skiff-e2e-s3", "mkdir", "-p", "/data/offsite")
+	eventually(t, 2*time.Minute, func() bool {
+		out, _ := exec.Command("docker", "exec", "skiff-e2e-s3", "sh", "-c", "echo s3.bucket.create -name offsite | weed shell").CombinedOutput()
+		return strings.Contains(string(out), "created bucket")
+	})
 
 	protectExisting(t, oldHome)
 	env := []string{"HOME=" + oldHome, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_ALLOW_PRIVATE_ENDPOINTS=1"}

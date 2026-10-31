@@ -39,7 +39,7 @@ export default function StoragePage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Object storage</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            S3-compatible buckets on your team's private network, backed by MinIO.
+            S3-compatible buckets on your team's private network.
           </p>
         </div>
         {!adding && (
@@ -149,7 +149,7 @@ function BucketCard({
           </div>
           <div>
             <p className="font-mono text-sm font-medium">{b.name}</p>
-            <p className="text-muted-foreground text-[11px]">S3 · MinIO</p>
+            <p className="text-muted-foreground text-[11px]">S3-compatible</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
