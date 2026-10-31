@@ -12,7 +12,8 @@ import {
   Tooltip,
   ReferenceLine,
 } from 'recharts'
-import { fmtBytes } from '@/lib/format'
+import { fmtBytes, fmtMoney } from '@/lib/format'
+import { useCost } from '@/hooks/use-cost'
 import { useInsights } from '@/hooks/use-insights'
 import { useResources } from '@/hooks/use-resources'
 import { ChartGridSkeleton } from '@/components/skeletons'
@@ -58,6 +59,10 @@ export function ObservabilityPanel({ app }: { app: string }) {
   const mins = RANGES.find((r) => r.v === range)!.mins
   const { data: a, isPending, isError } = useInsights(app, range)
   const { data: res } = useResources(mins, app)
+  const { data: cost } = useCost()
+  const costItem = cost?.items.find((i) => i.key === app)
+  const monthly =
+    cost && cost.price > 0 && costItem ? fmtMoney(costItem.monthly, cost.currency) : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -89,7 +94,7 @@ export function ObservabilityPanel({ app }: { app: string }) {
         <ErrorState message="Couldn't load this project's traffic — retrying…" />
       ) : (
         <>
-          <Stats a={a} />
+          <Stats a={a} monthly={monthly} />
           {a.requests === 0 ? (
             <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-white/8 py-14 text-sm">
               <Activity className="h-5 w-5" />
@@ -139,7 +144,7 @@ export function ObservabilityPanel({ app }: { app: string }) {
   )
 }
 
-function Stats({ a }: { a: Insights }) {
+function Stats({ a, monthly }: { a: Insights; monthly: string | null }) {
   const errRate = pct(a.errors5, a.requests)
   const tiles = [
     { label: 'Requests', value: a.requests.toLocaleString(), sub: fmtBytes(a.bytes) + ' out' },
@@ -164,9 +169,14 @@ function Stats({ a }: { a: Insights }) {
       value: pct(a.bots, a.requests).toFixed(0) + '%',
       sub: `${a.bots.toLocaleString()} requests`,
     },
+    {
+      label: 'Est. cost',
+      value: monthly ?? '—',
+      sub: monthly ? 'per month, share of the server' : 'set a server price on Server',
+    },
   ]
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       {tiles.map((t) => (
         <div
           key={t.label}

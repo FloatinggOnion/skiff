@@ -3,6 +3,7 @@ import { fmtBytes } from '@/lib/format'
 import { errText } from '@/lib/errors'
 import { useReclaimSpace, useServer } from '@/hooks/use-server'
 import { Button } from '@/components/ui/button'
+import { CostSection } from '@/components/cost-section'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FeedSkeleton } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
@@ -163,6 +164,8 @@ export default function ServerPage() {
           <ReclaimSpace />
         </Meter>
       </div>
+
+      <CostSection />
 
       <section className="mt-6">
         <h2 className="text-muted-foreground mb-3 font-mono text-[11px] tracking-wider uppercase">

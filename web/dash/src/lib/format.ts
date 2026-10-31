@@ -15,3 +15,11 @@ export function fmtBytes(b: number): string {
   if (b >= 1 << 10) return (b / (1 << 10)).toFixed(0) + 'kB'
   return b + 'B'
 }
+
+export const fmtMoney = (v: number, currency: string) =>
+  new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(v)
