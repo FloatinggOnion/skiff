@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -55,5 +56,6 @@ func runRollback(configPath, image string, timeout time.Duration) error {
 
 	return releaseImage(eng, cfg, releaseSpec{
 		image: image, contextDir: filepath.Dir(configPath), timeout: timeout, start: time.Now(),
+		labels: map[string]string{"skiff.deploy": os.Getenv("SKIFF_DEPLOY_ID")},
 	})
 }

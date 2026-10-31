@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -116,12 +117,42 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 	}
 	ui.Done("Built " + image)
 
-	if err := releaseImage(eng, cfg, releaseSpec{image: image, contextDir: contextDir, timeout: timeout, start: start}); err != nil {
+	deployID := os.Getenv("SKIFF_DEPLOY_ID")
+	labels := map[string]string{}
+	if deployID == "" {
+		deployID = fmt.Sprintf("%d-%s", time.Now().Unix(), shortID())
+		labels = cliDeployLabels(contextDir)
+	}
+	labels["skiff.deploy"] = deployID
+
+	if err := releaseImage(eng, cfg, releaseSpec{image: image, contextDir: contextDir, timeout: timeout, start: start, labels: labels}); err != nil {
 		return err
 	}
 
-	retainRollbackImage(eng, cfg.Name, image)
+	retainRollbackImage(eng, cfg.Name, image, deployID)
 	return nil
+}
+
+// cliDeployLabels marks a deploy run by hand so the server's panel can list it, with the commit it came from when there is one.
+func cliDeployLabels(dir string) map[string]string {
+	labels := map[string]string{"skiff.via": "cli"}
+	git := func(args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if sha := git("rev-parse", "HEAD"); sha != "" {
+		labels["skiff.commit"] = sha
+		if msg := git("log", "-1", "--format=%s"); msg != "" {
+			if len(msg) > 200 {
+				msg = msg[:200]
+			}
+			labels["skiff.message"] = msg
+		}
+	}
+	return labels
 }
 
 type releaseSpec struct {
@@ -129,6 +160,7 @@ type releaseSpec struct {
 	contextDir string
 	timeout    time.Duration
 	start      time.Time
+	labels     map[string]string
 }
 
 // releaseImage brings a built image up healthy, atomically swaps the router to it, then retires the old — the blue-green path shared by deploy and rollback.
@@ -203,6 +235,7 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			Env:           runtimeEnv,
 			Public:        eng.IsRemote(),
 			Network:       network,
+			Labels:        spec.labels,
 		})
 		if err != nil {
 			rollback()
@@ -272,12 +305,8 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 // retainImages is how many past builds to keep as instant-rollback points, per app.
 const retainImages = 5
 
-// retainRollbackImage tags the build by deploy id for no-rebuild rollback and prunes old ones; only when the panel sets SKIFF_DEPLOY_ID.
-func retainRollbackImage(eng *docker.Engine, app, image string) {
-	did := os.Getenv("SKIFF_DEPLOY_ID")
-	if did == "" {
-		return
-	}
+// retainRollbackImage tags the build by deploy id for no-rebuild rollback and prunes old ones.
+func retainRollbackImage(eng *docker.Engine, app, image, did string) {
 	if err := eng.Tag(image, fmt.Sprintf("skiff-%s:%s", app, did)); err != nil {
 		return
 	}

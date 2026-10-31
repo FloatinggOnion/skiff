@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -122,4 +123,45 @@ func (e *Engine) AppStates() (map[string]string, error) {
 		}
 	}
 	return states, nil
+}
+
+type ContainerMeta struct {
+	Created time.Time
+	Labels  map[string]string
+}
+
+func (e *Engine) ContainerMeta(name string) (ContainerMeta, error) {
+	out, err := e.command("inspect", "--format", "{{.Created}}\t{{json .Config.Labels}}", name).Output()
+	if err != nil {
+		return ContainerMeta{}, err
+	}
+	created, labels, _ := strings.Cut(strings.TrimSpace(string(out)), "\t")
+	m := ContainerMeta{Labels: map[string]string{}}
+	m.Created, _ = time.Parse(time.RFC3339Nano, created)
+	_ = json.Unmarshal([]byte(labels), &m.Labels)
+	return m, nil
+}
+
+type ContainerRuntime struct {
+	Env      map[string]string
+	Networks []string
+}
+
+// Runtime reads the environment and networks a container was started with.
+func (e *Engine) Runtime(name string) (ContainerRuntime, error) {
+	out, err := e.command("inspect", "--format",
+		"{{json .Config.Env}}\t{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}", name).Output()
+	if err != nil {
+		return ContainerRuntime{}, err
+	}
+	envJSON, nets, _ := strings.Cut(strings.TrimSpace(string(out)), "\t")
+	var kv []string
+	_ = json.Unmarshal([]byte(envJSON), &kv)
+	rt := ContainerRuntime{Env: map[string]string{}, Networks: strings.Fields(nets)}
+	for _, pair := range kv {
+		if k, v, ok := strings.Cut(pair, "="); ok {
+			rt.Env[k] = v
+		}
+	}
+	return rt, nil
 }

@@ -14,6 +14,7 @@ type RunSpec struct {
 	Env           map[string]string
 	Public        bool   // publish on all interfaces instead of 127.0.0.1
 	Network       string // optional docker network to join (for reaching managed resources by name)
+	Labels        map[string]string
 }
 
 type Route struct {
@@ -37,6 +38,11 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 	}
 	if s.App != "" {
 		args = append(args, "--label", "skiff.app="+s.App, "--label", fmt.Sprintf("skiff.port=%d", s.ContainerPort))
+	}
+	for _, k := range sortedKeys(s.Labels) {
+		if s.Labels[k] != "" {
+			args = append(args, "--label", k+"="+s.Labels[k])
+		}
 	}
 	if s.Network != "" {
 		args = append(args, "--network", s.Network)

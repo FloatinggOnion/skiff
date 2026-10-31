@@ -63,11 +63,7 @@ func (e *Engine) PruneBuildCache(olderThan time.Duration) error {
 }
 
 func parseCreatedAt(s string) time.Time {
-	// docker prints e.g. "2026-09-23 19:54:00 +0000 UTC"
-	if i := strings.LastIndexByte(s, ' '); i > 0 {
-		s = s[:i]
-	}
-	t, err := time.Parse("2006-01-02 15:04:05 -0700", s)
+	t, err := time.Parse("2006-01-02 15:04:05 -0700 MST", strings.TrimSpace(s))
 	if err != nil {
 		return time.Now()
 	}
