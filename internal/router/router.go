@@ -31,11 +31,14 @@ type Router struct {
 	DomainsFile string
 	// MetricsFile, when set, is where the router snapshots per-app request metrics for the panel's Analytics page.
 	MetricsFile string
+	// RequestsDir, when set, receives a daily JSONL log of each request to an app, which the panel reads for per-project insights.
+	RequestsDir string
 	// MailFile is the JSON forwarding table (domain → alias → destinations) read live by the SMTP listener on SMTPAddr.
 	MailFile string
 	SMTPAddr string
 
 	metrics       *Metrics
+	reqlog        *ReqLog
 	mu            sync.Mutex
 	cachedPanel   string
 	cachedAt      time.Time
@@ -58,6 +61,11 @@ func (rt *Router) startMetrics() {
 	if rt.MetricsFile != "" && rt.metrics == nil {
 		rt.metrics = NewMetrics(rt.MetricsFile)
 		go rt.metrics.Run()
+	}
+	if rt.RequestsDir != "" && rt.reqlog == nil {
+		if rt.reqlog = NewReqLog(rt.RequestsDir); rt.reqlog != nil {
+			go rt.reqlog.Run()
+		}
 	}
 }
 
@@ -108,8 +116,12 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 	start := time.Now()
 	label := rt.serve(rec, r)
+	dur := time.Since(start)
 	if rt.metrics != nil {
-		rt.metrics.Record(label, rec.status, r.ContentLength, rec.bytes, time.Since(start))
+		rt.metrics.Record(label, rec.status, r.ContentLength, rec.bytes, dur)
+	}
+	if label != "" && label != "dash" && label != "status" {
+		rt.reqlog.Record(label, r, rec.status, rec.bytes, dur)
 	}
 }
 

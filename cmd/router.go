@@ -13,7 +13,7 @@ import (
 )
 
 func newRouterCmd() *cobra.Command {
-	var domain, httpAddr, panel, panelPointer, siteApp, domainsFile, metricsFile, mailFile, smtpAddr string
+	var domain, httpAddr, panel, panelPointer, siteApp, domainsFile, metricsFile, requestsDir, mailFile, smtpAddr string
 	cmd := &cobra.Command{
 		Use:   "router",
 		Short: "Run the edge router (subdomain routing + auto HTTPS) — runs on the server",
@@ -31,6 +31,9 @@ func newRouterCmd() *cobra.Command {
 			if metricsFile == "" {
 				metricsFile = filepath.Join(home, ".skiff", "metrics.json")
 			}
+			if requestsDir == "" {
+				requestsDir = filepath.Join(home, ".skiff", "requests")
+			}
 			if mailFile == "" {
 				mailFile = filepath.Join(home, ".skiff", "mail.json")
 			}
@@ -45,6 +48,7 @@ func newRouterCmd() *cobra.Command {
 				SiteApp:      siteApp,
 				DomainsFile:  domainsFile,
 				MetricsFile:  metricsFile,
+				RequestsDir:  requestsDir,
 				MailFile:     mailFile,
 				SMTPAddr:     smtpAddr,
 			}
@@ -78,6 +82,7 @@ func newRouterCmd() *cobra.Command {
 	cmd.Flags().StringVar(&siteApp, "site-app", "www", "app that serves the apex + www.<domain>")
 	cmd.Flags().StringVar(&domainsFile, "domains-file", "", "file of custom host→app mappings (default ~/.skiff/domains.json)")
 	cmd.Flags().StringVar(&metricsFile, "metrics-file", "", "file to snapshot request metrics to (default ~/.skiff/metrics.json)")
+	cmd.Flags().StringVar(&requestsDir, "requests-dir", "", "directory for the per-request log (default ~/.skiff/requests)")
 	cmd.Flags().StringVar(&mailFile, "mail-file", "", "file of email forwarding rules (default ~/.skiff/mail.json)")
 	cmd.Flags().StringVar(&smtpAddr, "smtp-addr", ":25", "address to receive forwarded email on (empty disables)")
 	return cmd
