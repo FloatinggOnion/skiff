@@ -245,6 +245,35 @@ func (rt *Router) subFor(host string) (string, bool) {
 	return "", false
 }
 
+// certAllowed limits certificates to names Skiff actually serves. Wildcard DNS sends every name here, and scanners trying random subdomains would otherwise use up the certificate authority's weekly limit for the whole domain.
+func (rt *Router) certAllowed(host string) bool {
+	if _, ok := rt.customDomains()[host]; ok {
+		return true
+	}
+	if host == rt.MailHost() {
+		return true
+	}
+	sub, ok := rt.subFor(host)
+	if !ok {
+		return false
+	}
+	switch sub {
+	case "", "www", "dash", "status":
+		return true
+	}
+	if strings.Contains(sub, ".") {
+		return false
+	}
+	if len(rt.portsFor(sub)) > 0 {
+		return true
+	}
+	if _, ok := rt.sleepingApps()[sub]; ok {
+		return true
+	}
+	_, ok = rt.protectedApps()[sub]
+	return ok
+}
+
 // edgeServer sets ReadHeaderTimeout (closes Slowloris slow-header attacks) and IdleTimeout, but leaves Read/Write timeouts unset so proxied SSE/WebSocket streams aren't cut off mid-stream.
 func edgeServer(addr string, h http.Handler) *http.Server {
 	return &http.Server{
@@ -268,12 +297,7 @@ func (rt *Router) ServeTLS(cacheDir string) error {
 		Prompt: autocert.AcceptTOS,
 		Cache:  autocert.DirCache(cacheDir),
 		HostPolicy: func(_ context.Context, host string) error {
-			for _, d := range rt.Domains {
-				if host == d || strings.HasSuffix(host, "."+d) {
-					return nil
-				}
-			}
-			if _, ok := rt.customDomains()[host]; ok {
+			if rt.certAllowed(host) {
 				return nil
 			}
 			return fmt.Errorf("host not allowed: %s", host)

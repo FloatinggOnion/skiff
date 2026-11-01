@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -85,5 +87,38 @@ func TestAnswersNeedsAnHTTPReply(t *testing.T) {
 	defer srv.Close()
 	if !answers(srv.Listener.Addr().(*net.TCPAddr).Port) {
 		t.Fatal("an app answering 404 should count as ready")
+	}
+}
+
+func TestCertAllowedOnlyForServedNames(t *testing.T) {
+	dir := t.TempDir()
+	domains := filepath.Join(dir, "domains.json")
+	_ = os.WriteFile(domains, []byte(`{"shop.example.org":"shop"}`), 0o644)
+	sleeping := filepath.Join(dir, "sleeping.json")
+	_ = os.WriteFile(sleeping, []byte(`{"napper":["c1"]}`), 0o644)
+	rt := &Router{Domains: []string{"useskiff.xyz", "1-2-3-4.sslip.io"}, DomainsFile: domains, SleepFile: sleeping}
+	rt.cachedRoutes = []docker.Route{{App: "shop", HostPort: 1}}
+	rt.cachedRouteAt = time.Now().Add(time.Hour)
+
+	for host, want := range map[string]bool{
+		"useskiff.xyz":                   true,
+		"www.useskiff.xyz":               true,
+		"dash.useskiff.xyz":              true,
+		"status.1-2-3-4.sslip.io":        true,
+		"mx.useskiff.xyz":                true,
+		"shop.useskiff.xyz":              true,
+		"shop.1-2-3-4.sslip.io":          true,
+		"napper.useskiff.xyz":            true,
+		"shop.example.org":               true,
+		"xh9yvr6ula0i8yhl.useskiff.xyz":  false,
+		"www.www.zzq1.dash.useskiff.xyz": false,
+		"www.shop.useskiff.xyz":          false,
+		"mx.1-2-3-4.sslip.io":            false,
+		"other.example.org":              false,
+		"useskiff.xyz.attacker.example":  false,
+	} {
+		if got := rt.certAllowed(host); got != want {
+			t.Errorf("certAllowed(%q) = %v, want %v", host, got, want)
+		}
 	}
 }
