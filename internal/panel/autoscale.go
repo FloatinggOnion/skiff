@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"net/http"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/health"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -137,6 +137,7 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 	env, net := p.appRuntime(src)
 	_ = p.eng.EnsureNetwork(net)
 	mounts := p.appMounts(src)
+	check := p.healthPath(src, app.Container)
 
 	added := 0
 	for range count {
@@ -154,7 +155,7 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 		if err != nil {
 			break
 		}
-		if !healthPoll(hostPort, autoscaleHealthTTL) {
+		if health.Wait("127.0.0.1", hostPort, check, autoscaleHealthTTL) != nil {
 			_ = p.eng.Remove(container)
 			break
 		}
@@ -224,18 +225,25 @@ func (p *Panel) scaleDown(app string, count int) int {
 	return len(retire)
 }
 
-func healthPoll(hostPort int, timeout time.Duration) bool {
-	client := &http.Client{Timeout: 2 * time.Second}
-	url := fmt.Sprintf("http://127.0.0.1:%d/", hostPort)
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if resp, err := client.Get(url); err == nil {
-			_ = resp.Body.Close()
-			return true
+// healthOf holds the health check a deploy uses: a preview follows its project's.
+func healthOf(src Source) Source {
+	if src.Parent != "" {
+		if parent, ok := getSource(src.Parent); ok {
+			return parent
 		}
-		time.Sleep(500 * time.Millisecond)
 	}
-	return false
+	return src
+}
+
+// healthPath is what a new replica must answer before it takes traffic; a CLI app's comes from its skiff.toml, recorded on its container.
+func (p *Panel) healthPath(src Source, container string) string {
+	if src.Origin == originCLI {
+		if meta, err := p.eng.ContainerMeta(container); err == nil {
+			return meta.Labels["skiff.health"]
+		}
+		return ""
+	}
+	return healthOf(src).HealthPath
 }
 
 func replicaSuffix() string { return randHex(3) }

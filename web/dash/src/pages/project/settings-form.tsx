@@ -5,6 +5,7 @@ import { RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { errText } from '@/lib/errors'
 import { useConfirm } from '@/providers/confirm-provider'
 import { projectsService } from '@/services/api.service'
 import { projectSettingsSchema, type ProjectSettingsInput } from '@/validations/project-settings'
@@ -41,6 +42,8 @@ export function SettingsForm({
   scaleMax,
   scaleCpu,
   sleepAfter,
+  healthPath,
+  healthTimeout,
   onSaved,
   onDeleted,
   onRedeploy,
@@ -60,12 +63,15 @@ export function SettingsForm({
   scaleMax: number
   scaleCpu: number
   sleepAfter: number
+  healthPath: string
+  healthTimeout: number
   onSaved: () => void
   onDeleted: () => void
   onRedeploy: () => void
   cli?: boolean
 }) {
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const confirm = useConfirm()
   const form = useForm<ProjectSettingsInput>({
     resolver: zodResolver(projectSettingsSchema),
@@ -82,6 +88,8 @@ export function SettingsForm({
       scaleMax: scaleMax || Math.max(scaleMin || 1, replicas || 2),
       scaleCpu: scaleCpu || 70,
       sleepAfter: sleepAfter || 0,
+      healthPath: healthPath || '',
+      healthTimeout: healthTimeout || 0,
     },
   })
   const { register, handleSubmit, watch, setValue, formState } = form
@@ -97,16 +105,22 @@ export function SettingsForm({
       : 'border-white/15 text-muted-foreground')
 
   const save = handleSubmit(async (data) => {
-    await projectsService.update(name, data)
-    setSaved(true)
-    onSaved()
+    setSaveError('')
+    try {
+      await projectsService.update(name, data)
+      setSaved(true)
+      onSaved()
+    } catch (err) {
+      setSaved(false)
+      setSaveError(errText(err, 'Could not save the settings.'))
+    }
   })
 
   const del = async () => {
     if (
       !(await confirm({
         title: `Delete ${name}?`,
-        description: 'This stops the app and removes its config and volumes, with the files in them.',
+        description: 'This stops the app and deletes its config and volumes.',
         confirmText: 'Delete',
         destructive: true,
       }))
@@ -309,7 +323,44 @@ export function SettingsForm({
             </FieldDescription>
           </Field>
         )}
+        {!cli && (
+          <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_10rem]">
+            <Field data-invalid={!!formState.errors.healthPath}>
+              <FieldLabel htmlFor="s-health">Health check path</FieldLabel>
+              <Input
+                id="s-health"
+                placeholder="e.g. /healthz"
+                className="font-mono"
+                aria-invalid={!!formState.errors.healthPath}
+                {...register('healthPath')}
+              />
+              <FieldError errors={[formState.errors.healthPath]} />
+              <FieldDescription>
+                A new version takes traffic only once this answers 2xx or 3xx. Left empty, any
+                response from the app counts.
+              </FieldDescription>
+            </Field>
+            <Field data-invalid={!!formState.errors.healthTimeout}>
+              <FieldLabel htmlFor="s-health-timeout">Timeout (seconds)</FieldLabel>
+              <Input
+                id="s-health-timeout"
+                type="number"
+                min={0}
+                max={600}
+                placeholder="30"
+                className="font-mono"
+                aria-invalid={!!formState.errors.healthTimeout}
+                {...register('healthTimeout', {
+                  setValueAs: (v) => (v === '' || v === null ? 0 : Number(v)),
+                })}
+              />
+              <FieldError errors={[formState.errors.healthTimeout]} />
+              <FieldDescription>0 uses the default, 30.</FieldDescription>
+            </Field>
+          </div>
+        )}
         <div className="mt-5 flex items-center justify-end gap-3">
+          {saveError && <span className="text-xs text-rose-300">{saveError}</span>}
           {saved && <span className="text-muted-foreground text-xs">Saved.</span>}
           {!cli && (
             <Button size="sm" variant="outline" onClick={onRedeploy}>

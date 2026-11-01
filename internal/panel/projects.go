@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -108,6 +109,9 @@ type projectView struct {
 	Origin      string        `json:"origin,omitempty"`
 	SleepAfter  int           `json:"sleepAfter"`
 	Sleeping    bool          `json:"sleeping"`
+	HealthPath  string        `json:"healthPath"`
+	// HealthTimeout is in seconds; 0 means the default.
+	HealthTimeout int `json:"healthTimeout"`
 	// PreviewProtected means its previews ask visitors for a password.
 	PreviewProtected bool `json:"previewProtected"`
 }
@@ -142,22 +146,25 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			Release: src.Release, Autoscale: src.Autoscale, ScaleMin: src.ScaleMin, ScaleMax: src.ScaleMax, ScaleCPU: src.ScaleCPU,
 			Deploys: deploys, Previews: p.buildPreviews(app), Origin: src.Origin,
 			SleepAfter: src.SleepAfter, Sleeping: isSleeping(app),
+			HealthPath: src.HealthPath, HealthTimeout: src.HealthTimeout,
 			PreviewProtected: previewPasswordHash(app) != "",
 		})
 	case http.MethodPut:
 		var body struct {
-			Branch      string `json:"branch"`
-			RootDir     string `json:"rootDir"`
-			Port        string `json:"port"`
-			Auto        bool   `json:"auto"`
-			PreviewAuto bool   `json:"previewAuto"`
-			Replicas    int    `json:"replicas"`
-			Release     string `json:"release"`
-			Autoscale   bool   `json:"autoscale"`
-			ScaleMin    int    `json:"scaleMin"`
-			ScaleMax    int    `json:"scaleMax"`
-			ScaleCPU    int    `json:"scaleCpu"`
-			SleepAfter  int    `json:"sleepAfter"`
+			Branch        string `json:"branch"`
+			RootDir       string `json:"rootDir"`
+			Port          string `json:"port"`
+			Auto          bool   `json:"auto"`
+			PreviewAuto   bool   `json:"previewAuto"`
+			Replicas      int    `json:"replicas"`
+			Release       string `json:"release"`
+			Autoscale     bool   `json:"autoscale"`
+			ScaleMin      int    `json:"scaleMin"`
+			ScaleMax      int    `json:"scaleMax"`
+			ScaleCPU      int    `json:"scaleCpu"`
+			SleepAfter    int    `json:"sleepAfter"`
+			HealthPath    string `json:"healthPath"`
+			HealthTimeout int    `json:"healthTimeout"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		src, ok := getSource(app)
@@ -165,6 +172,12 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unknown project", http.StatusNotFound)
 			return
 		}
+		body.HealthPath = strings.TrimSpace(body.HealthPath)
+		if err := config.ValidateHealth(body.HealthPath, body.HealthTimeout); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		src.HealthPath, src.HealthTimeout = body.HealthPath, body.HealthTimeout
 		src.Branch = strings.TrimSpace(body.Branch)
 		src.RootDir = strings.TrimSpace(body.RootDir)
 		if port := strings.TrimSpace(body.Port); port != "" {

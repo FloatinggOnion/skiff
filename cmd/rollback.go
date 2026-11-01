@@ -26,7 +26,7 @@ func newRollbackCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", config.DefaultFile, "path to skiff.toml")
 	cmd.Flags().StringVar(&image, "image", "", "retained image tag to run (skiff-<app>:<deployid>)")
-	cmd.Flags().DurationVar(&timeout, "timeout", defaultHealthTimeout, "how long to wait for the version to become healthy")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "how long to wait for the version to become healthy (default: health_timeout in skiff.toml, else 30s)")
 	return cmd
 }
 

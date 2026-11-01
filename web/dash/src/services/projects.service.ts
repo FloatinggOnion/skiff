@@ -37,6 +37,8 @@ export type ProjectDetail = {
   sleepAfter: number
   sleeping: boolean
   previewProtected: boolean
+  healthPath: string
+  healthTimeout: number
 }
 
 export type Job = {
@@ -95,6 +97,8 @@ export type ProjectSettings = {
   scaleMax: number
   scaleCpu: number
   sleepAfter: number
+  healthPath: string
+  healthTimeout: number
 }
 
 class ProjectsService extends BaseService {

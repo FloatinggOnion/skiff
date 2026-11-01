@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,16 +15,14 @@ import (
 	"github.com/nuelScript/skiff/internal/builder"
 	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/health"
 	"github.com/nuelScript/skiff/internal/proxy"
 	"github.com/nuelScript/skiff/internal/registry"
 	"github.com/nuelScript/skiff/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-const (
-	defaultHealthTimeout = 30 * time.Second
-	defaultBuildTimeout  = 15 * time.Minute
-)
+const defaultBuildTimeout = 15 * time.Minute
 
 func newDeployCmd() *cobra.Command {
 	var configPath string
@@ -42,7 +39,7 @@ Reads config from skiff.toml.`,
 		},
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", config.DefaultFile, "path to skiff.toml")
-	cmd.Flags().DurationVar(&timeout, "timeout", defaultHealthTimeout, "how long to wait for the new version to become healthy")
+	cmd.Flags().DurationVar(&timeout, "timeout", 0, "how long to wait for the new version to become healthy (default: health_timeout in skiff.toml, else 30s)")
 	cmd.Flags().DurationVar(&buildTimeout, "build-timeout", defaultBuildTimeout, "cancel the build if it runs longer than this")
 	cmd.Flags().StringVar(&name, "name", "", "override the app name (e.g. for preview environments)")
 	return cmd
@@ -175,6 +172,18 @@ type releaseSpec struct {
 // releaseImage brings a built image up healthy, atomically swaps the router to it, then retires the old — the blue-green path shared by deploy and rollback.
 func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) error {
 	image, contextDir, timeout, start := spec.image, spec.contextDir, spec.timeout, spec.start
+	if timeout <= 0 {
+		timeout = health.DefaultTimeout
+		if cfg.Deploy.HealthTimeout > 0 {
+			timeout = time.Duration(cfg.Deploy.HealthTimeout) * time.Second
+		}
+	}
+	labels := map[string]string{}
+	for k, v := range spec.labels {
+		labels[k] = v
+	}
+	// Recorded on the container so the server's panel checks scale-ups of a CLI app the same way.
+	labels["skiff.health"] = cfg.Deploy.HealthPath
 	// Runtime env = build env + secrets; secrets never bake into the image, so a rollback runs current secrets against the old code.
 	buildEnv := cfg.Environment(contextDir)
 	runtimeEnv := make(map[string]string, len(buildEnv)+len(cfg.Secrets))
@@ -234,6 +243,9 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	} else {
 		ui.Step("Starting new version")
 	}
+	if cfg.Deploy.HealthPath != "" {
+		ui.Field("health", fmt.Sprintf("GET %s · %s", cfg.Deploy.HealthPath, timeout))
+	}
 
 	// Bring the whole new set up healthy before touching the old; if any replica fails, roll back everything started — the old version keeps serving.
 	var reps []registry.Replica
@@ -254,7 +266,7 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			Env:           runtimeEnv,
 			Public:        eng.IsRemote(),
 			Network:       network,
-			Labels:        spec.labels,
+			Labels:        labels,
 			Volumes:       mounts,
 		})
 		if err != nil {
@@ -262,11 +274,16 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			ui.Fail("Couldn't start container")
 			return err
 		}
-		if err := waitHealthy(healthHost, hostPort, timeout); err != nil {
+		if err := health.Wait(healthHost, hostPort, cfg.Deploy.HealthPath, timeout); err != nil {
 			_ = eng.Remove(container)
 			rollback()
 			ui.Fail("New version never became healthy — rolled back")
-			ui.Note(fmt.Sprintf("the app must listen on 0.0.0.0:%d (the `port` in skiff.toml) and answer HTTP", cfg.Build.Port))
+			ui.Note(err.Error())
+			if cfg.Deploy.HealthPath != "" {
+				ui.Note(fmt.Sprintf("%s must answer 2xx or 3xx on 0.0.0.0:%d (the `port` in skiff.toml)", cfg.Deploy.HealthPath, cfg.Build.Port))
+			} else {
+				ui.Note(fmt.Sprintf("the app must listen on 0.0.0.0:%d (the `port` in skiff.toml) and answer HTTP", cfg.Build.Port))
+			}
 			return err
 		}
 		reps = append(reps, registry.Replica{Container: container, HostPort: hostPort})
@@ -342,24 +359,4 @@ func shortID() string {
 		return fmt.Sprintf("%d", time.Now().UnixNano()%1_000_000)
 	}
 	return hex.EncodeToString(b)
-}
-
-func waitHealthy(host string, hostPort int, timeout time.Duration) error {
-	url := fmt.Sprintf("http://%s:%d/", host, hostPort)
-	client := &http.Client{Timeout: 2 * time.Second}
-	deadline := time.Now().Add(timeout)
-	var lastErr error
-	for time.Now().Before(deadline) {
-		resp, err := client.Get(url)
-		if err == nil {
-			resp.Body.Close()
-			return nil
-		}
-		lastErr = err
-		time.Sleep(500 * time.Millisecond)
-	}
-	if lastErr != nil {
-		return fmt.Errorf("no response within %s: %w", timeout, lastErr)
-	}
-	return fmt.Errorf("no response within %s", timeout)
 }

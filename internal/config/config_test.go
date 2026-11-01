@@ -133,3 +133,24 @@ func TestValidateVolumes(t *testing.T) {
 		t.Errorf("rejected a valid set: %v", err)
 	}
 }
+
+func TestLoadHealth(t *testing.T) {
+	c, err := Load(write(t, "skiff.toml", "name = \"app\"\n\n[deploy]\nhealth_path = \"/healthz?full=1\"\nhealth_timeout = 90\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Deploy.HealthPath != "/healthz?full=1" || c.Deploy.HealthTimeout != 90 {
+		t.Fatalf("deploy = %+v", c.Deploy)
+	}
+	for _, tc := range []struct {
+		path    string
+		timeout int
+	}{{"healthz", 0}, {"/a b", 0}, {"/a\tb", 0}, {"/ok", 4}, {"/ok", 601}, {"/ok", -1}} {
+		if ValidateHealth(tc.path, tc.timeout) == nil {
+			t.Errorf("accepted %q %d", tc.path, tc.timeout)
+		}
+	}
+	if ValidateHealth("", 0) != nil || ValidateHealth("/up", 5) != nil {
+		t.Error("rejected a valid health check")
+	}
+}

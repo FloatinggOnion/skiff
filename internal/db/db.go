@@ -68,6 +68,8 @@ var migrations = []string{
 	`ALTER TABLE databases ADD COLUMN cmd TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE backups ADD COLUMN offsite TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN sleep_after INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE sources ADD COLUMN health_path TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN health_timeout INTEGER NOT NULL DEFAULT 0`,
 }
 
 const schema = `
@@ -115,7 +117,9 @@ CREATE TABLE IF NOT EXISTS sources (
   scale_max    INTEGER NOT NULL DEFAULT 1,
   scale_cpu    INTEGER NOT NULL DEFAULT 0,
   origin       TEXT NOT NULL DEFAULT '',
-  sleep_after  INTEGER NOT NULL DEFAULT 0
+  sleep_after  INTEGER NOT NULL DEFAULT 0,
+  health_path  TEXT NOT NULL DEFAULT '',
+  health_timeout INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,

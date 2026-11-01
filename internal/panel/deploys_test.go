@@ -101,3 +101,34 @@ func TestCancelInflight(t *testing.T) {
 		t.Fatal("a canceled build should read as superseded (ctx canceled)")
 	}
 }
+
+func TestProjectTomlHealth(t *testing.T) {
+	openTestDB(t)
+	parent := Source{App: "api", Port: "3000", HealthPath: "/healthz", HealthTimeout: 90}
+	preview := Source{App: "api-feat", Port: "3000", Parent: "api"}
+	for _, s := range []Source{parent, preview} {
+		if err := putSource(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored, _ := getSource("api")
+	if stored.HealthPath != "/healthz" || stored.HealthTimeout != 90 {
+		t.Fatalf("health settings didn't round-trip: %+v", stored)
+	}
+	for _, src := range []Source{parent, preview} {
+		path := filepath.Join(t.TempDir(), "skiff.toml")
+		if err := os.WriteFile(path, []byte(projectToml(src, nil, teamNetwork(""), nil)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := config.Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Deploy.HealthPath != "/healthz" || cfg.Deploy.HealthTimeout != 90 {
+			t.Errorf("%s: deploy = %+v, want the project's health check", src.App, cfg.Deploy)
+		}
+	}
+	if strings.Contains(projectToml(Source{App: "web", Port: "8080"}, nil, teamNetwork(""), nil), "health") {
+		t.Error("a project without a health check shouldn't set one")
+	}
+}

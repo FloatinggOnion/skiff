@@ -456,6 +456,8 @@ export default function ProjectDetailPage() {
             scaleMax={project.scaleMax}
             scaleCpu={project.scaleCpu}
             sleepAfter={project.sleepAfter}
+            healthPath={project.healthPath}
+            healthTimeout={project.healthTimeout}
             onSaved={reload}
             onDeleted={() => navigate('/')}
             onRedeploy={() => term.redeploy(project.name)}

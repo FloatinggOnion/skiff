@@ -71,6 +71,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 
 	checkMCP(t, c, bin, panelAddr, routerAddr, project.Deploys[0].ID)
 	checkVolumes(t, c, panelAddr)
+	checkHealthCheck(t, c, panelAddr, routerAddr)
 	checkPreviewPassword(t, c, root, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
@@ -113,6 +114,39 @@ func checkVolumes(t *testing.T, c *http.Client, panelAddr string) {
 	if vols.Kind != "project" || len(vols.Volumes) != 1 || !vols.Volumes[0].Attached {
 		t.Fatalf("volumes view = %+v", vols)
 	}
+}
+
+// checkHealthCheck sets a health check the app fails, and expects the deploy to be refused with the running version left serving; a passing one deploys.
+func checkHealthCheck(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
+	t.Helper()
+	setHealth := func(path string, timeout int) {
+		var settings map[string]any
+		getJSON(t, c, "http://"+panelAddr+"/api/project?app="+app, &settings)
+		settings["healthPath"], settings["healthTimeout"] = path, timeout
+		body, _ := json.Marshal(settings)
+		req, _ := http.NewRequest(http.MethodPut, "http://"+panelAddr+"/api/project?app="+app, strings.NewReader(string(body)))
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("saving the health check: %d", resp.StatusCode)
+		}
+	}
+	running := appContainer(t, app)
+	setHealth("/missing", 5)
+	if ok, log := streamResult(t, c, "http://"+panelAddr+"/api/redeploy?app="+app); ok || !strings.Contains(log, "GET /missing answered 404") {
+		t.Fatalf("a failing health check should stop the deploy:\n%s", log)
+	}
+	if appContainer(t, app) != running {
+		t.Fatal("the running version was replaced despite the failed health check")
+	}
+	expectServed(t, routerAddr, "v2")
+
+	setHealth("/index.html", 0)
+	stream(t, c, "http://"+panelAddr+"/api/redeploy?app="+app)
+	expectServed(t, routerAddr, "v2")
 }
 
 func appContainer(t *testing.T, name string) string {
@@ -405,6 +439,14 @@ func expectServed(t *testing.T, routerAddr, version string) {
 // stream follows a deploy's SSE log to the end and fails the test unless it finished ok.
 func stream(t *testing.T, c *http.Client, url string) {
 	t.Helper()
+	if ok, log := streamResult(t, c, url); !ok {
+		t.Fatalf("deploy failed:\n%s", log)
+	}
+}
+
+// streamResult follows a deploy's SSE log to the end and reports whether it finished ok, with the log.
+func streamResult(t *testing.T, c *http.Client, url string) (bool, string) {
+	t.Helper()
 	resp, err := c.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -423,13 +465,11 @@ func stream(t *testing.T, c *http.Client, url string) {
 		}
 		log = append(log, line)
 		if strings.HasPrefix(line, "[done]") {
-			if line != "[done] ok" {
-				t.Fatalf("deploy failed:\n%s", strings.Join(log, "\n"))
-			}
-			return
+			return line == "[done] ok", strings.Join(log, "\n")
 		}
 	}
 	t.Fatalf("log ended without a result:\n%s", strings.Join(log, "\n"))
+	return false, ""
 }
 
 func client(t *testing.T) *http.Client {

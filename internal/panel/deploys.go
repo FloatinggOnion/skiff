@@ -396,6 +396,14 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if strings.TrimSpace(src.Release) != "" {
 		fmt.Fprintf(&b, "release = %q\n", src.Release)
 	}
+	if hc := healthOf(src); hc.HealthPath != "" || hc.HealthTimeout > 0 {
+		if hc.HealthPath != "" {
+			fmt.Fprintf(&b, "health_path = %q\n", hc.HealthPath)
+		}
+		if hc.HealthTimeout > 0 {
+			fmt.Fprintf(&b, "health_timeout = %d\n", hc.HealthTimeout)
+		}
+	}
 	var buildVars, secretVars []EnvVar
 	for _, e := range env {
 		if e.Build {

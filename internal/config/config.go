@@ -90,8 +90,28 @@ func validMountPath(p string) bool {
 }
 
 type Deploy struct {
-	Release string `toml:"release"`
-	Network string `toml:"network"`
+	Release       string `toml:"release"`
+	Network       string `toml:"network"`
+	HealthPath    string `toml:"health_path"`    // must answer 2xx/3xx before traffic moves; empty = any reply at /
+	HealthTimeout int    `toml:"health_timeout"` // seconds; 0 = the default
+}
+
+// ValidateHealth checks a health-check path and timeout (seconds, 0 for the default).
+func ValidateHealth(path string, timeout int) error {
+	if path != "" {
+		if !strings.HasPrefix(path, "/") || len(path) > 200 {
+			return fmt.Errorf("health check path must start with / (e.g. /healthz)")
+		}
+		for _, r := range path {
+			if r <= ' ' || r == 0x7f {
+				return fmt.Errorf("health check path can't contain spaces or control characters")
+			}
+		}
+	}
+	if timeout != 0 && (timeout < 5 || timeout > 600) {
+		return fmt.Errorf("health check timeout must be 5-600 seconds")
+	}
+	return nil
 }
 
 type Resources struct {
@@ -148,6 +168,9 @@ func (c *Config) applyDefaults() {
 func (c *Config) validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("skiff.toml is missing required field: name")
+	}
+	if err := ValidateHealth(c.Deploy.HealthPath, c.Deploy.HealthTimeout); err != nil {
+		return err
 	}
 	return ValidateVolumes(c.Volumes)
 }
