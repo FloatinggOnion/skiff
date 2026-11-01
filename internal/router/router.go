@@ -39,6 +39,8 @@ type Router struct {
 	// MailFile is the JSON forwarding table (domain → alias → destinations) read live by the SMTP listener on SMTPAddr.
 	MailFile string
 	SMTPAddr string
+	// GateFile lists previews that ask visitors for a password first.
+	GateFile string
 
 	metrics       *Metrics
 	reqlog        *ReqLog
@@ -61,6 +63,8 @@ type Router struct {
 	routesMu      sync.Mutex
 	cachedRoutes  []docker.Route
 	cachedRouteAt time.Time
+
+	gate gateState
 }
 
 func (rt *Router) startMetrics() {
@@ -189,6 +193,9 @@ func (rt *Router) routes() ([]docker.Route, error) {
 }
 
 func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string) bool {
+	if !rt.admit(w, r, app) {
+		return true
+	}
 	if _, err := rt.routes(); err != nil {
 		http.Error(w, "skiff: "+err.Error(), http.StatusInternalServerError)
 		return true

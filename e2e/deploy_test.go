@@ -13,6 +13,7 @@ import (
 	"net/http/cgi"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,11 +70,83 @@ func TestGitDeployLifecycle(t *testing.T) {
 	expectServed(t, routerAddr, "v1")
 
 	checkMCP(t, c, bin, panelAddr, routerAddr, project.Deploys[0].ID)
+	checkPreviewPassword(t, c, root, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("containers left after teardown: %s", out)
 	}
+}
+
+// checkPreviewPassword puts a project's previews behind a password and checks the router asks for it, while production stays public.
+func checkPreviewPassword(t *testing.T, c *http.Client, root, panelAddr, routerAddr string) {
+	t.Helper()
+	preview := app + "-feat"
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter label=skiff.app="+preview+") ; docker rmi $(docker images -q skiff-"+preview+")").Run()
+	})
+	run(t, filepath.Join(root, "work"), nil, "git", "push", "-q", filepath.Join(root, "srv", "site.git"), "main:feat")
+
+	req, _ := http.NewRequest(http.MethodPut, "http://"+panelAddr+"/api/project/preview-password?app="+app, strings.NewReader(`{"password":"preview-pass-1"}`))
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("setting the preview password: %d", resp.StatusCode)
+	}
+	stream(t, c, "http://"+panelAddr+"/api/preview?app="+app+"&branch=feat")
+
+	visit := func(host, method, path string, form url.Values, cookies []*http.Cookie) (*http.Response, string) {
+		var body io.Reader
+		if form != nil {
+			body = strings.NewReader(form.Encode())
+		}
+		req, _ := http.NewRequest(method, "http://"+routerAddr+path, body)
+		req.Host = host
+		if form != nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		for _, ck := range cookies {
+			req.AddCookie(ck)
+		}
+		noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		resp, err := noRedirect.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return resp, string(b)
+	}
+
+	resp, body := visit(preview+".localhost", "GET", "/", nil, nil)
+	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(body, "Password required") {
+		gates, _ := os.ReadFile(filepath.Join(root, "home", ".skiff", "protected.json"))
+		t.Fatalf("preview wasn't locked: %d %.200s (protected: %s)", resp.StatusCode, body, gates)
+	}
+	if resp, body := visit(app+".localhost", "GET", "/", nil, nil); resp.StatusCode != 200 || !strings.Contains(body, "site ") {
+		t.Fatalf("production was locked too: %d", resp.StatusCode)
+	}
+	if resp, _ := visit(preview+".localhost", "POST", "/__skiff/unlock", url.Values{"password": {"wrong-pass"}}, nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wrong password: %d", resp.StatusCode)
+	}
+	resp, _ = visit(preview+".localhost", "POST", "/__skiff/unlock", url.Values{"password": {"preview-pass-1"}, "next": {"/"}}, nil)
+	if resp.StatusCode != http.StatusSeeOther || len(resp.Cookies()) == 0 {
+		t.Fatalf("right password: %d", resp.StatusCode)
+	}
+	cookies := resp.Cookies()
+	resp, body = visit(preview+".localhost", "GET", "/", nil, cookies)
+	for deadline := time.Now().Add(15 * time.Second); resp.StatusCode == http.StatusNotFound && time.Now().Before(deadline); {
+		time.Sleep(300 * time.Millisecond)
+		resp, body = visit(preview+".localhost", "GET", "/", nil, cookies)
+	}
+	if resp.StatusCode != 200 || !strings.Contains(body, "site ") {
+		t.Fatalf("unlocked preview wasn't served: %d %.200s", resp.StatusCode, body)
+	}
+
+	post(t, c, "http://"+panelAddr+"/api/down?app="+preview, "")
 }
 
 // checkMCP drives `skiff mcp` the way an agent would, through the token API on the live panel.

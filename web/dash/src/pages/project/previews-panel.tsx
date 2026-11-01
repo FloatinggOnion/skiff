@@ -6,15 +6,20 @@ import { useDomains } from '@/hooks/use-domains'
 import { errText } from '@/lib/errors'
 import { type Preview } from '@/services/api.service'
 import { deployDot } from './status'
+import { PreviewPassword } from './preview-password'
 
 export function PreviewsPanel({
   project,
   previews,
+  passwordProtected,
+  onPasswordChange,
   onCreate,
   onTeardown,
 }: {
   project: string
   previews: Preview[]
+  passwordProtected: boolean
+  onPasswordChange: () => void
   onCreate: (branch: string) => void
   onTeardown: (name: string) => void | Promise<void>
 }) {
@@ -54,6 +59,8 @@ export function PreviewsPanel({
           </Button>
         </div>
       </form>
+
+      <PreviewPassword project={project} enabled={passwordProtected} onChanged={onPasswordChange} />
 
       {previews.length === 0 ? (
         <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-white/8 py-12 text-sm">

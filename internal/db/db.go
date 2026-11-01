@@ -330,6 +330,10 @@ CREATE TABLE IF NOT EXISTS cp_backups (
   size    INTEGER NOT NULL,
   created INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS preview_passwords (
+  app  TEXT PRIMARY KEY,
+  hash TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS offsite_objects (
   db_id   TEXT NOT NULL,
   key     TEXT NOT NULL,

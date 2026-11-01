@@ -108,6 +108,8 @@ type projectView struct {
 	Origin      string        `json:"origin,omitempty"`
 	SleepAfter  int           `json:"sleepAfter"`
 	Sleeping    bool          `json:"sleeping"`
+	// PreviewProtected means its previews ask visitors for a password.
+	PreviewProtected bool `json:"previewProtected"`
 }
 
 func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +142,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			Release: src.Release, Autoscale: src.Autoscale, ScaleMin: src.ScaleMin, ScaleMax: src.ScaleMax, ScaleCPU: src.ScaleCPU,
 			Deploys: deploys, Previews: p.buildPreviews(app), Origin: src.Origin,
 			SleepAfter: src.SleepAfter, Sleeping: isSleeping(app),
+			PreviewProtected: previewPasswordHash(app) != "",
 		})
 	case http.MethodPut:
 		var body struct {

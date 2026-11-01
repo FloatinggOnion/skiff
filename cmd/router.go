@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/gate"
 	"github.com/nuelScript/skiff/internal/router"
 	"github.com/nuelScript/skiff/internal/sleep"
 	"github.com/nuelScript/skiff/internal/ui"
@@ -53,6 +54,7 @@ func newRouterCmd() *cobra.Command {
 				SleepFile:    sleep.DefaultFile(),
 				MailFile:     mailFile,
 				SMTPAddr:     smtpAddr,
+				GateFile:     gate.DefaultFile(),
 			}
 
 			ui.Banner(version)

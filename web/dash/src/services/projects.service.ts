@@ -36,6 +36,7 @@ export type ProjectDetail = {
   origin?: 'cli'
   sleepAfter: number
   sleeping: boolean
+  previewProtected: boolean
 }
 
 export type Job = {
@@ -95,6 +96,14 @@ class ProjectsService extends BaseService {
 
   update(name: string, settings: ProjectSettings) {
     return this.put('/project', settings, { params: { app: name } })
+  }
+
+  setPreviewPassword(name: string, password: string) {
+    return this.put('/project/preview-password', { password }, { params: { app: name } })
+  }
+
+  removePreviewPassword(name: string) {
+    return this.delete('/project/preview-password', { params: { app: name } })
   }
 
   stop(name: string) {

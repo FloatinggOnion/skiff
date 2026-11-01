@@ -146,7 +146,8 @@ func deleteSource(app string) {
 	if del(`DELETE FROM sources WHERE app=?`) &&
 		del(`DELETE FROM deploys WHERE app=?`) &&
 		del(`DELETE FROM env_vars WHERE app=?`) &&
-		del(`DELETE FROM db_attachments WHERE app=?`) {
+		del(`DELETE FROM db_attachments WHERE app=?`) &&
+		del(`DELETE FROM preview_passwords WHERE app=?`) {
 		_ = tx.Commit()
 	}
 }

@@ -80,7 +80,8 @@ platform in the browser:
   zero-downtime rollout and instant rollback.
 - **Preview environments** — every branch gets its own live URL and certificate,
   posted on its pull request and removed when the branch is deleted. In a
-  monorepo, only projects whose folder the branch changed get one.
+  monorepo, only projects whose folder the branch changed get one. Put them
+  behind a password to keep work in progress private.
 - **Observability** — per-project requests, errors, latency, visitors, top pages
   and referrers, with deploys marked on the charts, plus uptime checks and
   incidents.

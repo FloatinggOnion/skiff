@@ -382,6 +382,8 @@ export default function ProjectDetailPage() {
           <PreviewsPanel
             project={project.name}
             previews={project.previews}
+            passwordProtected={project.previewProtected}
+            onPasswordChange={reload}
             onCreate={(branch) => term.preview(project.name, branch)}
             onTeardown={async (name) => {
               await projectsService.stop(name)
