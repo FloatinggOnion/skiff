@@ -12,6 +12,11 @@ export type Me = {
   role?: string
 }
 
+// A sign-in that still needs a code from the user's authenticator app; empty when the password was enough.
+export type SignInStep = { twoFactor: true; ticket: string } | '' | undefined
+
+export type TwoFactorStatus = { enabled: boolean; recoveryLeft: number }
+
 class AuthService extends BaseService {
   me() {
     return this.get<Me>('/me')
@@ -22,7 +27,11 @@ class AuthService extends BaseService {
   }
 
   login(email: string, password: string) {
-    return this.post('/auth/login', { email, password })
+    return this.post<SignInStep>('/auth/login', { email, password })
+  }
+
+  loginCode(ticket: string, code: string) {
+    return this.post('/auth/login/code', { ticket, code })
   }
 
   logout() {
@@ -30,7 +39,7 @@ class AuthService extends BaseService {
   }
 
   accept(token: string, name: string, password: string) {
-    return this.post('/auth/accept', { token, name, password })
+    return this.post<SignInStep>('/auth/accept', { token, name, password })
   }
 
   switchTeam(team: string) {
@@ -59,6 +68,33 @@ class AuthService extends BaseService {
 
   changePassword(current: string, password: string) {
     return this.post('/account/password', { current, password })
+  }
+
+  twoFactor() {
+    return this.get<TwoFactorStatus>('/account/2fa')
+  }
+
+  twoFactorSetup(password: string) {
+    return this.post<{ secret: string; uri: string }>('/account/2fa', {
+      action: 'setup',
+      password,
+    })
+  }
+
+  twoFactorEnable(code: string) {
+    return this.post<{ recoveryCodes: string[] }>('/account/2fa', { action: 'enable', code })
+  }
+
+  twoFactorDisable(password: string, code: string) {
+    return this.post('/account/2fa', { action: 'disable', password, code })
+  }
+
+  twoFactorRecovery(password: string, code: string) {
+    return this.post<{ recoveryCodes: string[] }>('/account/2fa', {
+      action: 'recovery',
+      password,
+      code,
+    })
   }
 
   renameTeam(name: string) {

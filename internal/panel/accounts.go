@@ -93,11 +93,7 @@ func (p *Panel) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if teams := p.auth.TeamsForUser(u.ID); len(teams) > 0 {
 		teamID = teams[0].ID
 	}
-	if err := p.setSession(w, u.ID, teamID); err != nil {
-		http.Error(w, "could not create session", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	p.finishSignIn(w, u.ID, teamID)
 }
 
 func (p *Panel) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -145,11 +141,7 @@ func (p *Panel) handleAccept(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := p.setSession(w, user.ID, team.ID); err != nil {
-		http.Error(w, "could not create session", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	p.finishSignIn(w, user.ID, team.ID)
 }
 
 func (p *Panel) handleTeamSwitch(w http.ResponseWriter, r *http.Request) {

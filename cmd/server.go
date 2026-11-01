@@ -16,6 +16,7 @@ func newServerCmd() *cobra.Command {
 	}
 	c.AddCommand(newServerSetupCmd())
 	c.AddCommand(newServerRestoreCmd())
+	c.AddCommand(newServerReset2FACmd())
 	return c
 }
 

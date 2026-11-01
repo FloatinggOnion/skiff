@@ -367,6 +367,9 @@ func (s *Store) DeleteUser(userID string) error {
 	if _, err := tx.Exec(`DELETE FROM memberships WHERE user_id = ?`, userID); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`DELETE FROM recovery_codes WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(`DELETE FROM users WHERE id = ?`, userID); err != nil {
 		return err
 	}

@@ -32,9 +32,20 @@ export function useAuth() {
     [refresh],
   )
 
+  // Resolves to a ticket when the account also needs an authenticator code, null once signed in.
   const login = useCallback(
     async (email: string, password: string) => {
-      await authService.login(email, password)
+      const step = await authService.login(email, password)
+      if (step && step.twoFactor) return step.ticket
+      await refresh()
+      return null
+    },
+    [refresh],
+  )
+
+  const loginCode = useCallback(
+    async (ticket: string, code: string) => {
+      await authService.loginCode(ticket, code)
       await refresh()
     },
     [refresh],
@@ -53,5 +64,5 @@ export function useAuth() {
     [qc, refresh],
   )
 
-  return { state, me, setup, login, logout, switchTeam, refresh }
+  return { state, me, setup, login, loginCode, logout, switchTeam, refresh }
 }

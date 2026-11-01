@@ -3,6 +3,7 @@ package auth
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/nuelScript/skiff/internal/db"
 )
@@ -86,5 +87,49 @@ func TestRoleMembership(t *testing.T) {
 	}
 	if _, ok := s.Role(other.ID, team.ID); ok {
 		t.Fatal("a non-member reported a role in the team")
+	}
+}
+
+func TestTwoFactor(t *testing.T) {
+	s := newTestStore(t)
+	u, _, err := s.CreateUser("dev@acme.dev", "Dev", "password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.HasTwoFactor(u.ID) || s.CheckSecondFactor(u.ID, "000000") {
+		t.Fatal("two-factor should start off")
+	}
+	secret, err := s.BeginTwoFactor(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.HasTwoFactor(u.ID) {
+		t.Fatal("an unconfirmed secret shouldn't turn two-factor on")
+	}
+	if _, err := s.EnableTwoFactor(u.ID, "000000"); err == nil {
+		t.Fatal("enabled with a wrong code")
+	}
+	now := time.Now().Unix() / totpPeriod
+	code, _ := totpCode(secret, now)
+	codes, err := s.EnableTwoFactor(u.ID, code)
+	if err != nil || len(codes) != recoveryCount || !s.HasTwoFactor(u.ID) {
+		t.Fatalf("enable: %v (%d codes)", err, len(codes))
+	}
+	if s.CheckSecondFactor(u.ID, code) {
+		t.Fatal("the code used to enable was accepted again")
+	}
+	next, _ := totpCode(secret, now+1)
+	if !s.CheckSecondFactor(u.ID, next) || s.CheckSecondFactor(u.ID, next) {
+		t.Fatal("a fresh code should work exactly once")
+	}
+	if !s.CheckSecondFactor(u.ID, codes[0]) || s.CheckSecondFactor(u.ID, codes[0]) || s.RecoveryLeft(u.ID) != recoveryCount-1 {
+		t.Fatal("a recovery code should work exactly once")
+	}
+	fresh, err := s.RegenerateRecovery(u.ID)
+	if err != nil || s.CheckSecondFactor(u.ID, codes[1]) || !s.CheckSecondFactor(u.ID, fresh[0]) {
+		t.Fatal("regenerating should retire the old codes")
+	}
+	if err := s.DisableTwoFactor(u.ID); err != nil || s.HasTwoFactor(u.ID) || s.RecoveryLeft(u.ID) != 0 {
+		t.Fatalf("disable: %v", err)
 	}
 }

@@ -2,6 +2,7 @@
 // sync. Reference these — never inline a key string.
 export const queryKeys = {
   me: ['me'] as const,
+  twoFactor: ['two-factor'] as const,
   apps: ['apps'] as const,
   project: (name: string) => ['project', name] as const,
   system: ['system'] as const,

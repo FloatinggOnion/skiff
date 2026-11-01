@@ -4,6 +4,7 @@ import { authService, githubService, type Member, type GithubStatus } from '@/se
 import { queryKeys } from '@/constants/query-keys'
 import { ProfileSection } from './settings/profile-section'
 import { PasswordSection } from './settings/password-section'
+import { TwoFactorSection } from './settings/two-factor-section'
 import { TeamSection } from './settings/team-section'
 import { MembersSection } from './settings/members-section'
 import { AlertsSection } from './settings/alerts-section'
@@ -38,6 +39,7 @@ export default function SettingsPage() {
       <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
         {me?.user && <ProfileSection user={me.user} onSaved={refresh} />}
         <PasswordSection />
+        <TwoFactorSection />
         <TeamSection team={team} isOwner={isOwner} onSaved={refresh} />
         <MembersSection
           members={members}

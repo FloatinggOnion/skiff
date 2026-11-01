@@ -70,6 +70,9 @@ var migrations = []string{
 	`ALTER TABLE sources ADD COLUMN sleep_after INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE sources ADD COLUMN health_path TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN health_timeout INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE users ADD COLUMN totp_pending TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE users ADD COLUMN totp_step INTEGER NOT NULL DEFAULT 0`,
 }
 
 const schema = `
@@ -78,7 +81,15 @@ CREATE TABLE IF NOT EXISTS users (
   email         TEXT UNIQUE NOT NULL,
   name          TEXT NOT NULL DEFAULT '',
   password_hash TEXT NOT NULL,
-  created       INTEGER NOT NULL
+  created       INTEGER NOT NULL,
+  totp_secret   TEXT NOT NULL DEFAULT '',
+  totp_pending  TEXT NOT NULL DEFAULT '',
+  totp_step     INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS recovery_codes (
+  user_id TEXT NOT NULL,
+  hash    TEXT NOT NULL,
+  PRIMARY KEY (user_id, hash)
 );
 CREATE TABLE IF NOT EXISTS teams (
   id      TEXT PRIMARY KEY,

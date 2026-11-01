@@ -122,6 +122,12 @@ journalctl -u skiff-panel@7070 -n 50 --no-pager`}</CodeBlock>
           <strong>Ports 80/443 in use:</strong> make sure nothing else (nginx, Apache, Caddy) is
           bound to them — the Skiff router needs both.
         </li>
+        <li>
+          <strong>Locked out by two-factor:</strong> if you&apos;ve lost both your authenticator and
+          your recovery codes, turn two-factor off for your account from the server, then sign in
+          with your password and set it up again:
+          <CodeBlock label="on your server">skiff server reset-2fa you@example.com</CodeBlock>
+        </li>
       </ul>
     </article>
   );

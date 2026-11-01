@@ -33,7 +33,7 @@ function AuthGate() {
   if (auth.state === 'checking')
     return <div className="text-muted-foreground flex h-screen items-center justify-center">…</div>
   if (auth.state === 'setup') return <Setup onSetup={auth.setup} />
-  if (auth.state === 'out') return <Login onLogin={auth.login} />
+  if (auth.state === 'out') return <Login onLogin={auth.login} onCode={auth.loginCode} />
   return <Outlet />
 }
 

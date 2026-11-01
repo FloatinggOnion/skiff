@@ -106,6 +106,8 @@ platform in the browser:
   5xx errors spike.
 - **Teams, audit log, and API tokens** — collaborators, an activity trail, and a
   token-authenticated API for CI.
+- **Two-factor sign-in** — authenticator-app codes for the dashboard, with
+  recovery codes.
 - **Agents** — `skiff mcp` lets an AI assistant list projects, deploy, read logs
   and traffic, change env vars and roll back.
 
