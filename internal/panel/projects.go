@@ -403,20 +403,28 @@ func (p *Panel) handleEnv(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	get, set, action := getEnv, setEnv, "env.update"
+	if r.URL.Query().Get("scope") == "preview" {
+		if src, ok := getSource(app); !ok || src.Parent != "" {
+			http.Error(w, "preview overrides belong to a project", http.StatusNotFound)
+			return
+		}
+		get, set, action = getPreviewEnv, setPreviewEnv, "env.preview.update"
+	}
 	switch r.Method {
 	case http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(getEnv(app))
+		_ = json.NewEncoder(w).Encode(get(app))
 	case http.MethodPut:
 		var body struct {
 			Vars []EnvVar `json:"vars"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if err := setEnv(app, body.Vars); err != nil {
+		if err := set(app, body.Vars); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		p.audit(r, "env.update", app, "")
+		p.audit(r, action, app, "")
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

@@ -64,6 +64,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go guard("prewarmDatabaseImages", p.prewarmDatabaseImages)
 	go guard("prewarmStorageImages", p.prewarmStorageImages)
 	go guard("writeGateFile", func() { _ = writeGateFile() })
+	go guard("dropCopiedPreviewEnv", dropCopiedPreviewEnv)
 	go p.backupLoop()
 	go p.jobLoop()
 	go p.resourceLoop()

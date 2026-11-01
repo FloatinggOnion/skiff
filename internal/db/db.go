@@ -330,6 +330,13 @@ CREATE TABLE IF NOT EXISTS cp_backups (
   size    INTEGER NOT NULL,
   created INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS preview_env (
+  app   TEXT NOT NULL,
+  key   TEXT NOT NULL,
+  value TEXT NOT NULL DEFAULT '',
+  build INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (app, key)
+);
 CREATE TABLE IF NOT EXISTS preview_passwords (
   app  TEXT PRIMARY KEY,
   hash TEXT NOT NULL

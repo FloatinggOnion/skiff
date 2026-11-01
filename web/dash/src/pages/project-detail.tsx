@@ -421,6 +421,12 @@ export default function ProjectDetailPage() {
             </p>
           )}
           <EnvEditor app={project.name} />
+          {!cli && (
+            <section className="mt-10 border-t border-white/8 pt-6">
+              <h2 className="mb-3 text-sm font-semibold">Preview overrides</h2>
+              <EnvEditor app={project.name} scope="preview" />
+            </section>
+          )}
         </TabsContent>
 
         {/* Jobs */}

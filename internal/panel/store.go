@@ -147,7 +147,8 @@ func deleteSource(app string) {
 		del(`DELETE FROM deploys WHERE app=?`) &&
 		del(`DELETE FROM env_vars WHERE app=?`) &&
 		del(`DELETE FROM db_attachments WHERE app=?`) &&
-		del(`DELETE FROM preview_passwords WHERE app=?`) {
+		del(`DELETE FROM preview_passwords WHERE app=?`) &&
+		del(`DELETE FROM preview_env WHERE app=?`) {
 		_ = tx.Commit()
 	}
 }
@@ -265,8 +266,25 @@ func getDeployByID(id string) (Deploy, bool) {
 	return d, err == nil
 }
 
-func getEnv(app string) []EnvVar {
-	rows, err := sqlDB.Query(`SELECT key,value,build FROM env_vars WHERE app=? ORDER BY key`, app)
+func getEnv(app string) []EnvVar { return readEnv(`env_vars`, app) }
+
+func setEnv(app string, vars []EnvVar) error { return writeEnv(`env_vars`, app, vars) }
+
+// getPreviewEnv and setPreviewEnv hold a project's overrides for its previews, e.g. a separate DATABASE_URL.
+func getPreviewEnv(app string) []EnvVar { return readEnv(`preview_env`, app) }
+
+func setPreviewEnv(app string, vars []EnvVar) error { return writeEnv(`preview_env`, app, vars) }
+
+// dropCopiedPreviewEnv removes vars previews were given as a copy of their project's when they were created; they now read the project's live, and a stale copy would hide later changes and the preview overrides.
+func dropCopiedPreviewEnv() {
+	_, _ = sqlDB.Exec(`DELETE FROM env_vars WHERE app IN (SELECT app FROM sources WHERE parent<>'')
+		AND EXISTS (SELECT 1 FROM sources s JOIN env_vars pe ON pe.app = s.parent
+			WHERE s.app = env_vars.app AND pe.key = env_vars.key AND pe.value = env_vars.value AND pe.build = env_vars.build)`)
+}
+
+// readEnv and writeEnv take the table name from the constants above, never from input.
+func readEnv(table, app string) []EnvVar {
+	rows, err := sqlDB.Query(`SELECT key,value,build FROM `+table+` WHERE app=? ORDER BY key`, app)
 	if err != nil {
 		return nil
 	}
@@ -286,13 +304,13 @@ func getEnv(app string) []EnvVar {
 	return out
 }
 
-func setEnv(app string, vars []EnvVar) error {
+func writeEnv(table, app string, vars []EnvVar) error {
 	tx, err := sqlDB.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck
-	if _, err := tx.Exec(`DELETE FROM env_vars WHERE app=?`, app); err != nil {
+	if _, err := tx.Exec(`DELETE FROM `+table+` WHERE app=?`, app); err != nil {
 		return err
 	}
 	for _, e := range vars {
@@ -301,7 +319,7 @@ func setEnv(app string, vars []EnvVar) error {
 			continue
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO env_vars(app,key,value,build) VALUES(?,?,?,?)`,
+			`INSERT INTO `+table+`(app,key,value,build) VALUES(?,?,?,?)`,
 			app, key, e.Value, b2i(e.Build)); err != nil {
 			return err
 		}
@@ -355,13 +373,18 @@ func setSharedEnv(team string, vars []EnvVar) error {
 
 // deployEnv merges the team's shared vars with the app's own; the app wins on a
 // key conflict.
+// deployEnv layers team-shared vars, then the project's own; a preview reads its project's vars fresh each deploy, then the preview overrides, then anything set on that preview alone.
 func deployEnv(src Source) []EnvVar {
-	merged := map[string]EnvVar{}
-	for _, e := range sharedEnv(src.Team) {
-		merged[e.Key] = e
+	layers := [][]EnvVar{sharedEnv(src.Team)}
+	if src.Parent != "" {
+		layers = append(layers, getEnv(src.Parent), getPreviewEnv(src.Parent))
 	}
-	for _, e := range getEnv(src.App) {
-		merged[e.Key] = e
+	layers = append(layers, getEnv(src.App))
+	merged := map[string]EnvVar{}
+	for _, layer := range layers {
+		for _, e := range layer {
+			merged[e.Key] = e
+		}
 	}
 	out := make([]EnvVar, 0, len(merged))
 	for _, e := range merged {

@@ -78,7 +78,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	}
 }
 
-// checkPreviewPassword puts a project's previews behind a password and checks the router asks for it, while production stays public.
+// checkPreviewPassword gives a project preview-only env overrides and a password, then checks the preview gets the override and the router asks for the password, while production stays public.
 func checkPreviewPassword(t *testing.T, c *http.Client, root, panelAddr, routerAddr string) {
 	t.Helper()
 	preview := app + "-feat"
@@ -96,7 +96,29 @@ func checkPreviewPassword(t *testing.T, c *http.Client, root, panelAddr, routerA
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("setting the preview password: %d", resp.StatusCode)
 	}
+	putEnv := func(scope, body string) {
+		req, _ := http.NewRequest(http.MethodPut, "http://"+panelAddr+"/api/env?app="+app+scope, strings.NewReader(body))
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("saving env%s: %d", scope, resp.StatusCode)
+		}
+	}
+	putEnv("", `{"vars":[{"key":"DATABASE_URL","value":"postgres://prod"},{"key":"REGION","value":"eu"}]}`)
+	putEnv("&scope=preview", `{"vars":[{"key":"DATABASE_URL","value":"postgres://staging"}]}`)
+
 	stream(t, c, "http://"+panelAddr+"/api/preview?app="+app+"&branch=feat")
+
+	out, err := exec.Command("sh", "-c", "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' $(docker ps -q --filter label=skiff.app="+preview+" | head -1)").Output()
+	if err != nil {
+		t.Fatalf("inspecting the preview: %v", err)
+	}
+	if env := string(out); !strings.Contains(env, "DATABASE_URL=postgres://staging") || !strings.Contains(env, "REGION=eu") || strings.Contains(env, "postgres://prod") {
+		t.Fatalf("preview should get the override and the project's other vars:\n%s", env)
+	}
 
 	visit := func(host, method, path string, form url.Values, cookies []*http.Cookie) (*http.Response, string) {
 		var body io.Reader

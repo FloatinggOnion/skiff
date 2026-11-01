@@ -127,3 +127,63 @@ func TestTeamDeploysPagination(t *testing.T) {
 		t.Fatalf("expected nothing past the end, got %+v", extra)
 	}
 }
+
+func TestPreviewEnvLayers(t *testing.T) {
+	openTestDB(t)
+	if _, err := sqlDB.Exec(`INSERT INTO shared_env(team,key,value,build) VALUES('t1','REGION','eu',0),('t1','DATABASE_URL','shared-db',0)`); err != nil {
+		t.Fatal(err)
+	}
+	prod := Source{App: "shop", Team: "t1"}
+	preview := Source{App: "shop-feat", Team: "t1", Parent: "shop"}
+	_ = setEnv("shop", []EnvVar{{Key: "DATABASE_URL", Value: "prod-db"}, {Key: "API_KEY", Value: "live"}})
+	_ = setPreviewEnv("shop", []EnvVar{{Key: "DATABASE_URL", Value: "staging-db"}})
+	_ = setEnv("shop-feat", []EnvVar{{Key: "API_KEY", Value: "test-only-this-branch"}})
+
+	env := func(src Source) map[string]string {
+		out := map[string]string{}
+		for _, e := range deployEnv(src) {
+			out[e.Key] = e.Value
+		}
+		return out
+	}
+	if got := env(prod); got["DATABASE_URL"] != "prod-db" || got["API_KEY"] != "live" || got["REGION"] != "eu" {
+		t.Errorf("production must ignore preview overrides: %v", got)
+	}
+	if got := env(preview); got["DATABASE_URL"] != "staging-db" || got["API_KEY"] != "test-only-this-branch" || got["REGION"] != "eu" {
+		t.Errorf("preview layering wrong: %v", got)
+	}
+
+	// A change to the project's own vars reaches the preview on its next deploy.
+	_ = setEnv("shop", []EnvVar{{Key: "DATABASE_URL", Value: "prod-db"}, {Key: "FEATURE", Value: "on"}})
+	if got := env(preview); got["FEATURE"] != "on" {
+		t.Errorf("preview missed a new project var: %v", got)
+	}
+
+	deleteSource("shop")
+	if len(getPreviewEnv("shop")) != 0 {
+		t.Error("deleting the project left its preview overrides behind")
+	}
+}
+
+func TestDropCopiedPreviewEnv(t *testing.T) {
+	openTestDB(t)
+	_ = putSource(Source{App: "shop"})
+	_ = putSource(Source{App: "shop-feat", Parent: "shop"})
+	_ = setEnv("shop", []EnvVar{{Key: "DATABASE_URL", Value: "prod-db"}, {Key: "A", Value: "1"}})
+	_ = setEnv("shop-feat", []EnvVar{{Key: "DATABASE_URL", Value: "prod-db"}, {Key: "A", Value: "1"}, {Key: "ONLY_HERE", Value: "x"}})
+	_ = setPreviewEnv("shop", []EnvVar{{Key: "DATABASE_URL", Value: "staging-db"}})
+
+	dropCopiedPreviewEnv()
+
+	if got := getEnv("shop-feat"); len(got) != 1 || got[0].Key != "ONLY_HERE" {
+		t.Fatalf("only the preview's own var should remain, got %v", got)
+	}
+	if len(getEnv("shop")) != 2 {
+		t.Fatal("the project's own vars were touched")
+	}
+	for _, e := range deployEnv(Source{App: "shop-feat", Parent: "shop"}) {
+		if e.Key == "DATABASE_URL" && e.Value != "staging-db" {
+			t.Fatalf("the override should now win, got %q", e.Value)
+		}
+	}
+}
