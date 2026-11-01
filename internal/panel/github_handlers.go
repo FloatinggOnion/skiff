@@ -28,7 +28,7 @@ func (p *Panel) handleGithubStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 	if cfg.Configured() {
 		out["slug"] = cfg.Slug
-		if prCommentsNeedGrant() {
+		if prGate.needsGrant() || statusGate.needsGrant() {
 			out["permissionsUrl"] = "https://github.com/settings/apps/" + cfg.Slug + "/permissions"
 		}
 	}

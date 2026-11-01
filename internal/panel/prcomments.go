@@ -10,11 +10,50 @@ import (
 	"github.com/nuelScript/skiff/internal/github"
 )
 
-var (
-	prMu           sync.Mutex
-	prNeedsGrant   bool // the GitHub App hasn't been given "Pull requests: write"
-	prNeedsGrantAt time.Time
-)
+// grantGate backs off from a GitHub call the app isn't permitted to make, retrying hourly in case the permission was granted.
+type grantGate struct {
+	mu         sync.Mutex
+	permission string
+	needed     bool
+	at         time.Time
+}
+
+func (g *grantGate) blocked() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.needed && time.Since(g.at) < time.Hour
+}
+
+func (g *grantGate) needsGrant() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.needed
+}
+
+func (g *grantGate) ok() {
+	g.mu.Lock()
+	g.needed = false
+	g.mu.Unlock()
+}
+
+// note records a failed call and reports whether it was something other than a missing permission.
+func (g *grantGate) note(err error) bool {
+	if err == nil {
+		return false
+	}
+	if !errors.Is(err, github.ErrForbidden) {
+		return true
+	}
+	g.mu.Lock()
+	if !g.needed {
+		log.Printf("skiff: grant the GitHub App %q", g.permission)
+	}
+	g.needed, g.at = true, time.Now()
+	g.mu.Unlock()
+	return false
+}
+
+var prGate = &grantGate{permission: "Pull requests: write"}
 
 func previewCommentBody(app, url, commit, status string, at time.Time) string {
 	state := map[string]string{
@@ -42,10 +81,7 @@ func (p *Panel) commentOnPR(src Source, commit, status string) {
 	if !gh.Installed() {
 		return
 	}
-	prMu.Lock()
-	blocked := prNeedsGrant && time.Since(prNeedsGrantAt) < time.Hour
-	prMu.Unlock()
-	if blocked {
+	if prGate.blocked() {
 		return
 	}
 	pr, err := gh.OpenPullRequest(src.Repo, src.Branch)
@@ -63,29 +99,11 @@ func (p *Panel) commentOnPR(src Source, commit, status string) {
 	}
 	_, _ = sqlDB.Exec(`INSERT INTO pr_comments(app,pr,comment_id) VALUES(?,?,?)
 		ON CONFLICT(app,pr) DO UPDATE SET comment_id=excluded.comment_id`, src.App, pr, id)
-	prMu.Lock()
-	prNeedsGrant = false
-	prMu.Unlock()
+	prGate.ok()
 }
 
 func (p *Panel) notePRError(err error) {
-	if err == nil {
-		return
+	if prGate.note(err) {
+		log.Printf("skiff: preview comment: %v", err)
 	}
-	if errors.Is(err, github.ErrForbidden) {
-		prMu.Lock()
-		if !prNeedsGrant {
-			log.Printf("skiff: can't comment on pull requests — grant the GitHub App \"Pull requests: write\"")
-		}
-		prNeedsGrant, prNeedsGrantAt = true, time.Now()
-		prMu.Unlock()
-		return
-	}
-	log.Printf("skiff: preview comment: %v", err)
-}
-
-func prCommentsNeedGrant() bool {
-	prMu.Lock()
-	defer prMu.Unlock()
-	return prNeedsGrant
 }

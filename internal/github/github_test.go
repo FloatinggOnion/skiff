@@ -87,3 +87,21 @@ func itoa(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
 }
+
+func TestSetStatus(t *testing.T) {
+	var got map[string]string
+	gh := fakeGitHub(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/repos/acme/shop/statuses/abc123" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL)
+		}
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(http.StatusCreated)
+	})
+	long := string(make([]byte, 200))
+	if err := gh.SetStatus("acme/shop", "abc123", "success", "Skiff / shop", long, "https://shop.example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if got["state"] != "success" || got["context"] != "Skiff / shop" || got["target_url"] != "https://shop.example.com" || len(got["description"]) != 140 {
+		t.Fatalf("got %v", got)
+	}
+}

@@ -91,16 +91,22 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	ctx, superseded, done := beginBuild(src.App, id)
 	defer done()
 	go p.commentOnPR(src, shortCommit(commit), "building")
+	sha := commit
+	status, stopStatus := p.statusReporter(src)
+	defer stopStatus()
+	status(sha, "building")
 	// finish maps a supersede (canceled by a newer deploy) to "canceled", not "failed" — no failure alert.
 	finish := func(failMsg string) {
 		if superseded() {
 			logln("✗ superseded by a newer deploy")
 			setDeployStatus(src.App, id, "canceled")
+			status(sha, "canceled")
 			return
 		}
 		logln(failMsg)
 		setDeployStatus(src.App, id, "failed")
 		go p.commentOnPR(src, shortCommit(commit), "failed")
+		status(sha, "failed")
 		go dispatchAlert(alertEvent{
 			Team: src.Team, Kind: "deploy.failed", App: src.App,
 			Title:  "Deploy failed: " + src.App,
@@ -140,6 +146,12 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		finish("✗ clone failed: " + cloneError(out))
 		return
 	}
+	if sha == "" {
+		if out, err := exec.Command("git", "-C", work, "rev-parse", "HEAD").Output(); err == nil {
+			sha = strings.TrimSpace(string(out))
+			status(sha, "building")
+		}
+	}
 
 	// Root dir (monorepo support), joined safely so a "../.." can't escape the clone.
 	ctxDir := filepath.Join(work, filepath.Clean("/"+src.RootDir))
@@ -176,6 +188,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	setDeployStatus(src.App, id, "live")
 	p.reconcileWorkers(src.App)
 	go p.commentOnPR(src, shortCommit(commit), "live")
+	status(sha, "live")
 }
 
 func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {

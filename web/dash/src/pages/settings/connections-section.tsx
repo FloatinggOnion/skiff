@@ -34,8 +34,9 @@ export function ConnectionsSection({ gh }: { gh?: GithubStatus }) {
       </div>
       {gh?.permissionsUrl && (
         <p className="text-muted-foreground mt-3 text-xs leading-relaxed">
-          To post preview links on pull requests, give the app{' '}
-          <span className="text-foreground/80">Pull requests: Read and write</span> in its{' '}
+          To post preview links and deploy statuses on pull requests, give the app{' '}
+          <span className="text-foreground/80">Pull requests</span> and{' '}
+          <span className="text-foreground/80">Commit statuses</span> (Read and write) in its{' '}
           <a href={gh.permissionsUrl} target="_blank" rel="noreferrer" className="underline">
             GitHub permissions
           </a>

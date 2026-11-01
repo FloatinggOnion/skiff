@@ -77,7 +77,7 @@ func Manifest(baseURL, name string) string {
 		"setup_url":           baseURL + "/api/github/installed",
 		"setup_on_update":     true,
 		"public":              false,
-		"default_permissions": map[string]string{"contents": "read", "metadata": "read", "pull_requests": "write"},
+		"default_permissions": map[string]string{"contents": "read", "metadata": "read", "pull_requests": "write", "statuses": "write"},
 		"default_events":      []string{"push", "pull_request"},
 	}
 	b, _ := json.Marshal(m)
@@ -399,6 +399,16 @@ func (c *Config) OpenPullRequest(repo, branch string) (int, error) {
 		return 0, err
 	}
 	return prs[0].Number, nil
+}
+
+// SetStatus sets a commit status; state is pending, success, failure or error.
+func (c *Config) SetStatus(repo, sha, state, context, description, targetURL string) error {
+	if len(description) > 140 {
+		description = description[:140]
+	}
+	return c.call(http.MethodPost, fmt.Sprintf(apiBase+"/repos/%s/statuses/%s", repo, sha), map[string]string{
+		"state": state, "context": context, "description": description, "target_url": targetURL,
+	}, nil)
 }
 
 // UpsertComment edits the comment if it still exists, otherwise posts a new one, returning the comment's id.
