@@ -148,6 +148,50 @@ func (p *Panel) handleGithubDeploy(w http.ResponseWriter, r *http.Request) {
 	p.tailLog(w, r, name, id)
 }
 
+func (p *Panel) onPush(push github.Push) {
+	if push.Deleted {
+		for _, pv := range branchPreviews(push.Repo, push.Branch) {
+			recordAudit(pv.Team, AuditEntry{Actor: "push", Action: "project.delete", Target: pv.App, Detail: "branch deleted"})
+			go p.removeApp(pv.App)
+		}
+		return
+	}
+	for _, src := range sourcesForRepo(push.Repo, push.Branch) {
+		if !touched(push.Paths, src.RootDir) {
+			continue
+		}
+		id := newDeployID()
+		recordAudit(src.Team, AuditEntry{Actor: "push", Action: "deploy", Target: src.App, Detail: shortCommit(push.Commit)})
+		go p.runDeploy(src, "", push.Commit, push.Message, "push", id)
+	}
+	for _, app := range previewsToCreate(push) {
+		p.createPreview(app, push.Branch, push.Commit, push.Message)
+	}
+	toSelfBranch := p.selfRepo != "" && push.Repo == p.selfRepo && push.Branch == p.selfBranch
+	if toSelfBranch && p.pushTouchesSelf(push.Paths) {
+		id := newDeployID()
+		addDeploy(Deploy{
+			ID: id, App: "panel", Commit: shortCommit(push.Commit), Message: push.Message,
+			Trigger: "push", Status: "building", Started: time.Now().Unix(),
+		})
+		p.launchSelfUpdate(id, push.Commit)
+	}
+}
+
+// onPullRequest posts the preview comment on a pull request opened after its branch's preview was built.
+func (p *Panel) onPullRequest(pr github.PullRequest) {
+	switch pr.Action {
+	case "opened", "reopened", "ready_for_review":
+	default:
+		return
+	}
+	for _, pv := range branchPreviews(pr.Repo, pr.Branch) {
+		if ds := appDeploys(pv.App); len(ds) > 0 {
+			go p.commentOnPR(pv, ds[0].Commit, ds[0].Status)
+		}
+	}
+}
+
 // handleHook is the GitHub webhook receiver — HMAC-verified, not session-gated.
 func (p *Panel) handleHook(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 5<<20))
@@ -165,37 +209,14 @@ func (p *Panel) handleHook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad signature", http.StatusUnauthorized)
 		return
 	}
-	if r.Header.Get("X-GitHub-Event") != "push" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	push, ok := github.ParsePush(body)
-	if ok {
-		for _, src := range sourcesForRepo(push.Repo, push.Branch) {
-			if !touched(push.Paths, src.RootDir) {
-				continue
-			}
-			id := newDeployID()
-			recordAudit(src.Team, AuditEntry{Actor: "push", Action: "deploy", Target: src.App, Detail: shortCommit(push.Commit)})
-			go p.runDeploy(src, "", push.Commit, push.Message, "push", id)
+	switch r.Header.Get("X-GitHub-Event") {
+	case "push":
+		if push, ok := github.ParsePush(body); ok {
+			p.onPush(push)
 		}
-		for _, app := range productionAppsForRepo(push.Repo) {
-			if !app.PreviewAuto || app.Branch == "" || app.Branch == push.Branch {
-				continue
-			}
-			if _, exists := getSource(previewName(app.App, push.Branch)); exists {
-				continue
-			}
-			p.createPreview(app, push.Branch, push.Commit, push.Message)
-		}
-		toSelfBranch := p.selfRepo != "" && push.Repo == p.selfRepo && push.Branch == p.selfBranch
-		if toSelfBranch && p.pushTouchesSelf(push.Paths) {
-			id := newDeployID()
-			addDeploy(Deploy{
-				ID: id, App: "panel", Commit: shortCommit(push.Commit), Message: push.Message,
-				Trigger: "push", Status: "building", Started: time.Now().Unix(),
-			})
-			p.launchSelfUpdate(id, push.Commit)
+	case "pull_request":
+		if pr, ok := github.ParsePullRequest(body); ok {
+			p.onPullRequest(pr)
 		}
 	}
 	w.WriteHeader(http.StatusOK)

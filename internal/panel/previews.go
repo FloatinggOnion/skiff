@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/nuelScript/skiff/internal/github"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -46,6 +47,43 @@ func previewSources(parent string) []Source {
 	}
 	if rows.Err() != nil {
 		return nil
+	}
+	return out
+}
+
+// branchPreviews are the previews built from one branch of a repo.
+func branchPreviews(repo, branch string) []Source {
+	rows, err := sqlDB.Query(`SELECT `+sourceCols+` FROM sources WHERE parent<>'' AND repo=? AND branch=?`, repo, branch)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []Source
+	for rows.Next() {
+		if s, ok := scanSource(rows); ok {
+			out = append(out, s)
+		}
+	}
+	if rows.Err() != nil {
+		return nil
+	}
+	return out
+}
+
+// previewsToCreate are the projects that get a new preview from this push: automatic previews on, a branch other than their own, no preview yet, and a change inside their root directory.
+func previewsToCreate(push github.Push) []Source {
+	var out []Source
+	for _, app := range productionAppsForRepo(push.Repo) {
+		if !app.PreviewAuto || app.Branch == "" || app.Branch == push.Branch {
+			continue
+		}
+		if _, exists := getSource(previewName(app.App, push.Branch)); exists {
+			continue
+		}
+		if !touched(push.Paths, app.RootDir) {
+			continue
+		}
+		out = append(out, app)
 	}
 	return out
 }

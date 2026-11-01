@@ -78,7 +78,7 @@ func Manifest(baseURL, name string) string {
 		"setup_on_update":     true,
 		"public":              false,
 		"default_permissions": map[string]string{"contents": "read", "metadata": "read", "pull_requests": "write"},
-		"default_events":      []string{"push"},
+		"default_events":      []string{"push", "pull_request"},
 	}
 	b, _ := json.Marshal(m)
 	return string(b)
@@ -244,6 +244,7 @@ type Push struct {
 	Commit  string
 	Message string   // head commit message (first line shown in the UI)
 	Paths   []string // changed files (best-effort; GitHub truncates very large pushes)
+	Deleted bool     // the branch was deleted; only Repo and Branch are set
 }
 
 type commitFiles struct {
@@ -264,8 +265,12 @@ func ParsePush(body []byte) (Push, bool) {
 		HeadCommit *commitFiles  `json:"head_commit"`
 		Commits    []commitFiles `json:"commits"`
 	}
-	if json.Unmarshal(body, &p) != nil || p.Repository.FullName == "" || p.Deleted {
+	if json.Unmarshal(body, &p) != nil || p.Repository.FullName == "" || !strings.HasPrefix(p.Ref, "refs/heads/") {
 		return Push{}, false
+	}
+	branch := strings.TrimPrefix(p.Ref, "refs/heads/")
+	if p.Deleted {
+		return Push{Repo: p.Repository.FullName, Branch: branch, Deleted: true}, true
 	}
 	seen := map[string]bool{}
 	var paths []string
@@ -297,11 +302,44 @@ func ParsePush(body []byte) (Push, bool) {
 	}
 	return Push{
 		Repo:    p.Repository.FullName,
-		Branch:  strings.TrimPrefix(p.Ref, "refs/heads/"),
+		Branch:  branch,
 		Commit:  p.After,
 		Message: msg,
 		Paths:   paths,
 	}, true
+}
+
+type PullRequest struct {
+	Action string
+	Repo   string
+	Branch string
+	Number int
+}
+
+// ParsePullRequest reads a pull_request event; pull requests from forks are ignored since their branches live outside the repo.
+func ParsePullRequest(body []byte) (PullRequest, bool) {
+	var p struct {
+		Action      string `json:"action"`
+		Number      int    `json:"number"`
+		PullRequest struct {
+			Head struct {
+				Ref  string `json:"ref"`
+				Repo *struct {
+					FullName string `json:"full_name"`
+				} `json:"repo"`
+			} `json:"head"`
+		} `json:"pull_request"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
+	}
+	if json.Unmarshal(body, &p) != nil || p.Repository.FullName == "" || p.PullRequest.Head.Ref == "" {
+		return PullRequest{}, false
+	}
+	if head := p.PullRequest.Head.Repo; head == nil || head.FullName != p.Repository.FullName {
+		return PullRequest{}, false
+	}
+	return PullRequest{Action: p.Action, Repo: p.Repository.FullName, Branch: p.PullRequest.Head.Ref, Number: p.Number}, true
 }
 
 // apiBase is GitHub's REST root; tests point it at a fake.

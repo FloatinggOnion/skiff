@@ -43,6 +43,13 @@ func cancelInflight(app, id string) bool {
 	return false
 }
 
+func building(app string) bool {
+	inflightMu.Lock()
+	defer inflightMu.Unlock()
+	_, ok := inflight[app]
+	return ok
+}
+
 // beginBuild registers this build as the app's in-flight one, canceling any prior deploy OR rollback so their container swaps never race. Returns a build context, a "was I superseded" predicate, and a cleanup to defer.
 func beginBuild(app, id string) (context.Context, func() bool, func()) {
 	ctx, cancel := context.WithTimeout(context.Background(), deployDeadline)

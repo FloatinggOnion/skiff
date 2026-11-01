@@ -79,7 +79,8 @@ platform in the browser:
 - **Push-to-deploy** — connect GitHub and every push builds and ships, with
   zero-downtime rollout and instant rollback.
 - **Preview environments** — every branch gets its own live URL and certificate,
-  posted on its pull request.
+  posted on its pull request and removed when the branch is deleted. In a
+  monorepo, only projects whose folder the branch changed get one.
 - **Observability** — per-project requests, errors, latency, visitors, top pages
   and referrers, with deploys marked on the charts, plus uptime checks and
   incidents.

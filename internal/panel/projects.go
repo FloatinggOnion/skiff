@@ -358,6 +358,17 @@ func (p *Panel) handleDown(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	p.removeApp(name)
+	p.audit(r, "project.delete", name, "")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// removeApp stops a build in flight and deletes the app with everything it runs; a build left going could otherwise register a container after the project is gone.
+func (p *Panel) removeApp(name string) {
+	cancelInflight(name, "")
+	for deadline := time.Now().Add(20 * time.Second); building(name) && time.Now().Before(deadline); {
+		time.Sleep(250 * time.Millisecond)
+	}
 	// Remove every container — all replicas, not just the representative — or leftovers keep serving (router finds backends by label) and hold host ports.
 	for _, c := range p.eng.AppContainers(name) {
 		_ = p.eng.Remove(c)
@@ -372,8 +383,6 @@ func (p *Panel) handleDown(w http.ResponseWriter, r *http.Request) {
 	_, _ = registry.Delete(name)
 	deleteSource(name)
 	p.removeAppImages(name)
-	p.audit(r, "project.delete", name, "")
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (p *Panel) handleEnv(w http.ResponseWriter, r *http.Request) {
