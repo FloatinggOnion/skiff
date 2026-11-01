@@ -78,3 +78,10 @@ func TestDatabaseURLs(t *testing.T) {
 		t.Errorf("mongodb public URL should enable TLS: %s", got)
 	}
 }
+
+func TestHasBucket(t *testing.T) {
+	list := "  media-files\tsize:0\tlogical:0\tchunk:0\n  media\tsize:0\n"
+	if !hasBucket(list, "media-files") || !hasBucket(list, "media") || hasBucket(list, "medi") || hasBucket("", "media") {
+		t.Fatal("hasBucket matched the wrong names")
+	}
+}

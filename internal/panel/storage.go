@@ -211,19 +211,36 @@ func (p *Panel) createBucket(team, name string) (bucketRow, error) {
 }
 
 func (p *Panel) makeBucket(container, bucket string) error {
+	shell := func(cmd string, timeout time.Duration) (string, error) {
+		var out bytes.Buffer
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		err := p.eng.Exec(ctx, container, []string{"weed", "shell"}, strings.NewReader(cmd+"\n"), &out)
+		return out.String(), err
+	}
 	var last string
 	for range 30 {
-		var out bytes.Buffer
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := p.eng.Exec(ctx, container, []string{"weed", "shell"}, strings.NewReader("s3.bucket.create -name "+bucket+"\n"), &out)
-		cancel()
-		last = strings.TrimSpace(out.String())
-		if err == nil && strings.Contains(last, "created bucket") {
+		out, err := shell("s3.bucket.create -name "+bucket, 30*time.Second)
+		last = strings.TrimSpace(out)
+		if err == nil && strings.Contains(out, "created bucket") {
+			return nil
+		}
+		// A create that timed out on a cold store can still land, after which every retry says it already exists.
+		if list, err := shell("s3.bucket.list", 10*time.Second); err == nil && hasBucket(list, bucket) {
 			return nil
 		}
 		time.Sleep(2 * time.Second)
 	}
 	return fmt.Errorf("%s", last)
+}
+
+func hasBucket(list, bucket string) bool {
+	for _, line := range strings.Split(list, "\n") {
+		if f := strings.Fields(line); len(f) > 0 && f[0] == bucket {
+			return true
+		}
+	}
+	return false
 }
 
 // prewarmStorageImages pulls the storage image so the first bucket doesn't stall.
