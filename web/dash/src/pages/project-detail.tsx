@@ -24,6 +24,7 @@ import { useConfirm } from '@/providers/confirm-provider'
 import { projectsService, type Deploy } from '@/services/api.service'
 import { JobsPanel } from './project/jobs-panel'
 import { WorkersPanel } from './project/workers-panel'
+import { VolumesPanel } from './project/volumes-panel'
 import { SettingsForm } from './project/settings-form'
 import { PreviewsPanel } from './project/previews-panel'
 import { ObservabilityPanel } from './project/observability-panel'
@@ -460,6 +461,7 @@ export default function ProjectDetailPage() {
             onRedeploy={() => term.redeploy(project.name)}
             cli={cli}
           />
+          <VolumesPanel app={project.name} onRedeploy={() => term.redeploy(project.name)} />
         </TabsContent>
       </Tabs>
 

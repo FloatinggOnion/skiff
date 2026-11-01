@@ -135,6 +135,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/jobs", p.protected(p.handleJobs))
 	mux.HandleFunc("/api/jobs/run", p.protected(p.handleJobRun))
 	mux.HandleFunc("/api/workers", p.protected(p.handleWorkers))
+	mux.HandleFunc("/api/volumes", p.protected(p.handleVolumes))
 	mux.HandleFunc("/api/db/exec", p.protected(p.handleDBShell))
 	mux.HandleFunc("/api/domains", p.protected(p.handleDomains))
 	mux.HandleFunc("/api/mail", p.protected(p.handleMail))

@@ -136,6 +136,7 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 	}
 	env, net := p.appRuntime(src)
 	_ = p.eng.EnsureNetwork(net)
+	mounts := p.appMounts(src)
 
 	added := 0
 	for range count {
@@ -148,6 +149,7 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 			Env:           env,
 			Public:        p.eng.IsRemote(),
 			Network:       net,
+			Volumes:       mounts,
 		})
 		if err != nil {
 			break

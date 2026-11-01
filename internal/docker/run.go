@@ -15,6 +15,7 @@ type RunSpec struct {
 	Public        bool   // publish on all interfaces instead of 127.0.0.1
 	Network       string // optional docker network to join (for reaching managed resources by name)
 	Labels        map[string]string
+	Volumes       []Mount
 }
 
 type Route struct {
@@ -53,6 +54,7 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 	if s.CPU != "" {
 		args = append(args, "--cpus", s.CPU)
 	}
+	args = append(args, mountArgs(s.Volumes)...)
 	for _, k := range sortedKeys(s.Env) {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
 	}
@@ -73,6 +75,7 @@ type WorkerSpec struct {
 	Command string // run via sh -c
 	Env     map[string]string
 	Network string
+	Volumes []Mount
 }
 
 func (e *Engine) RunWorker(s WorkerSpec) error {
@@ -82,6 +85,7 @@ func (e *Engine) RunWorker(s WorkerSpec) error {
 	if s.Network != "" {
 		args = append(args, "--network", s.Network)
 	}
+	args = append(args, mountArgs(s.Volumes)...)
 	for _, k := range sortedKeys(s.Env) {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
 	}

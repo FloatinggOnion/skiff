@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Callout, Steps, Step } from "@/components/docs-prose";
 
 export const metadata: Metadata = {
@@ -74,6 +75,10 @@ export default function Previews() {
         under <strong>Environment → Preview overrides</strong> replaces a variable of the same name
         for previews only. Point <code>DATABASE_URL</code> at a staging database there, or switch an
         API key to test mode, and a preview never touches what production uses.
+      </p>
+      <p>
+        If the project has <Link href="/docs/volumes">volumes</Link>, a preview mounts them at the same
+        paths, on empty volumes of its own.
       </p>
 
       <h2>Password protection</h2>

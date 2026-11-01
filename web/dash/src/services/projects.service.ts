@@ -61,6 +61,18 @@ export type Worker = {
   created: number
 }
 
+export type Volume = {
+  name: string
+  path: string
+  size: number
+  attached: boolean
+}
+
+export type Volumes = {
+  kind: 'project' | 'cli' | 'preview'
+  volumes: Volume[]
+}
+
 export type Preview = {
   name: string
   branch: string
@@ -136,6 +148,18 @@ class ProjectsService extends BaseService {
 
   deleteWorker(id: string) {
     return this.delete('/workers', { params: { id } })
+  }
+
+  volumes(app: string) {
+    return this.get<Volumes>('/volumes', { params: { app } })
+  }
+
+  addVolume(app: string, name: string, path: string) {
+    return this.post('/volumes', { name, path }, { params: { app } })
+  }
+
+  deleteVolume(app: string, name: string) {
+    return this.delete('/volumes', { params: { app, name } })
   }
 }
 

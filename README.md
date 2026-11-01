@@ -100,6 +100,8 @@ platform in the browser:
   renewed for you.
 - **Autoscaling** — add and retire replicas to hold each app near a target CPU.
 - **Workers & cron** — long-running background processes and scheduled jobs.
+- **Persistent volumes** — directories that keep their files across deploys, for
+  SQLite databases and uploads; previews get empty copies of their own.
 - **Alerts** — email, Slack, or webhook when a deploy fails, an app goes down, or
   5xx errors spike.
 - **Teams, audit log, and API tokens** — collaborators, an activity trail, and a
@@ -149,6 +151,10 @@ API_KEY = "..."
 [resources]
 memory = "512m"
 cpu    = "0.5"
+
+[[volumes]]              # kept across deploys; repeat for more (up to 5)
+name = "data"
+path = "/data"
 
 # [server]               # omit for local Docker
 # host = "root@1.2.3.4"  # deploy to a remote box over SSH

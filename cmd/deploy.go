@@ -199,11 +199,21 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 		healthHost = docker.SSHHostname(cfg.Server.Host)
 	}
 
+	var mounts []docker.Mount
+	for _, v := range cfg.Volumes {
+		name := config.VolumeName(cfg.Name, v.Name)
+		if err := eng.EnsureAppVolume(name, cfg.Name, v.Name); err != nil {
+			ui.Fail("Couldn't create volume " + v.Name)
+			return err
+		}
+		mounts = append(mounts, docker.Mount{Name: name, Destination: v.Path})
+	}
+
 	// Release command (e.g. migrations) runs once before the new version goes live; on failure abort — the old version keeps serving.
 	if rel := strings.TrimSpace(cfg.Deploy.Release); rel != "" {
 		ui.Step("Running release command")
 		rctx, cancel := context.WithTimeout(context.Background(), timeout)
-		out, err := eng.RunOnce(rctx, image, runtimeEnv, network, rel)
+		out, err := eng.RunOnce(rctx, image, runtimeEnv, network, mounts, rel)
 		cancel()
 		if err != nil {
 			ui.Fail("Release command failed — deploy aborted, old version still serving")
@@ -245,6 +255,7 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			Public:        eng.IsRemote(),
 			Network:       network,
 			Labels:        spec.labels,
+			Volumes:       mounts,
 		})
 		if err != nil {
 			rollback()

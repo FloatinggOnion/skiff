@@ -384,6 +384,7 @@ func (p *Panel) removeApp(name string) {
 		writeDomainsFile()
 	}
 	_, _ = registry.Delete(name)
+	p.removeAppVolumes(name)
 	deleteSource(name)
 	p.removeAppImages(name)
 }

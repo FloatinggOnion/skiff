@@ -64,3 +64,15 @@ func TestParseCreatedAt(t *testing.T) {
 		t.Fatalf("parsed %v", got)
 	}
 }
+
+func TestParseVolumeSizes(t *testing.T) {
+	out := []byte(`[{"Name":"skiff-app_data","Size":"64.63MB"},{"Name":"skiff-npm","Size":"0B"}]` + "\n")
+	got := parseVolumeSizes(out)
+	want := 64.63 * (1 << 20)
+	if got["skiff-app_data"] != int64(want) || got["skiff-npm"] != 0 || len(got) != 2 {
+		t.Fatalf("got %v", got)
+	}
+	if len(parseVolumeSizes([]byte("null"))) != 0 {
+		t.Fatal("null output should give no sizes")
+	}
+}

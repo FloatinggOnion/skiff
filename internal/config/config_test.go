@@ -93,3 +93,43 @@ release = "npm run migrate"
 		t.Fatalf("parsed wrong: %+v", c)
 	}
 }
+
+func TestLoadVolumes(t *testing.T) {
+	c, err := Load(write(t, "skiff.toml", "name = \"app\"\n\n[[volumes]]\nname = \"data\"\npath = \"/data\"\n\n[[volumes]]\nname = \"uploads\"\npath = \"/app/public/uploads\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Volumes) != 2 || c.Volumes[1] != (Volume{Name: "uploads", Path: "/app/public/uploads"}) {
+		t.Fatalf("volumes = %+v", c.Volumes)
+	}
+	if got := VolumeName("app", "data"); got != "skiff-app_data" {
+		t.Errorf("VolumeName = %q", got)
+	}
+}
+
+func TestValidateVolumes(t *testing.T) {
+	bad := [][]Volume{
+		{{Name: "", Path: "/data"}},
+		{{Name: "Data", Path: "/data"}},
+		{{Name: "-x", Path: "/data"}},
+		{{Name: "a_b", Path: "/data"}},
+		{{Name: "data", Path: "data"}},
+		{{Name: "data", Path: "/"}},
+		{{Name: "data", Path: "/data/../etc"}},
+		{{Name: "data", Path: "/data/"}},
+		{{Name: "data", Path: "/data:ro"}},
+		{{Name: "data", Path: "/proc/x"}},
+		{{Name: "data", Path: "/dev"}},
+		{{Name: "a", Path: "/a"}, {Name: "a", Path: "/b"}},
+		{{Name: "a", Path: "/a"}, {Name: "b", Path: "/a"}},
+		{{Name: "a", Path: "/a"}, {Name: "b", Path: "/b"}, {Name: "c", Path: "/c"}, {Name: "d", Path: "/d"}, {Name: "e", Path: "/e"}, {Name: "f", Path: "/f"}},
+	}
+	for _, v := range bad {
+		if ValidateVolumes(v) == nil {
+			t.Errorf("accepted %+v", v)
+		}
+	}
+	if err := ValidateVolumes([]Volume{{Name: "data", Path: "/data"}, {Name: "cache-2", Path: "/var/cache/app"}}); err != nil {
+		t.Errorf("rejected a valid set: %v", err)
+	}
+}

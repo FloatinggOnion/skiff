@@ -106,7 +106,7 @@ export function SettingsForm({
     if (
       !(await confirm({
         title: `Delete ${name}?`,
-        description: 'This stops the app and removes its config.',
+        description: 'This stops the app and removes its config and volumes, with the files in them.',
         confirmText: 'Delete',
         destructive: true,
       }))

@@ -94,6 +94,7 @@ func (p *Panel) reconcileWorkers(app string) {
 	}
 	env, net := p.appRuntime(src)
 	_ = p.eng.EnsureNetwork(net)
+	mounts := p.appMounts(src)
 	for _, w := range listWorkers(app) {
 		reps := w.Replicas
 		if reps < 1 {
@@ -102,7 +103,7 @@ func (p *Panel) reconcileWorkers(app string) {
 		for range reps {
 			name := workerPrefix(app, w.Name) + replicaSuffix()
 			_ = p.eng.RunWorker(docker.WorkerSpec{
-				Name: name, App: app, Image: image, Command: w.Command, Env: env, Network: net,
+				Name: name, App: app, Image: image, Command: w.Command, Env: env, Network: net, Volumes: mounts,
 			})
 		}
 	}

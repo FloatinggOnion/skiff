@@ -15,7 +15,7 @@ func TestProjectToml(t *testing.T) {
 		{Key: "API_URL", Value: "https://x", Build: true}, // build + runtime
 		{Key: "SECRET_TOKEN", Value: "shh", Build: false}, // runtime-only secret
 	}
-	out := projectToml(src, env, teamNetwork(src.Team))
+	out := projectToml(src, env, teamNetwork(src.Team), nil)
 
 	path := filepath.Join(t.TempDir(), "skiff.toml")
 	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
@@ -46,7 +46,7 @@ func TestProjectToml(t *testing.T) {
 		t.Errorf("secret missing from [secrets]: %v", cfg.Secrets)
 	}
 
-	bare := projectToml(Source{App: "web", Port: "8080"}, nil, teamNetwork(""))
+	bare := projectToml(Source{App: "web", Port: "8080"}, nil, teamNetwork(""), nil)
 	if strings.Contains(bare, "replicas") || strings.Contains(bare, "release") {
 		t.Errorf("bare config should omit replicas/release:\n%s", bare)
 	}

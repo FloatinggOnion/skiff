@@ -71,11 +71,12 @@ func (e *Engine) PullImage(image string) error {
 }
 
 // RunOnce runs a throwaway container executing a shell command (sh -c), for release commands (migrations) and scheduled jobs.
-func (e *Engine) RunOnce(ctx context.Context, image string, env map[string]string, network, cmd string) (string, error) {
+func (e *Engine) RunOnce(ctx context.Context, image string, env map[string]string, network string, volumes []Mount, cmd string) (string, error) {
 	args := []string{"run", "--rm"}
 	if network != "" {
 		args = append(args, "--network", network)
 	}
+	args = append(args, mountArgs(volumes)...)
 	for _, k := range sortedKeys(env) {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, env[k]))
 	}

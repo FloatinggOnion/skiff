@@ -337,6 +337,13 @@ CREATE TABLE IF NOT EXISTS preview_env (
   build INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (app, key)
 );
+CREATE TABLE IF NOT EXISTS volumes (
+  app     TEXT NOT NULL,
+  name    TEXT NOT NULL,
+  path    TEXT NOT NULL,
+  created INTEGER NOT NULL,
+  PRIMARY KEY (app, name)
+);
 CREATE TABLE IF NOT EXISTS preview_passwords (
   app  TEXT PRIMARY KEY,
   hash TEXT NOT NULL

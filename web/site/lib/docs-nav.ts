@@ -13,6 +13,7 @@ export const DOCS_NAV: DocSection[] = [
     title: "Guides",
     items: [
       { href: "/docs/previews", label: "Preview environments" },
+      { href: "/docs/volumes", label: "Persistent volumes" },
       { href: "/docs/email-forwarding", label: "Email forwarding" },
       { href: "/docs/agents", label: "AI agents (MCP)" },
     ],

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/github"
 )
 
@@ -160,7 +161,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		return
 	}
 	tomlPath := filepath.Join(ctxDir, "skiff.toml")
-	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src), teamNetwork(src.Team))), 0o644)
+	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src), teamNetwork(src.Team), p.volumeDefs(src))), 0o644)
 
 	logln("→ building & deploying")
 	self, _ := os.Executable()
@@ -187,6 +188,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	logln("✓ live")
 	setDeployStatus(src.App, id, "live")
 	p.reconcileWorkers(src.App)
+	p.pruneVolumes(src)
 	go p.commentOnPR(src, shortCommit(commit), "live")
 	status(sha, "live")
 }
@@ -220,7 +222,7 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 	}
 	tomlPath := filepath.Join(work, "skiff.toml")
 	env, net := p.appRuntime(src)
-	_ = os.WriteFile(tomlPath, []byte(projectToml(src, envList(env), net)), 0o644)
+	_ = os.WriteFile(tomlPath, []byte(projectToml(src, envList(env), net, p.volumeDefs(src))), 0o644)
 
 	image := fmt.Sprintf("skiff-%s:%s", src.App, targetID)
 	logln("→ rolling back to " + image)
@@ -253,6 +255,7 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 	logln("✓ live")
 	setDeployStatus(src.App, id, "live")
 	p.reconcileWorkers(src.App)
+	p.pruneVolumes(src)
 }
 
 func (p *Panel) tailLog(w http.ResponseWriter, r *http.Request, app, id string) {
@@ -381,7 +384,7 @@ func orRoot(d string) string {
 }
 
 // projectToml renders the deploy skiff.toml; env vars split into [env] (build+runtime) vs [secrets] (runtime-only, never baked into the image).
-func projectToml(src Source, env []EnvVar, network string) string {
+func projectToml(src Source, env []EnvVar, network string, volumes []config.Volume) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "name = %q\n", src.App)
 	if src.Replicas > 1 {
@@ -412,6 +415,9 @@ func projectToml(src Source, env []EnvVar, network string) string {
 		for _, e := range secretVars {
 			fmt.Fprintf(&b, "%s = %q\n", e.Key, e.Value)
 		}
+	}
+	for _, v := range volumes {
+		fmt.Fprintf(&b, "\n[[volumes]]\nname = %q\npath = %q\n", v.Name, v.Path)
 	}
 	return b.String()
 }

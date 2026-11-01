@@ -70,12 +70,68 @@ func TestGitDeployLifecycle(t *testing.T) {
 	expectServed(t, routerAddr, "v1")
 
 	checkMCP(t, c, bin, panelAddr, routerAddr, project.Deploys[0].ID)
+	checkVolumes(t, c, panelAddr)
 	checkPreviewPassword(t, c, root, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("containers left after teardown: %s", out)
 	}
+	if out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "label=skiff.volume.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("volumes left after teardown: %s", out)
+	}
+}
+
+// checkVolumes gives the project a volume and checks a file written to it survives a redeploy onto new containers.
+func checkVolumes(t *testing.T, c *http.Client, panelAddr string) {
+	t.Helper()
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker volume rm -f $(docker volume ls -q --filter label=skiff.volume.app="+app+") $(docker volume ls -q --filter label=skiff.volume.app="+app+"-feat)").Run()
+	})
+	post(t, c, "http://"+panelAddr+"/api/volumes?app="+app, `{"name":"data","path":"/data"}`)
+	stream(t, c, "http://"+panelAddr+"/api/redeploy?app="+app)
+
+	before := appContainer(t, app)
+	dockerExec(t, before, "echo kept > /data/note")
+	stream(t, c, "http://"+panelAddr+"/api/redeploy?app="+app)
+	after := appContainer(t, app)
+	if after == before {
+		t.Fatal("the redeploy didn't replace the container")
+	}
+	if got := dockerExec(t, after, "cat /data/note"); got != "kept" {
+		t.Fatalf("file on the volume after a redeploy = %q, want kept", got)
+	}
+
+	var vols struct {
+		Kind    string `json:"kind"`
+		Volumes []struct {
+			Name     string `json:"name"`
+			Attached bool   `json:"attached"`
+		} `json:"volumes"`
+	}
+	getJSON(t, c, "http://"+panelAddr+"/api/volumes?app="+app, &vols)
+	if vols.Kind != "project" || len(vols.Volumes) != 1 || !vols.Volumes[0].Attached {
+		t.Fatalf("volumes view = %+v", vols)
+	}
+}
+
+func appContainer(t *testing.T, name string) string {
+	t.Helper()
+	out, err := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+name).Output()
+	ids := strings.Fields(string(out))
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("want one running container for %s, got %q (%v)", name, ids, err)
+	}
+	return ids[0]
+}
+
+func dockerExec(t *testing.T, container, script string) string {
+	t.Helper()
+	out, err := exec.Command("docker", "exec", container, "sh", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("docker exec %s: %v\n%s", script, err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // checkPreviewPassword gives a project preview-only env overrides and a password, then checks the preview gets the override and the router asks for the password, while production stays public.
@@ -118,6 +174,9 @@ func checkPreviewPassword(t *testing.T, c *http.Client, root, panelAddr, routerA
 	}
 	if env := string(out); !strings.Contains(env, "DATABASE_URL=postgres://staging") || !strings.Contains(env, "REGION=eu") || strings.Contains(env, "postgres://prod") {
 		t.Fatalf("preview should get the override and the project's other vars:\n%s", env)
+	}
+	if got := dockerExec(t, appContainer(t, preview), "ls -A /data"); got != "" {
+		t.Fatalf("preview should mount an empty volume of its own, found %q", got)
 	}
 
 	visit := func(host, method, path string, form url.Values, cookies []*http.Cookie) (*http.Response, string) {
