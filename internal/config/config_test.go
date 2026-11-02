@@ -196,3 +196,16 @@ func TestRegistryHost(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateResources(t *testing.T) {
+	for _, ok := range [][2]string{{"", ""}, {"512m", ""}, {"2g", "0.5"}, {"1.5g", "2"}, {"", "1"}} {
+		if err := ValidateResources(ok[0], ok[1]); err != nil {
+			t.Errorf("%v: %v", ok, err)
+		}
+	}
+	for _, bad := range [][2]string{{"512", ""}, {"m", ""}, {"512mb", ""}, {"5m", ""}, {"0g", ""}, {"-1g", ""}, {"", "x"}, {"", "0"}, {"", "-1"}, {"1g --privileged", ""}} {
+		if ValidateResources(bad[0], bad[1]) == nil {
+			t.Errorf("%v was accepted", bad)
+		}
+	}
+}

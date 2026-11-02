@@ -1,7 +1,11 @@
 package panel
 
 import (
+	"context"
+	"log"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/nuelScript/skiff/internal/registry"
 )
@@ -13,7 +17,7 @@ const (
 
 // attentionItem is something on the home screen a person should act on.
 type attentionItem struct {
-	Kind    string `json:"kind"` // deploy.failed | app.down | disk | memory
+	Kind    string `json:"kind"` // deploy.failed | app.down | oom | disk | memory
 	App     string `json:"app,omitempty"`
 	State   string `json:"state,omitempty"`
 	At      int64  `json:"at,omitempty"`
@@ -24,6 +28,53 @@ type attentionItem struct {
 type serverUsage struct {
 	Mem  resourceUsage `json:"mem"`
 	Disk resourceUsage `json:"disk"`
+}
+
+const (
+	oomShownFor  = time.Hour
+	oomAlertGap  = 15 * time.Minute
+	oomRetryWait = 5 * time.Second
+)
+
+// oomLog remembers when each app last ran out of memory. A killed container restarts straight away, so without this it would look like nothing happened.
+var oomLog = struct {
+	sync.Mutex
+	last map[string]time.Time
+}{last: map[string]time.Time{}}
+
+// noteOOM records the kill and reports whether it should alert, which it does at most once per gap so a crash loop can't flood anyone.
+func noteOOM(app string, now time.Time) bool {
+	oomLog.Lock()
+	defer oomLog.Unlock()
+	prev, seen := oomLog.last[app]
+	oomLog.last[app] = now
+	return !seen || now.Sub(prev) >= oomAlertGap
+}
+
+func recentOOM(app string, now time.Time) (time.Time, bool) {
+	oomLog.Lock()
+	defer oomLog.Unlock()
+	t, ok := oomLog.last[app]
+	return t, ok && now.Sub(t) < oomShownFor
+}
+
+func (p *Panel) oomLoop() {
+	for {
+		err := p.eng.WatchOOM(context.Background(), func(app, container string) {
+			log.Printf("skiff: %s ran out of memory (%s)", app, container)
+			src, ok := getSource(app)
+			if ok && noteOOM(app, time.Now()) {
+				go dispatchAlert(alertEvent{
+					Team: src.Team, Kind: "app.oom", App: app,
+					Title:  app + " ran out of memory",
+					Detail: "It hit its memory limit and was restarted. Raise its limit in project settings, or look for a leak.",
+				})
+			}
+		})
+		if err != nil {
+			time.Sleep(oomRetryWait)
+		}
+	}
 }
 
 func usageOf() serverUsage { return serverUsage{Mem: procMem(), Disk: diskUsage()} }
@@ -116,6 +167,8 @@ func (p *Panel) handleOverview(w http.ResponseWriter, r *http.Request) {
 		}
 		if item, ok := projectAttention(src.App, state, deployed, last); ok {
 			attention = append(attention, item)
+		} else if t, oom := recentOOM(src.App, time.Now()); oom {
+			attention = append(attention, attentionItem{Kind: "oom", App: src.App, At: t.Unix()})
 		}
 	}
 	if p.isOwner(r) {

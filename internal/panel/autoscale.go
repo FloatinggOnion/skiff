@@ -156,6 +156,7 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 	_ = p.eng.EnsureNetwork(net)
 	mounts := p.appMounts(src)
 	check := p.healthPath(src, app.Container)
+	memory, cpu := p.replicaLimits(src, app.Container)
 
 	added := 0
 	for range count {
@@ -169,6 +170,8 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 			Public:        p.eng.IsRemote(),
 			Network:       net,
 			Volumes:       mounts,
+			Memory:        memory,
+			CPU:           cpu,
 		})
 		if err != nil {
 			break
@@ -251,6 +254,17 @@ func healthOf(src Source) Source {
 		}
 	}
 	return src
+}
+
+// replicaLimits are a new replica's memory and CPU limits; a CLI app's come from its skiff.toml, recorded on its container.
+func (p *Panel) replicaLimits(src Source, container string) (memory, cpu string) {
+	if src.Origin == originCLI {
+		if meta, err := p.eng.ContainerMeta(container); err == nil {
+			return meta.Labels["skiff.memory"], meta.Labels["skiff.cpu"]
+		}
+	}
+	hc := healthOf(src)
+	return hc.Memory, hc.CPU
 }
 
 // healthPath is what a new replica must answer before it takes traffic; a CLI app's comes from its skiff.toml, recorded on its container.

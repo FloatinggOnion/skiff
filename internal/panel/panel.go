@@ -78,6 +78,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go p.cpBackupLoop()
 	go p.appLogLoop()
 	go p.logDrainLoop()
+	go p.oomLoop()
 	return p, nil
 }
 

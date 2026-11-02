@@ -40,7 +40,7 @@ export type ControlPlane = {
 }
 
 export type AttentionItem = {
-  kind: 'deploy.failed' | 'app.down' | 'disk' | 'memory'
+  kind: 'deploy.failed' | 'app.down' | 'oom' | 'disk' | 'memory'
   app?: string
   state?: string
   at?: number

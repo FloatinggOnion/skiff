@@ -40,7 +40,7 @@ func setAlerts(team string, a AlertConfig) error {
 
 type alertEvent struct {
 	Team   string
-	Kind   string // deploy.failed | app.unhealthy | app.recovered | error.spike | test
+	Kind   string // deploy.failed | app.unhealthy | app.oom | app.recovered | error.spike | test
 	App    string
 	Title  string
 	Detail string
@@ -181,7 +181,7 @@ func postJSON(url string, payload any) error {
 
 func slackText(ev alertEvent) string {
 	icon := map[string]string{
-		"deploy.failed": "🚨", "app.unhealthy": "🔴", "app.recovered": "✅",
+		"deploy.failed": "🚨", "app.unhealthy": "🔴", "app.oom": "🔴", "app.recovered": "✅",
 		"error.spike": "⚠️", "test": "🔔",
 	}[ev.Kind]
 	if icon == "" {

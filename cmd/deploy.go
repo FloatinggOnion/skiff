@@ -238,6 +238,8 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	}
 	// Recorded on the container so the server's panel checks scale-ups of a CLI app the same way.
 	labels["skiff.health"] = cfg.Deploy.HealthPath
+	labels["skiff.memory"] = cfg.Resources.Memory
+	labels["skiff.cpu"] = cfg.Resources.CPU
 	// Runtime env = build env + secrets; secrets never bake into the image, so a rollback runs current secrets against the old code.
 	buildEnv := cfg.Environment(contextDir)
 	runtimeEnv := make(map[string]string, len(buildEnv)+len(cfg.Secrets))

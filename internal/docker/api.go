@@ -219,6 +219,36 @@ func apiFollowLogs(ctx context.Context, c *http.Client, container string, since 
 	return demuxLogs(resp.Body, line)
 }
 
+// WatchOOM calls fn with the app whenever one of its containers is killed for exceeding its memory limit, until ctx ends. It reports an error when events can't be read, and needs the local Docker socket.
+func (e *Engine) WatchOOM(ctx context.Context, fn func(app, container string)) error {
+	c := e.api()
+	if c == nil {
+		return errors.New("no docker socket")
+	}
+	f, _ := json.Marshal(map[string][]string{"type": {"container"}, "event": {"oom"}})
+	resp, err := apiGet(ctx, c, "/events", url.Values{"filters": {string(f)}})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	dec := json.NewDecoder(resp.Body)
+	for {
+		var ev struct {
+			Actor struct{ Attributes map[string]string }
+		}
+		if err := dec.Decode(&ev); err != nil {
+			return err
+		}
+		app := ev.Actor.Attributes["skiff.app"]
+		if app == "" {
+			app = ev.Actor.Attributes["skiff.worker.app"]
+		}
+		if app != "" {
+			fn(app, ev.Actor.Attributes["name"])
+		}
+	}
+}
+
 const maxLogLine = 1 << 20
 
 // demuxLogs splits Docker's framed stream: each frame is an 8-byte header (stream type, then a big-endian length at offset 4) and its payload. One line can span frames, and a frame can hold several lines.

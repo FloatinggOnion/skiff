@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,5 +94,46 @@ func TestPruneRequestsByCount(t *testing.T) {
 	_ = sqlDB.QueryRow(`SELECT count(*) FROM requests`).Scan(&n)
 	if n != 50 {
 		t.Fatalf("rows after pruning = %d, want the 50 inside the window", n)
+	}
+}
+
+func TestOOMLog(t *testing.T) {
+	now := time.Now()
+	if !noteOOM("oom-a", now) {
+		t.Fatal("the first kill should alert")
+	}
+	if noteOOM("oom-a", now.Add(time.Minute)) {
+		t.Fatal("a crash loop shouldn't alert every time")
+	}
+	if !noteOOM("oom-a", now.Add(time.Minute+oomAlertGap)) {
+		t.Fatal("it should alert again after the gap")
+	}
+	if _, ok := recentOOM("oom-a", now.Add(2*time.Minute+oomAlertGap)); !ok {
+		t.Fatal("a recent kill should show")
+	}
+	if _, ok := recentOOM("oom-a", now.Add(2*time.Hour)); ok {
+		t.Fatal("an old kill should stop showing")
+	}
+	if _, ok := recentOOM("oom-never", now); ok {
+		t.Fatal("an app that never ran out shouldn't show")
+	}
+}
+
+func TestResourcesInToml(t *testing.T) {
+	openTestDB(t)
+	got := projectToml(Source{App: "a", Port: "80", Memory: "512m", CPU: "0.5"}, nil, "net", nil)
+	if !strings.Contains(got, "[resources]\nmemory = \"512m\"\ncpu = \"0.5\"\n") {
+		t.Fatalf("toml = %s", got)
+	}
+	if strings.Contains(projectToml(Source{App: "a", Port: "80"}, nil, "net", nil), "[resources]") {
+		t.Fatal("no limits should mean no section")
+	}
+	_ = putSource(Source{App: "shop", Port: "80", Memory: "1g", CPU: "2"})
+	got = projectToml(Source{App: "shop-x", Port: "80", Parent: "shop"}, nil, "net", nil)
+	if !strings.Contains(got, `memory = "1g"`) {
+		t.Fatalf("a preview should inherit its project's limits: %s", got)
+	}
+	if s, _ := getSource("shop"); s.Memory != "1g" || s.CPU != "2" {
+		t.Fatalf("limits didn't round-trip: %+v", s)
 	}
 }

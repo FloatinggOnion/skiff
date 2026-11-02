@@ -447,6 +447,8 @@ export default function ProjectDetailPage() {
             healthTimeout={project.healthTimeout}
             image={project.image}
             maxReplicas={project.maxReplicas}
+            memory={project.memory}
+            cpu={project.cpu}
             onSaved={reload}
             cli={cli}
           />

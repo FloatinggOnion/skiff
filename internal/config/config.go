@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -137,6 +138,24 @@ func RegistryHost(ref string) string {
 		return first
 	}
 	return "docker.io"
+}
+
+// ValidateResources checks a replica's memory and CPU limits; empty means no limit of its own.
+func ValidateResources(memory, cpu string) error {
+	if memory != "" {
+		n, unit := memory[:len(memory)-1], memory[len(memory)-1]
+		v, err := strconv.ParseFloat(n, 64)
+		if err != nil || (unit != 'm' && unit != 'g') || v <= 0 || (unit == 'm' && v < 16) {
+			return fmt.Errorf("memory limit must look like 512m or 2g, and be at least 16m")
+		}
+	}
+	if cpu != "" {
+		v, err := strconv.ParseFloat(cpu, 64)
+		if err != nil || v <= 0 || v > 1024 {
+			return fmt.Errorf("CPU limit must be a number of cores, like 0.5 or 2")
+		}
+	}
+	return nil
 }
 
 type Resources struct {

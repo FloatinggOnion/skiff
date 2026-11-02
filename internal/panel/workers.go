@@ -104,6 +104,7 @@ func (p *Panel) reconcileWorkers(app string) {
 			name := workerPrefix(app, w.Name) + replicaSuffix()
 			_ = p.eng.RunWorker(docker.WorkerSpec{
 				Name: name, App: app, Image: image, Command: w.Command, Env: env, Network: net, Volumes: mounts,
+				Memory: healthOf(src).Memory, CPU: healthOf(src).CPU,
 			})
 		}
 	}

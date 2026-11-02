@@ -46,6 +46,15 @@ function describe(item: AttentionItem) {
         detail: `Its container is ${item.state}.`,
         action: 'Open',
       }
+    case 'oom':
+      return {
+        icon: MemoryStick,
+        tone: 'text-danger',
+        to: project,
+        title: `${item.app} ran out of memory`,
+        detail: `It hit its memory limit and was restarted${item.at ? ` ${relTime(item.at)}` : ''}. It may need a higher limit, or have a leak.`,
+        action: 'Open',
+      }
     case 'disk':
       return {
         icon: HardDrive,

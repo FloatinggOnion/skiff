@@ -10,6 +10,13 @@ import { projectsService } from '@/services/api.service'
 import { projectSettingsSchema, type ProjectSettingsInput } from '@/validations/project-settings'
 import { Stepper } from './stepper'
 
+const MEMORY_OPTIONS = ['', '256m', '512m', '1g', '2g', '4g']
+const CPU_OPTIONS = ['', '0.5', '1', '2', '4']
+
+// A value set elsewhere that isn't a preset still shows, selected.
+const withCurrent = (options: string[], current: string) =>
+  options.includes(current) ? options : [...options, current]
+
 const SLEEP_OPTIONS = [
   { v: 0, label: 'Never' },
   { v: 15, label: '15m' },
@@ -45,6 +52,8 @@ export function SettingsForm({
   healthTimeout,
   image = '',
   maxReplicas = 10,
+  memory = '',
+  cpu = '',
   onSaved,
   cli = false,
 }: {
@@ -66,6 +75,8 @@ export function SettingsForm({
   healthTimeout: number
   image?: string
   maxReplicas?: number
+  memory?: string
+  cpu?: string
   onSaved: () => void
   cli?: boolean
 }) {
@@ -89,6 +100,8 @@ export function SettingsForm({
       healthPath: healthPath || '',
       healthTimeout: healthTimeout || 0,
       image,
+      memory: memory || '',
+      cpu: cpu || '',
     },
   })
   const { register, handleSubmit, watch, setValue, formState } = form
@@ -290,6 +303,46 @@ export function SettingsForm({
             </FieldGroup>
           )}
         </div>
+        {!cli && (
+          <div className="mt-4 flex flex-col gap-4 rounded-lg border border-foreground/8 p-4">
+            <div>
+              <h3 className="text-sm font-medium">Limits per replica</h3>
+              <p className="text-muted-foreground mt-0.5 text-xs">
+                Stops one app from starving the others. An app over its memory limit is restarted,
+                and you&apos;re told. With no limit, it can use up to 75% of the server&apos;s
+                memory. Changes apply on the next deploy.
+              </p>
+            </div>
+            {(
+              [
+                { field: 'memory', label: 'Memory', options: MEMORY_OPTIONS, empty: 'Server cap' },
+                { field: 'cpu', label: 'CPU cores', options: CPU_OPTIONS, empty: 'No limit' },
+              ] as const
+            ).map(({ field, label, options, empty }) => (
+              <div key={field} className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm">{label}</span>
+                <div className="flex rounded-md border border-foreground/12 p-0.5">
+                  {withCurrent([...options], values[field]).map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      aria-pressed={values[field] === o}
+                      onClick={() => setValue(field, o, { shouldDirty: true })}
+                      className={
+                        'rounded px-2.5 py-1 font-mono text-[11px] transition-colors ' +
+                        (values[field] === o
+                          ? 'bg-foreground/10 text-foreground'
+                          : 'text-muted-foreground hover:text-foreground')
+                      }
+                    >
+                      {o === '' ? empty : o.toUpperCase().replace(/([MG])$/, ' $1B')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="mt-4 flex items-start justify-between gap-4 rounded-lg border border-foreground/8 p-4">
           <div>
             <h3 className="text-sm font-medium">Sleep when idle</h3>

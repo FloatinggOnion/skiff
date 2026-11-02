@@ -74,6 +74,8 @@ var migrations = []string{
 	`ALTER TABLE users ADD COLUMN totp_pending TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE users ADD COLUMN totp_step INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE sources ADD COLUMN image TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN memory_limit TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN cpu_limit TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -132,7 +134,9 @@ CREATE TABLE IF NOT EXISTS sources (
   sleep_after  INTEGER NOT NULL DEFAULT 0,
   health_path  TEXT NOT NULL DEFAULT '',
   health_timeout INTEGER NOT NULL DEFAULT 0,
-  image        TEXT NOT NULL DEFAULT ''
+  image        TEXT NOT NULL DEFAULT '',
+  memory_limit TEXT NOT NULL DEFAULT '',
+  cpu_limit    TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,

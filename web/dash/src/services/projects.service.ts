@@ -43,6 +43,8 @@ export type ProjectDetail = {
   healthTimeout: number
   image?: string
   maxReplicas: number
+  memory: string
+  cpu: string
   domains: string[]
 }
 
@@ -119,6 +121,8 @@ export type ProjectSettings = {
   healthPath: string
   healthTimeout: number
   image?: string
+  memory: string
+  cpu: string
 }
 
 class ProjectsService extends BaseService {

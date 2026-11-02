@@ -112,8 +112,10 @@ platform in the browser:
   SQLite databases and uploads; previews get empty copies of their own.
 - **Log drains** — send every project's logs to Better Stack, Axiom, Datadog or
   any HTTP endpoint, resuming where it stopped after an outage.
-- **Alerts** — email, Slack, or webhook when a deploy fails, an app goes down, or
-  5xx errors spike.
+- **Limits** — memory and CPU per replica, with a safety cap for apps that set none,
+  so one runaway app can't take the others down.
+- **Alerts** — email, Slack, or webhook when a deploy fails, an app goes down or runs
+  out of memory, or 5xx errors spike.
 - **Teams, audit log, and API tokens** — collaborators, an activity trail, and a
   token-authenticated API for CI.
 - **Two-factor sign-in** — authenticator-app codes for the dashboard, with
@@ -161,7 +163,7 @@ API_URL = "https://api.example.com"
 [secrets]                # runtime only — never baked into the image
 API_KEY = "..."
 
-[resources]
+[resources]              # per replica; with no memory limit, an app can use up to 75% of the server
 memory = "512m"
 cpu    = "0.5"
 

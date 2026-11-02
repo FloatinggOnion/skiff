@@ -73,7 +73,7 @@ func (e *Engine) PullImage(image string) error {
 
 // RunOnce runs a throwaway container executing a shell command (sh -c), for release commands (migrations) and scheduled jobs.
 func (e *Engine) RunOnce(ctx context.Context, image string, env map[string]string, network string, volumes []Mount, cmd string) (string, error) {
-	args := []string{"run", "--rm"}
+	args := []string{"run", "--rm", "--memory", e.memoryOr("")}
 	if network != "" {
 		args = append(args, "--network", network)
 	}

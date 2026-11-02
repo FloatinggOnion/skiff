@@ -485,6 +485,15 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 			fmt.Fprintf(&b, "health_timeout = %d\n", hc.HealthTimeout)
 		}
 	}
+	if hc := healthOf(src); hc.Memory != "" || hc.CPU != "" {
+		b.WriteString("\n[resources]\n")
+		if hc.Memory != "" {
+			fmt.Fprintf(&b, "memory = %q\n", hc.Memory)
+		}
+		if hc.CPU != "" {
+			fmt.Fprintf(&b, "cpu = %q\n", hc.CPU)
+		}
+	}
 	var buildVars, secretVars []EnvVar
 	for _, e := range env {
 		if e.Build {

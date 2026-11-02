@@ -2,6 +2,9 @@ package docker
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+	"sync"
 )
 
 type RunSpec struct {
@@ -22,6 +25,35 @@ type Route struct {
 	App      string
 	HostPort int
 }
+
+// SafetyCapPercent is how much of the server's memory an app with no limit of its own may use: enough for nearly anything, while leaving room for the other apps and for Skiff to keep running if one runs away.
+const SafetyCapPercent = 75
+
+var (
+	capMu    sync.Mutex
+	capCache = map[string]int64{}
+)
+
+// memoryOr is the memory limit for a container: its own, or the safety cap.
+func (e *Engine) memoryOr(own string) string {
+	if own != "" {
+		return own
+	}
+	capMu.Lock()
+	defer capMu.Unlock()
+	total, ok := capCache[e.host]
+	if !ok {
+		out, err := e.command("info", "--format", "{{.MemTotal}}").Output()
+		if err != nil {
+			return "0" // can't tell the size of the server; leave it unlimited
+		}
+		total, _ = strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		capCache[e.host] = total
+	}
+	return strconv.FormatInt(safetyCap(total), 10)
+}
+
+func safetyCap(total int64) int64 { return total / 100 * SafetyCapPercent }
 
 func (e *Engine) Run(s RunSpec) (int, error) {
 	defer invalidateStates()
@@ -49,9 +81,7 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 	if s.Network != "" {
 		args = append(args, "--network", s.Network)
 	}
-	if s.Memory != "" {
-		args = append(args, "--memory", s.Memory)
-	}
+	args = append(args, "--memory", e.memoryOr(s.Memory))
 	if s.CPU != "" {
 		args = append(args, "--cpus", s.CPU)
 	}
@@ -77,12 +107,18 @@ type WorkerSpec struct {
 	Env     map[string]string
 	Network string
 	Volumes []Mount
+	Memory  string
+	CPU     string
 }
 
 func (e *Engine) RunWorker(s WorkerSpec) error {
 	_ = e.command("rm", "-f", s.Name).Run()
 	args := []string{"run", "-d", "--name", s.Name, "--restart", "unless-stopped",
-		"--label", "skiff.kind=worker", "--label", "skiff.worker.app=" + s.App}
+		"--label", "skiff.kind=worker", "--label", "skiff.worker.app=" + s.App,
+		"--memory", e.memoryOr(s.Memory)}
+	if s.CPU != "" {
+		args = append(args, "--cpus", s.CPU)
+	}
 	if s.Network != "" {
 		args = append(args, "--network", s.Network)
 	}

@@ -24,6 +24,8 @@ export const projectSettingsSchema = z
       .refine((v) => v === '' || v.startsWith('/'), 'Start with /, like /healthz')
       .refine((v) => !/[\s\x00-\x1f\x7f]/.test(v), "Can't contain spaces"),
     image: z.union([z.literal(''), imageRef]),
+    memory: z.string(),
+    cpu: z.string(),
     healthTimeout: z
       .number({ error: 'Enter a number of seconds' })
       .int()

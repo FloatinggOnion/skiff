@@ -121,8 +121,10 @@ type projectView struct {
 	// HealthTimeout is in seconds; 0 means the default.
 	HealthTimeout int `json:"healthTimeout"`
 	// PreviewProtected means its previews ask visitors for a password.
-	PreviewProtected bool `json:"previewProtected"`
-	MaxReplicas      int  `json:"maxReplicas"`
+	PreviewProtected bool   `json:"previewProtected"`
+	MaxReplicas      int    `json:"maxReplicas"`
+	Memory           string `json:"memory"`
+	CPU              string `json:"cpu"`
 	// Domains are the project's custom domains, main one first; URL stays its Skiff address.
 	Domains []string `json:"domains"`
 	// Image is set for a project that runs a prebuilt image instead of building a repo.
@@ -163,6 +165,8 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			PreviewProtected: previewPasswordHash(app) != "",
 			Image:            src.Image,
 			MaxReplicas:      maxReplicas(),
+			Memory:           src.Memory,
+			CPU:              src.CPU,
 			Domains:          domainsOr(projectDomains(src.Team)[app]),
 		})
 	case http.MethodPut:
@@ -182,6 +186,8 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			HealthPath    string `json:"healthPath"`
 			HealthTimeout int    `json:"healthTimeout"`
 			Image         string `json:"image"`
+			Memory        string `json:"memory"`
+			CPU           string `json:"cpu"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		src, ok := getSource(app)
@@ -195,6 +201,12 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		src.HealthPath, src.HealthTimeout = body.HealthPath, body.HealthTimeout
+		body.Memory, body.CPU = strings.ToLower(strings.TrimSpace(body.Memory)), strings.TrimSpace(body.CPU)
+		if err := config.ValidateResources(body.Memory, body.CPU); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		src.Memory, src.CPU = body.Memory, body.CPU
 		if src.Image != "" {
 			// An image project's port may be left empty to use the one the image exposes.
 			img, port := strings.TrimSpace(body.Image), strings.TrimSpace(body.Port)

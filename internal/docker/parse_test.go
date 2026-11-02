@@ -104,3 +104,9 @@ func TestDockerAuthConfig(t *testing.T) {
 		t.Errorf("docker hub config = %s", hub)
 	}
 }
+
+func TestSafetyCap(t *testing.T) {
+	if got := safetyCap(4 << 30); got < 3200000000 || got > 3221225472 {
+		t.Fatalf("cap on 4 GB = %d", got)
+	}
+}
