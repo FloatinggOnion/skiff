@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { SiteBackground } from "@/components/site-background";
 import { SiteNav } from "@/components/site-nav";
 import { SiteFooter } from "@/components/site-footer";
 import { DocsSidebar } from "@/components/docs-sidebar";
@@ -9,7 +8,6 @@ import { DocsPager } from "@/components/docs-pager";
 export default function DocsLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <SiteBackground />
       <SiteNav />
       <div className="mx-auto flex max-w-6xl gap-10 px-6 py-12">
         <DocsSidebar />

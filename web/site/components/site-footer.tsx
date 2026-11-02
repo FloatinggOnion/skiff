@@ -8,15 +8,15 @@ export function SiteFooter() {
         <div>
           <Logo />
           <p className="text-muted mt-2 text-sm">
-            Deploy anything, anywhere you own.
+            Small boat, your own water.
           </p>
         </div>
-        <div className="text-subtle flex items-center gap-6 font-mono text-xs">
+        <div className="text-subtle flex flex-wrap items-center gap-6 text-sm">
           <a href="/docs" className="hover:text-fg transition-colors">
-            DOCS
+            Docs
           </a>
-          <a href="#features" className="hover:text-fg transition-colors">
-            FEATURES
+          <a href="/#features" className="hover:text-fg transition-colors">
+            Features
           </a>
           <a
             href={GITHUB_URL}
@@ -24,9 +24,9 @@ export function SiteFooter() {
             rel="noreferrer"
             className="hover:text-fg transition-colors"
           >
-            GITHUB
+            GitHub
           </a>
-          <span className="text-subtle/70">&copy; {new Date().getFullYear()} SKIFF</span>
+          <span className="text-subtle/70">&copy; {new Date().getFullYear()} Skiff</span>
         </div>
       </div>
     </footer>

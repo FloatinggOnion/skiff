@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function SelfHosting() {
   return (
     <article className="prose prose-invert max-w-none">
-      <p className="not-prose text-brand-2/80 font-mono text-[11px] tracking-[0.3em] uppercase">
+      <p className="not-prose text-brand text-sm font-medium">
         Getting started
       </p>
       <h1>Self-hosting</h1>
@@ -89,7 +89,7 @@ A    example.com      <your-server-ip>    (optional — apex / marketing site)`}
       <p>
         For push-to-deploy — a <code>git push</code> rebuilds and ships automatically, and branches
         can spin up preview environments — install the Skiff GitHub App from{" "}
-        <strong>Settings → GitHub</strong> in the dashboard and pick which repos it can access.
+        <strong>Settings → Integrations</strong> in the dashboard and pick which repos it can access.
         Without it, you can still deploy any public repo (or a private one with a token) by pasting
         its URL.
       </p>

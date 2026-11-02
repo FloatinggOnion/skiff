@@ -18,7 +18,7 @@ function PreviewVisual() {
           <span className="text-fg font-mono text-xs">{x.b}</span>
           <span className="text-subtle flex items-center gap-2 font-mono text-[11px]">
             {x.u}
-            <span className="bg-signal h-1.5 w-1.5 rounded-full shadow-[0_0_8px_var(--color-signal)]" />
+            <span className="bg-signal h-1.5 w-1.5 rounded-full" />
           </span>
         </div>
       ))}
@@ -38,14 +38,14 @@ function RolloutVisual() {
       <div className="bg-line mt-4 h-1.5 w-full overflow-hidden rounded-full">
         <div
           className="h-full w-full rounded-full"
-          style={{ background: "linear-gradient(90deg, var(--muted), var(--fg))" }}
+          style={{ background: "var(--brand)" }}
         />
       </div>
       <div className="text-subtle mt-4 grid grid-cols-2 gap-3">
-        <span>drain · graceful</span>
-        <span className="text-right">rollback · armed</span>
-        <span>checks · 4/4 passing</span>
-        <span className="text-right">downtime · 0ms</span>
+        <span>GET /healthz · 200</span>
+        <span className="text-right">2 of 2 replicas</span>
+        <span>traffic · moved</span>
+        <span className="text-right">v41 · retired</span>
       </div>
     </div>
   );
@@ -62,7 +62,7 @@ function DatabaseVisual() {
             className="border-line bg-bg/50 flex items-center justify-between rounded-lg border px-3.5 py-2.5"
           >
             <span className="text-fg font-mono text-xs">{e}</span>
-            <span className="bg-signal h-1.5 w-1.5 rounded-full shadow-[0_0_8px_var(--color-signal)]" />
+            <span className="bg-signal h-1.5 w-1.5 rounded-full" />
           </div>
         ))}
       </div>
@@ -93,7 +93,7 @@ function AnalyticsVisual() {
             className="flex-1 rounded-sm"
             style={{
               height: `${h}%`,
-              background: "linear-gradient(to top, var(--muted), var(--fg))",
+              background: "var(--brand)",
             }}
           />
         ))}
@@ -125,7 +125,7 @@ function Row({
   return (
     <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <div className={flip ? "lg:order-2" : ""}>
-        <p className="text-brand font-mono text-[11px] tracking-[0.2em] uppercase">
+        <p className="text-brand text-sm font-medium">
           {eyebrow}
         </p>
         <h3 className="font-display mt-4 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
@@ -157,7 +157,7 @@ export function FeatureRows() {
           points={[
             "Git push or one click in the console",
             "Automatic HTTPS on your own domain",
-            "Ten-plus languages detected out of the box",
+            "Ten-plus languages detected, or bring a Dockerfile or a prebuilt image",
           ]}
           visual={<ConsoleMock />}
         />
@@ -198,12 +198,12 @@ export function FeatureRows() {
         />
         <Row
           eyebrow="Reliability"
-          title="Releases that never blink."
-          body="Health-checked, zero-downtime rollouts with automatic rollback. A bad build is caught and reverted before a single request hits it."
+          title="A bad build never takes traffic."
+          body="A new version has to pass its health check before traffic moves to it. If it never does, the deploy stops and the running version keeps serving."
           points={[
-            "Graceful drain and cut-over",
-            "Automatic rollback on failed checks",
-            "Zero dropped requests",
+            "Set your own health check path and timeout",
+            "Release commands, like migrations, run before the swap",
+            "Instant rollback to any of the last five builds",
           ]}
           visual={<RolloutVisual />}
         />

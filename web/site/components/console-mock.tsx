@@ -41,10 +41,10 @@ export function ConsoleMock() {
         <div className="space-y-2 p-5 font-mono text-[12.5px] leading-relaxed">
           <p className="log-line text-muted">
             <span className="text-fg">➜</span>{" "}
-            <span className="text-fg">git push skiff main</span>
+            <span className="text-fg">git push origin main</span>
           </p>
           <p className="log-line text-subtle">
-            enumerating objects · counting · done
+            GitHub webhook received · cloning
           </p>
           <p className="log-line text-muted">
             → detected <span className="text-fg">Node</span> · installing
@@ -58,9 +58,7 @@ export function ConsoleMock() {
             <div className="bg-line h-1 w-full overflow-hidden rounded-full">
               <div
                 className="deploy-bar h-full origin-left rounded-full"
-                style={{
-                  background: "linear-gradient(90deg, var(--muted), var(--fg))",
-                }}
+                style={{ background: "var(--brand)" }}
               />
             </div>
           </div>
@@ -79,7 +77,7 @@ export function ConsoleMock() {
 
         <div className="border-line flex items-center justify-between border-t px-5 py-3 font-mono text-[11px]">
           <span className="text-muted flex items-center gap-2">
-            <span className="bg-fg animate-pulse-dot h-1.5 w-1.5 rounded-full" />
+            <span className="bg-signal animate-pulse-dot h-1.5 w-1.5 rounded-full" />
             running · 1 replica
           </span>
           <span className="text-subtle">HTTPS · auto-renew</span>

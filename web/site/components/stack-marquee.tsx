@@ -58,7 +58,7 @@ function Row({ reverse = false }: { reverse?: boolean }) {
 export function StackMarquee() {
   return (
     <section id="stacks" className="border-line/60 border-y py-12">
-      <p className="text-subtle mb-8 text-center font-mono text-[11px] tracking-[0.3em] uppercase">
+      <p className="text-muted mb-8 text-center text-sm">
         Speaks every stack — no Dockerfile required
       </p>
       <div className="relative space-y-6 overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)]">

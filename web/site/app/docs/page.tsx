@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function DocsHome() {
   return (
     <article className="prose prose-invert max-w-none">
-      <p className="not-prose text-brand-2/80 font-mono text-[11px] tracking-[0.3em] uppercase">Docs</p>
+      <p className="not-prose text-brand text-sm font-medium">Docs</p>
       <h1>Ship to a server you own</h1>
       <p className="text-muted text-lg">
         Skiff turns a plain Linux box into your own deploy platform — push-to-deploy, automatic

@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function Images() {
   return (
     <article className="prose prose-invert max-w-none">
-      <p className="not-prose text-brand-2/80 font-mono text-[11px] tracking-[0.3em] uppercase">
+      <p className="not-prose text-brand text-sm font-medium">
         Guides
       </p>
       <h1>Prebuilt images</h1>
@@ -68,7 +68,7 @@ path = "/app/data"`}</CodeBlock>
       <h2>Deploy a new tag from CI</h2>
       <p>
         After your pipeline pushes an image, point the project at it and deploy in one call. Create
-        a token under <strong>Settings → API tokens</strong>, then:
+        a token under <strong>Settings → Integrations</strong>, then:
       </p>
       <CodeBlock label="shell">{`curl -X POST https://dash.example.com/api/v1/apps/api/deploy \\
   -H "Authorization: Bearer $SKIFF_TOKEN" \\

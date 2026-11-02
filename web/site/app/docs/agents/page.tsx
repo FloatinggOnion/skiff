@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function Agents() {
   return (
     <article className="prose prose-invert max-w-none">
-      <p className="not-prose text-brand-2/80 font-mono text-[11px] tracking-[0.3em] uppercase">
+      <p className="not-prose text-brand text-sm font-medium">
         Guides
       </p>
       <h1>AI agents (MCP)</h1>
@@ -24,7 +24,7 @@ export default function Agents() {
       <h2>Connect an assistant</h2>
       <Steps>
         <Step n={1} title="Create an API token">
-          In the dashboard, open <strong>Settings → API tokens</strong> and create one. It&apos;s
+          In the dashboard, open <strong>Settings → Integrations</strong> and create one. It&apos;s
           shown once and acts for that team only.
         </Step>
         <Step n={2} title="Add Skiff as an MCP server">

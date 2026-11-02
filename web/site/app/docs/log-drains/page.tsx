@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function LogDrains() {
   return (
     <article className="prose prose-invert max-w-none">
-      <p className="not-prose text-brand-2/80 font-mono text-[11px] tracking-[0.3em] uppercase">
+      <p className="not-prose text-brand text-sm font-medium">
         Guides
       </p>
       <h1>Log drains</h1>
@@ -27,7 +27,7 @@ export default function LogDrains() {
           Most log services have an HTTP ingest endpoint and a token. Better Stack, Axiom and
           Datadog all do, or use your own endpoint.
         </Step>
-        <Step n={2} title="Open Settings → Log drain">
+        <Step n={2} title="Open Settings → Team → Log drain">
           Team owners can add one drain per team. It covers every project in the team, previews
           included.
         </Step>
@@ -63,7 +63,7 @@ export default function LogDrains() {
       <h2>When the service is down</h2>
       <p>
         Skiff only moves on once the service answers with a 2xx. Until then it keeps retrying, up to
-        every five minutes, and <strong>Settings</strong> shows the error. Sending picks up from the
+        every five minutes, and the Log drain section shows the error. Sending picks up from the
         same line afterwards, including after a Skiff restart.
       </p>
       <ul>

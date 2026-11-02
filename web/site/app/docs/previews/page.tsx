@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function Previews() {
   return (
     <article className="prose prose-invert max-w-none">
-      <p className="not-prose text-brand-2/80 font-mono text-[11px] tracking-[0.3em] uppercase">
+      <p className="not-prose text-brand text-sm font-medium">
         Guides
       </p>
       <h1>Preview environments</h1>
@@ -24,7 +24,7 @@ export default function Previews() {
       <h2>Turn them on</h2>
       <Steps>
         <Step n={1} title="Connect GitHub">
-          Install the Skiff GitHub App from <strong>Settings → Connections</strong> and give it the
+          Install the Skiff GitHub App from <strong>Settings → Integrations</strong> and give it the
           repositories you deploy from.
         </Step>
         <Step n={2} title="Enable previews on the project">
@@ -59,7 +59,7 @@ export default function Previews() {
       <Callout>
         Both need the GitHub App to have <strong>Pull requests</strong> and{" "}
         <strong>Commit statuses</strong> set to read and write. New installs ask for them; an older
-        install shows a link under <strong>Settings → Connections</strong> to grant them.
+        install shows a link under <strong>Settings → Integrations</strong> to grant them.
       </Callout>
 
       <h2>Only what the branch changed</h2>

@@ -1,7 +1,10 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
+  --color-hull: var(--hull);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-elevated: var(--elevated);
@@ -19,6 +22,27 @@
 }
 
 :root {
+  --bg: #f6f8f5;
+  --surface: #ffffff;
+  --elevated: #e9efeb;
+  --line: #d5dfda;
+  --line-strong: #c7d3cd;
+  --fg: #12302c;
+  --muted: #4b655f;
+  --subtle: #5d7770;
+  --brand: #a4531f;
+  --brand-2: #a4531f;
+  --signal: #0f6b4a;
+  --primary: #14403a;
+  --primary-fg: #f6f8f5;
+  --hull: #e3ebe6;
+  --well: #081513;
+  --glow: 18, 48, 44;
+  color-scheme: light;
+}
+
+.dark,
+.well {
   --bg: #142c29;
   --surface: #19332f;
   --elevated: #1e3a36;
@@ -29,9 +53,21 @@
   --subtle: #86a39b;
   --brand: #e39155;
   --brand-2: #e39155;
-  --signal: #e39155;
+  --signal: #8fdcb9;
+  --primary: #e39155;
+  --primary-fg: #1a1109;
+  --hull: #1c3834;
   --glow: 227, 145, 85;
   color-scheme: dark;
+}
+
+.well {
+  --bg: #081513;
+  --surface: #0e2220;
+  --elevated: #142c29;
+  background: var(--well);
+  color: var(--fg);
+  border-top: 2px solid var(--brand);
 }
 
 body {
@@ -52,58 +88,13 @@ body {
     font-family: var(--font-brand-display), system-ui, sans-serif;
   }
 
-  /* subtle monochrome headline emphasis */
-  .text-gradient {
-    background: linear-gradient(
-      180deg,
-      var(--fg),
-      color-mix(in oklab, var(--fg) 52%, var(--muted))
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  .grid-overlay {
-    background-image:
-      linear-gradient(
-        to right,
-        color-mix(in oklab, var(--fg) 4%, transparent) 1px,
-        transparent 1px
-      ),
-      linear-gradient(
-        to bottom,
-        color-mix(in oklab, var(--fg) 4%, transparent) 1px,
-        transparent 1px
-      );
-    background-size: 52px 52px;
-    -webkit-mask-image: radial-gradient(ellipse 74% 56% at 50% -6%, #000 28%, transparent 78%);
-    mask-image: radial-gradient(ellipse 74% 56% at 50% -6%, #000 28%, transparent 78%);
-  }
-
-  .hero-glow {
-    background: radial-gradient(
-      40% 32% at 50% -8%,
-      rgba(var(--glow), 0.06),
-      transparent 72%
-    );
-  }
-
   .glow-amber {
-    box-shadow:
-      0 0 0 1px color-mix(in oklab, var(--fg) 8%, transparent),
-      0 50px 140px -50px rgba(0, 0, 0, 0.55);
-  }
-
-  .ring-glow {
-    box-shadow:
-      0 0 0 1px color-mix(in oklab, var(--fg) 6%, transparent),
-      0 40px 120px -50px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 24px 60px -36px rgba(var(--glow), 0.35);
   }
 
   .btn-brand {
-    background: var(--fg);
-    color: var(--bg);
+    background: var(--primary);
+    color: var(--primary-fg);
     transition: opacity 0.15s ease, transform 0.15s ease;
   }
   .btn-brand:hover {
@@ -113,49 +104,19 @@ body {
     transform: translateY(1px);
   }
 
-  .glass {
-    background: color-mix(in oklab, var(--elevated) 80%, transparent);
-    backdrop-filter: blur(14px);
-  }
-
   .marquee-track {
     animation: marquee 40s linear infinite;
   }
   .marquee-track-rev {
     animation: marquee 46s linear infinite reverse;
   }
-  .animate-aurora-1 {
-    animation: aurora1 22s ease-in-out infinite;
-  }
-  .animate-aurora-2 {
-    animation: aurora2 28s ease-in-out infinite;
-  }
-  .animate-aurora-3 {
-    animation: aurora3 34s ease-in-out infinite;
-  }
   .animate-pulse-dot {
     animation: pulseDot 2.4s ease-in-out infinite;
   }
-  .orbit-spin {
-    animation: orbitSpin linear infinite;
-  }
-  .orbit-spin-rev {
-    animation: orbitSpin linear infinite reverse;
-  }
-  .animate-core {
-    animation: corePulse 3.8s ease-in-out infinite;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .marquee-track,
     .marquee-track-rev,
-    .animate-aurora-1,
-    .animate-aurora-2,
-    .animate-aurora-3,
-    .animate-pulse-dot,
-    .orbit-spin,
-    .orbit-spin-rev,
-    .animate-core {
+    .animate-pulse-dot {
       animation: none;
     }
   }
@@ -164,33 +125,6 @@ body {
 @keyframes marquee {
   to {
     transform: translateX(-50%);
-  }
-}
-@keyframes aurora1 {
-  0%,
-  100% {
-    transform: translate(-8%, -6%) scale(1);
-  }
-  50% {
-    transform: translate(10%, 9%) scale(1.22);
-  }
-}
-@keyframes aurora2 {
-  0%,
-  100% {
-    transform: translate(12%, 6%) scale(1.16);
-  }
-  50% {
-    transform: translate(-7%, -9%) scale(1);
-  }
-}
-@keyframes aurora3 {
-  0%,
-  100% {
-    transform: translate(0, 10%) scale(1);
-  }
-  50% {
-    transform: translate(-11%, -5%) scale(1.12);
   }
 }
 @keyframes pulseDot {
@@ -204,22 +138,7 @@ body {
     box-shadow: 0 0 0 5px transparent;
   }
 }
-@keyframes orbitSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes corePulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-/* Docs prose — Tailwind Typography tuned to the monochrome theme. */
+/* Docs prose — Tailwind Typography tuned to the theme tokens. */
 .prose {
   --tw-prose-invert-body: var(--muted);
   --tw-prose-invert-headings: var(--fg);
@@ -235,7 +154,7 @@ body {
   --tw-prose-invert-pre-bg: var(--surface);
 }
 .prose :is(h1, h2, h3, h4) {
-  font-family: var(--font-brand-sans), system-ui, sans-serif;
+  font-family: var(--font-brand-display), system-ui, sans-serif;
   letter-spacing: -0.012em;
 }
 .prose :where(a) {

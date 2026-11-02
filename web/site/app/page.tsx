@@ -1,38 +1,27 @@
-import { SiteBackground } from "@/components/site-background";
 import { SiteNav } from "@/components/site-nav";
 import { Hero } from "@/components/hero";
-import { StackMarquee } from "@/components/stack-marquee";
-import { StatsStrip } from "@/components/stats-strip";
+import { WhySkiff } from "@/components/why-skiff";
 import { FeatureRows } from "@/components/feature-rows";
-import { Showcase } from "@/components/showcase";
+import { ConsoleShowcase } from "@/components/console-showcase";
+import { StackMarquee } from "@/components/stack-marquee";
+import { AlsoIncluded } from "@/components/also-included";
 import { HowItWorks } from "@/components/how-it-works";
 import { FinalCta } from "@/components/final-cta";
 import { SiteFooter } from "@/components/site-footer";
-import { Reveal } from "@/components/reveal";
 
 export default function Home() {
   return (
     <>
-      <SiteBackground />
       <SiteNav />
       <main>
         <Hero />
-        <Reveal>
-          <StackMarquee />
-        </Reveal>
-        <Reveal>
-          <StatsStrip />
-        </Reveal>
-        <Reveal>
-          <FeatureRows />
-        </Reveal>
-        <Showcase />
-        <Reveal>
-          <HowItWorks />
-        </Reveal>
-        <Reveal>
-          <FinalCta />
-        </Reveal>
+        <WhySkiff />
+        <ConsoleShowcase />
+        <StackMarquee />
+        <FeatureRows />
+        <AlsoIncluded />
+        <HowItWorks />
+        <FinalCta />
       </main>
       <SiteFooter />
     </>

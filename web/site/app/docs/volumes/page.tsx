@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function Volumes() {
   return (
     <article className="prose prose-invert max-w-none">
-      <p className="not-prose text-brand-2/80 font-mono text-[11px] tracking-[0.3em] uppercase">
+      <p className="not-prose text-brand text-sm font-medium">
         Guides
       </p>
       <h1>Persistent volumes</h1>

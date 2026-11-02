@@ -3,18 +3,18 @@ import { SectionHeading } from "@/components/section-heading";
 const steps = [
   {
     n: "01",
-    title: "Point Skiff at your server",
-    body: "One command connects Skiff to any Linux box over SSH.",
+    title: "Set up your server",
+    body: "One command on a fresh Ubuntu or Debian box installs everything.",
   },
   {
     n: "02",
-    title: "Push your code",
-    body: "Deploy from a git push or straight from the console.",
+    title: "Point it at your code",
+    body: "Connect a GitHub repo, or use a Git URL, an image or the CLI.",
   },
   {
     n: "03",
     title: "Get an HTTPS URL",
-    body: "Skiff builds, runs, and serves your app on your domain.",
+    body: "Skiff builds it, runs it and serves it on your domain.",
   },
 ];
 
@@ -22,7 +22,7 @@ export function HowItWorks() {
   return (
     <section id="how" className="mx-auto max-w-6xl px-6 py-24">
       <SectionHeading
-        eyebrow="The passage"
+        eyebrow="How it works"
         title="From zero to deployed in three moves."
       />
       <div className="mt-14 grid gap-10 sm:grid-cols-3">

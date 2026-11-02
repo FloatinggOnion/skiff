@@ -74,7 +74,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#142c29",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f8f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#142c29" },
+  ],
   colorScheme: "dark",
 };
 
@@ -100,14 +103,22 @@ const jsonLd = {
   },
 };
 
+// Runs before first paint, so a dark-theme reload never flashes light.
+const THEME_INIT = `try{var t=localStorage.getItem('skiff-theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable} antialiased`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${display.variable} ${sans.variable} ${mono.variable} antialiased`}
+    >
       <body>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
