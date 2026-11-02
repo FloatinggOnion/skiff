@@ -79,6 +79,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	checkCatalogApp(t, c, panelAddr, routerAddr)
 	checkStatusPage(t, c, panelAddr, routerAddr)
 	checkPrivateService(t, c, panelAddr, routerAddr)
+	checkGRPC(t, c, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
@@ -416,6 +417,38 @@ func checkPrivateService(t *testing.T, c *http.Client, panelAddr, routerAddr str
 	out, err := exec.Command("docker", "run", "--rm", "--network", network, "curlimages/curl:8.10.1", "-s", "-m", "10", project.InternalURL).CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "Hostname:") {
 		t.Fatalf("calling it by name: %v %s", err, out)
+	}
+	post(t, c, "http://"+panelAddr+"/api/down?app="+svc, "")
+}
+
+// checkGRPC deploys a real gRPC server on a port that only speaks gRPC, so its deploy check has to recognise it, and calls it through the router with a real client: one reply, then a stream.
+func checkGRPC(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
+	t.Helper()
+	const svc = "e2e-grpc"
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter label=skiff.app="+svc+") ; docker rmi $(docker images -q skiff-"+svc+")").Run()
+	})
+	bin := filepath.Join(t.TempDir(), "grpcurl")
+	run(t, "", []string{"GOBIN=" + filepath.Dir(bin)}, "go", "install", "github.com/fullstorydev/grpcurl/cmd/grpcurl@v1.9.3")
+	var created struct{ App, ID string }
+	postJSON(t, c, "http://"+panelAddr+"/api/projects/image", `{"name":"`+svc+`","image":"moul/grpcbin:latest","port":"9000"}`, &created)
+	stream(t, c, "http://"+panelAddr+"/api/deploys/log?app="+svc+"&id="+created.ID)
+
+	call := func(method string) string {
+		t.Helper()
+		var out []byte
+		eventually(t, 30*time.Second, func() bool {
+			var err error
+			out, err = exec.Command(bin, "-plaintext", "-max-time", "10", "-authority", svc+".localhost", "-d", `{"greeting":"skiff"}`, routerAddr, method).CombinedOutput()
+			return err == nil
+		})
+		return string(out)
+	}
+	if got := call("hello.HelloService/SayHello"); !strings.Contains(got, "hello skiff") {
+		t.Fatalf("unary call: %s", got)
+	}
+	if got := call("hello.HelloService/LotsOfReplies"); strings.Count(got, "hello skiff") < 2 {
+		t.Fatalf("server stream: %s", got)
 	}
 	post(t, c, "http://"+panelAddr+"/api/down?app="+svc, "")
 }

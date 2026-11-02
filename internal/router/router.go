@@ -346,6 +346,26 @@ var upstream = &http.Transport{
 	DisableCompression:  true,
 }
 
+// grpcUpstream speaks HTTP/2 without TLS to the app, which is what a gRPC server listens for; the shared transport speaks HTTP/1.1, which gRPC can't use.
+var grpcUpstream = func() *http.Transport {
+	p := new(http.Protocols)
+	p.SetUnencryptedHTTP2(true)
+	return &http.Transport{
+		DialContext:     (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		Protocols:       p,
+		IdleConnTimeout: 60 * time.Second,
+	}
+}()
+
+// isGRPC spots a gRPC call. gRPC-Web is left out: it's designed to work over ordinary HTTP.
+func isGRPC(r *http.Request) bool {
+	if r.ProtoMajor != 2 {
+		return false
+	}
+	ct := r.Header.Get("Content-Type")
+	return ct == "application/grpc" || strings.HasPrefix(ct, "application/grpc+") || strings.HasPrefix(ct, "application/grpc;")
+}
+
 type proxyBuffers struct{ sync.Pool }
 
 func (b *proxyBuffers) Get() []byte  { return *(b.Pool.Get().(*[]byte)) }
@@ -358,8 +378,12 @@ var proxyBufs = &proxyBuffers{Pool: sync.Pool{New: func() any {
 
 func proxyTo(w http.ResponseWriter, r *http.Request, hostport string) {
 	target := &url.URL{Scheme: "http", Host: hostport}
+	var transport http.RoundTripper = upstream
+	if isGRPC(r) {
+		transport = grpcUpstream
+	}
 	rp := &httputil.ReverseProxy{
-		Transport:  upstream,
+		Transport:  transport,
 		BufferPool: proxyBufs,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
@@ -429,7 +453,13 @@ func edgeServer(addr string, h http.Handler) *http.Server {
 func (rt *Router) ServeHTTPOnly(addr string) error {
 	rt.startMetrics()
 	rt.startMail(nil)
-	return edgeServer(addr, rt).ListenAndServe()
+	// Plain-text HTTP/2 too, since this mode has no TLS to negotiate it over.
+	s := edgeServer(addr, rt)
+	p := new(http.Protocols)
+	p.SetHTTP1(true)
+	p.SetUnencryptedHTTP2(true)
+	s.Protocols = p
+	return s.ListenAndServe()
 }
 
 func (rt *Router) ServeTLS(cacheDir string) error {

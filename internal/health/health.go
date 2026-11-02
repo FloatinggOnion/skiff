@@ -3,13 +3,37 @@ package health
 
 import (
 	"fmt"
+	"io"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 )
 
 const DefaultTimeout = 30 * time.Second
 
-// Wait polls the app until it's ready: with no path any HTTP reply at / will do (it's listening); with a path it must answer 2xx or 3xx.
+// speaksHTTP2 opens plain-text HTTP/2 and checks the server answers with its settings frame. A gRPC server can refuse any request it's sent, so the handshake is the proof. A port that only accepts and hangs up, as docker's proxy does before the app is up, fails it.
+func speaksHTTP2(host string, port int) bool {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), 2*time.Second)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	const clientPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+	emptySettings := []byte{0, 0, 0, 0x4, 0, 0, 0, 0, 0}
+	if _, err := conn.Write(append([]byte(clientPreface), emptySettings...)); err != nil {
+		return false
+	}
+	var header [9]byte
+	if _, err := io.ReadFull(conn, header[:]); err != nil {
+		return false
+	}
+	const frameSettings = 0x4
+	return header[3] == frameSettings
+}
+
+// Wait polls the app until it's ready: with no path any HTTP reply at / will do (it's listening), including over plain-text HTTP/2, which is all a gRPC server speaks; with a path it must answer 2xx or 3xx.
 func Wait(host string, port int, path string, timeout time.Duration) error {
 	strict := path != ""
 	if !strict {
@@ -32,6 +56,11 @@ func Wait(host string, port int, path string, timeout time.Duration) error {
 			last = fmt.Errorf("GET %s answered %d", path, resp.StatusCode)
 		} else {
 			last = err
+			if !strict {
+				if speaksHTTP2(host, port) {
+					return nil
+				}
+			}
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

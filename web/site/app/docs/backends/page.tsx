@@ -57,6 +57,16 @@ export default function Backends() {
         limits at the CDN instead.
       </p>
 
+      <h2>gRPC</h2>
+      <p>
+        gRPC services work with no setting to change, including streaming. Clients connect over HTTPS
+        as usual, and Skiff speaks plain-text HTTP/2 to your app, so have the server listen without
+        TLS on its port. A service with no web page passes its deploy check by answering over HTTP/2.
+        Set the project&apos;s port yourself if the image exposes more than one. gRPC calls count
+        toward a rate limit like any other request, and over an internal address they go directly to
+        the service.
+      </p>
+
       <h2>The rest of a backend</h2>
       <ul>
         <li>
@@ -79,8 +89,8 @@ export default function Backends() {
       <h2>What Skiff doesn&apos;t do yet</h2>
       <ul>
         <li>
-          <strong>Raw TCP or UDP from outside.</strong> The router speaks HTTP, and a deploy needs an
-          HTTP answer to pass its health check.
+          <strong>Raw TCP or UDP from outside.</strong> The router speaks HTTP and gRPC, and a deploy
+          needs an answer in one of them to pass its health check.
         </li>
         <li>
           <strong>More than one server.</strong> Replicas and autoscaling work within your server.

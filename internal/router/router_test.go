@@ -1,6 +1,7 @@
 package router
 
 import (
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -328,5 +329,81 @@ func TestLimitKeyGroupsIPv6(t *testing.T) {
 	}
 	if key("1.2.3.4:1") != "1.2.3.4" {
 		t.Errorf("ipv4 key = %q", key("1.2.3.4:1"))
+	}
+}
+
+// gRPC needs HTTP/2 to the app and trailers back, and streams must arrive as they're sent.
+func TestGRPCThroughRouter(t *testing.T) {
+	p := new(http.Protocols)
+	p.SetUnencryptedHTTP2(true)
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	backend := &http.Server{Protocols: p, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/grpc")
+		w.Header().Set("Trailer", "Grpc-Status")
+		_, _ = w.Write([]byte("first:" + r.Proto))
+		w.(http.Flusher).Flush()
+		<-release
+		_, _ = w.Write([]byte("|second"))
+		w.Header().Set("Grpc-Status", "0")
+	})}
+	go backend.Serve(l)
+	defer backend.Close()
+	rt := &Router{Domains: []string{"example.com"}}
+	rt.routeTable = map[string][]int{"svc": {l.Addr().(*net.TCPAddr).Port}}
+	rt.routeAt = time.Now().Add(time.Hour)
+	front := httptest.NewUnstartedServer(rt)
+	front.EnableHTTP2 = true
+	front.StartTLS()
+	defer front.Close()
+
+	req, _ := http.NewRequest("POST", front.URL+"/hello.Hello/Say", strings.NewReader("x"))
+	req.Host = "svc.example.com"
+	req.Header.Set("Content-Type", "application/grpc")
+	req.Header.Set("Te", "trailers")
+	resp, err := front.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	buf := make([]byte, 64)
+	n, err := resp.Body.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(buf[:n]) != "first:HTTP/2.0" {
+		t.Fatalf("the first message should arrive on its own, over HTTP/2: %q", buf[:n])
+	}
+	close(release)
+	rest, _ := io.ReadAll(resp.Body)
+	if string(rest) != "|second" || resp.Trailer.Get("Grpc-Status") != "0" {
+		t.Fatalf("rest %q, trailer %q", rest, resp.Trailer.Get("Grpc-Status"))
+	}
+}
+
+func TestIsGRPC(t *testing.T) {
+	for ct, want := range map[string]bool{
+		"application/grpc":           true,
+		"application/grpc+proto":     true,
+		"application/grpc;charset=x": true,
+		"application/grpc-web":       false,
+		"application/grpc-web+proto": false,
+		"application/json":           false,
+		"":                           false,
+	} {
+		r := httptest.NewRequest("POST", "/", nil)
+		r.ProtoMajor = 2
+		r.Header.Set("Content-Type", ct)
+		if got := isGRPC(r); got != want {
+			t.Errorf("isGRPC(%q) = %v", ct, got)
+		}
+	}
+	r := httptest.NewRequest("POST", "/", nil)
+	r.Header.Set("Content-Type", "application/grpc")
+	if isGRPC(r) {
+		t.Error("gRPC can't arrive over HTTP/1")
 	}
 }
