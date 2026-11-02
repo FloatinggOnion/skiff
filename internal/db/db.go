@@ -361,6 +361,21 @@ CREATE TABLE IF NOT EXISTS volumes (
   created INTEGER NOT NULL,
   PRIMARY KEY (app, name)
 );
+CREATE TABLE IF NOT EXISTS log_drains (
+  team         TEXT PRIMARY KEY,
+  url          TEXT NOT NULL,
+  header_name  TEXT NOT NULL DEFAULT '',
+  header_value TEXT NOT NULL DEFAULT '',
+  last_ok      INTEGER NOT NULL DEFAULT 0,
+  last_error   TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS log_drain_cursors (
+  team TEXT NOT NULL,
+  app  TEXT NOT NULL,
+  day  TEXT NOT NULL,
+  pos  INTEGER NOT NULL,
+  PRIMARY KEY (team, app)
+);
 CREATE TABLE IF NOT EXISTS registry_creds (
   app      TEXT PRIMARY KEY,
   username TEXT NOT NULL,

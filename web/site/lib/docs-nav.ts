@@ -15,6 +15,7 @@ export const DOCS_NAV: DocSection[] = [
       { href: "/docs/previews", label: "Preview environments" },
       { href: "/docs/images", label: "Prebuilt images" },
       { href: "/docs/volumes", label: "Persistent volumes" },
+      { href: "/docs/log-drains", label: "Log drains" },
       { href: "/docs/email-forwarding", label: "Email forwarding" },
       { href: "/docs/agents", label: "AI agents (MCP)" },
     ],

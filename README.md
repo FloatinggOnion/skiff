@@ -105,6 +105,8 @@ platform in the browser:
   point it at a new tag from CI with one API call.
 - **Persistent volumes** — directories that keep their files across deploys, for
   SQLite databases and uploads; previews get empty copies of their own.
+- **Log drains** — send every project's logs to Better Stack, Axiom, Datadog or
+  any HTTP endpoint, resuming where it stopped after an outage.
 - **Alerts** — email, Slack, or webhook when a deploy fails, an app goes down, or
   5xx errors spike.
 - **Teams, audit log, and API tokens** — collaborators, an activity trail, and a

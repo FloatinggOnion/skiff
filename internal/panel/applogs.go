@@ -51,6 +51,23 @@ func (c *logCollector) writer(app string) *logWriter {
 	return w
 }
 
+// forget deletes an app's saved logs along with the app; the name can be taken again, by another team too.
+func (c *logCollector) forget(app string) {
+	c.mu.Lock()
+	w := c.writers[app]
+	delete(c.writers, app)
+	c.mu.Unlock()
+	if w != nil {
+		w.mu.Lock()
+		if w.f != nil {
+			w.f.Close()
+		}
+		w.f, w.full = nil, true
+		w.mu.Unlock()
+	}
+	_ = os.RemoveAll(appLogDir(app))
+}
+
 // lastLoggedAt reads the newest saved line's time so a restart resumes where collection left off.
 func lastLoggedAt(app string) time.Time {
 	days, _ := filepath.Glob(filepath.Join(appLogDir(app), "*.log"))

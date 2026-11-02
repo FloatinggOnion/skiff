@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -40,7 +41,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	push("v1")
 
 	protectExisting(t, home)
-	env := []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}
+	env := []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_DRAIN_ALLOW_PRIVATE=1"}
 	panelAddr, routerAddr := freeAddr(t), freeAddr(t)
 	start(t, env, bin, "panel", "--addr", panelAddr, "--domain", "localhost")
 	waitHTTP(t, "http://"+panelAddr+"/api/me")
@@ -74,6 +75,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	checkHealthCheck(t, c, panelAddr, routerAddr)
 	checkPreviewPassword(t, c, root, panelAddr, routerAddr)
 	checkImageProject(t, c, panelAddr, routerAddr)
+	checkLogDrain(t, c, panelAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
@@ -213,6 +215,76 @@ func checkImageProject(t *testing.T, c *http.Client, panelAddr, routerAddr strin
 	}
 	eventually(t, 30*time.Second, served)
 	post(t, c, "http://"+panelAddr+"/api/down?app="+img, "")
+}
+
+// checkLogDrain deploys an app with a drain on and expects the real container's startup line to reach the endpoint, carrying the header; a refusal is reported and retried without losing the line.
+func checkLogDrain(t *testing.T, c *http.Client, panelAddr string) {
+	t.Helper()
+	const drained = "e2e-drain"
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter label=skiff.app="+drained+") ; docker rmi $(docker images -q skiff-"+drained+")").Run()
+	})
+	var mu sync.Mutex
+	refuse := true
+	var lines []map[string]string
+	var key string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if refuse {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		key = r.Header.Get("X-Drain-Key")
+		var batch []map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&batch)
+		lines = append(lines, batch...)
+	}))
+	defer srv.Close()
+	put(t, c, "http://"+panelAddr+"/api/log-drain", `{"url":"`+srv.URL+`","headerName":"X-Drain-Key","headerValue":"e2e-key"}`)
+
+	var created struct{ App, ID string }
+	postJSON(t, c, "http://"+panelAddr+"/api/projects/image", `{"name":"`+drained+`","image":"traefik/whoami:v1.10.3"}`, &created)
+	stream(t, c, "http://"+panelAddr+"/api/deploys/log?app="+drained+"&id="+created.ID)
+
+	var status struct {
+		LastError string `json:"lastError"`
+		HeaderSet bool   `json:"headerSet"`
+	}
+	eventually(t, 60*time.Second, func() bool {
+		getJSON(t, c, "http://"+panelAddr+"/api/log-drain", &status)
+		return strings.Contains(status.LastError, "503")
+	})
+	mu.Lock()
+	refuse = false
+	mu.Unlock()
+	eventually(t, 60*time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, l := range lines {
+			if l["app"] == drained && strings.Contains(l["message"], "Starting up") {
+				return true
+			}
+		}
+		return false
+	})
+	mu.Lock()
+	if key != "e2e-key" {
+		t.Errorf("drain header = %q", key)
+	}
+	mu.Unlock()
+	eventually(t, 30*time.Second, func() bool {
+		getJSON(t, c, "http://"+panelAddr+"/api/log-drain", &status)
+		return status.LastError == ""
+	})
+
+	req, _ := http.NewRequest(http.MethodDelete, "http://"+panelAddr+"/api/log-drain", nil)
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	post(t, c, "http://"+panelAddr+"/api/down?app="+drained, "")
 }
 
 func appContainer(t *testing.T, name string) string {

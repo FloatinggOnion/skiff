@@ -156,7 +156,8 @@ func deleteSource(app string) {
 		del(`DELETE FROM preview_passwords WHERE app=?`) &&
 		del(`DELETE FROM preview_env WHERE app=?`) &&
 		del(`DELETE FROM volumes WHERE app=?`) &&
-		del(`DELETE FROM registry_creds WHERE app=?`) {
+		del(`DELETE FROM registry_creds WHERE app=?`) &&
+		del(`DELETE FROM log_drain_cursors WHERE app=?`) {
 		_ = tx.Commit()
 	}
 }
