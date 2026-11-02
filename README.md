@@ -106,6 +106,8 @@ platform in the browser:
   renewed for you.
 - **Autoscaling** — add and retire replicas to hold each app near a target CPU.
 - **Workers & cron** — long-running background processes and scheduled jobs.
+- **One-click apps** — install Uptime Kuma, n8n, Ghost, Umami, Vaultwarden or Gitea,
+  with storage, secrets and any database set up for you.
 - **Prebuilt images** — run any image from Docker Hub or a private registry, and
   point it at a new tag from CI with one API call.
 - **Persistent volumes** — directories that keep their files across deploys, for

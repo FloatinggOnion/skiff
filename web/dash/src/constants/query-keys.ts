@@ -15,6 +15,7 @@ export const queryKeys = {
   databasesUnmanaged: ['databases', 'unmanaged'] as const,
   offsite: ['backups', 'offsite'] as const,
   logDrain: ['logs', 'drain'] as const,
+  catalog: ['catalog'] as const,
   storage: ['storage'] as const,
   bucketObjects: (id: string, prefix: string) => ['storage', id, 'objects', prefix] as const,
   members: ['members'] as const,

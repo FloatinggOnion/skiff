@@ -121,10 +121,12 @@ type projectView struct {
 	// HealthTimeout is in seconds; 0 means the default.
 	HealthTimeout int `json:"healthTimeout"`
 	// PreviewProtected means its previews ask visitors for a password.
-	PreviewProtected bool   `json:"previewProtected"`
-	MaxReplicas      int    `json:"maxReplicas"`
-	Memory           string `json:"memory"`
-	CPU              string `json:"cpu"`
+	PreviewProtected bool `json:"previewProtected"`
+	MaxReplicas      int  `json:"maxReplicas"`
+	// SetupNote is the first-run step for a project installed from the catalog.
+	SetupNote string `json:"setupNote,omitempty"`
+	Memory    string `json:"memory"`
+	CPU       string `json:"cpu"`
 	// Domains are the project's custom domains, main one first; URL stays its Skiff address.
 	Domains []string `json:"domains"`
 	// Image is set for a project that runs a prebuilt image instead of building a repo.
@@ -165,6 +167,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			PreviewProtected: previewPasswordHash(app) != "",
 			Image:            src.Image,
 			MaxReplicas:      maxReplicas(),
+			SetupNote:        catalogNote(src.Catalog),
 			Memory:           src.Memory,
 			CPU:              src.CPU,
 			Domains:          domainsOr(projectDomains(src.Team)[app]),

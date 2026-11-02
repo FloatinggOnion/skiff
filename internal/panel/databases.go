@@ -338,6 +338,37 @@ func (p *Panel) prewarmDatabaseImages() {
 	p.prewarmImages(imgs...)
 }
 
+// provisionDB starts a managed database for the team and records it.
+func (p *Panel) provisionDB(team, engine, name string) (dbRow, error) {
+	e := dbEngines[engine]
+	id := randToken()[:12]
+	container := "skiff-db-" + id
+	pass := randToken()
+	user := e.user
+	dbname := ""
+	if e.hasDB {
+		dbname = name
+	}
+	env, cmd := e.container(user, pass, dbname)
+	net := teamNetwork(team)
+	if err := p.eng.EnsureNetwork(net); err != nil {
+		return dbRow{}, err
+	}
+	if _, err := p.eng.RunDatabase(docker.DBRunSpec{
+		Name: container, Image: e.image, Network: net,
+		Volume: container + "-data", MountAt: e.mountAt, Env: env, Cmd: cmd,
+		Labels: map[string]string{"skiff.kind": "database", "skiff.db": id, "skiff.team": team},
+	}); err != nil {
+		return dbRow{}, err
+	}
+	d := dbRow{
+		ID: id, Team: team, Name: name, Engine: engine, Container: container,
+		Host: container, Port: e.port, Username: user, Password: pass, DBName: dbname,
+		Created: time.Now().Unix(),
+	}
+	return d, putDB(d)
+}
+
 func (p *Panel) handleDatabases(w http.ResponseWriter, r *http.Request) {
 	team := p.teamID(r)
 	if team == "" {
@@ -358,7 +389,7 @@ func (p *Panel) handleDatabases(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		e, ok := dbEngines[body.Engine]
+		_, ok := dbEngines[body.Engine]
 		if !ok {
 			http.Error(w, "unknown engine", http.StatusBadRequest)
 			return
@@ -368,34 +399,8 @@ func (p *Panel) handleDatabases(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid name", http.StatusBadRequest)
 			return
 		}
-		id := randToken()[:12]
-		container := "skiff-db-" + id
-		pass := randToken()
-		user := e.user
-		dbname := ""
-		if e.hasDB {
-			dbname = name
-		}
-		env, cmd := e.container(user, pass, dbname)
-		net := teamNetwork(team)
-		if err := p.eng.EnsureNetwork(net); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if _, err := p.eng.RunDatabase(docker.DBRunSpec{
-			Name: container, Image: e.image, Network: net,
-			Volume: container + "-data", MountAt: e.mountAt, Env: env, Cmd: cmd,
-			Labels: map[string]string{"skiff.kind": "database", "skiff.db": id, "skiff.team": team},
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		d := dbRow{
-			ID: id, Team: team, Name: name, Engine: body.Engine, Container: container,
-			Host: container, Port: e.port, Username: user, Password: pass, DBName: dbname,
-			Created: time.Now().Unix(),
-		}
-		if err := putDB(d); err != nil {
+		d, err := p.provisionDB(team, body.Engine, name)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

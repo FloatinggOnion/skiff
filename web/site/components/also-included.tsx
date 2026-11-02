@@ -1,4 +1,5 @@
 const ITEMS = [
+  ["One-click apps", "Uptime Kuma, n8n, Ghost, Umami, Vaultwarden and Gitea, set up for you."],
   ["Prebuilt images", "Run any image from Docker Hub or a private registry."],
   ["Persistent volumes", "Files that survive deploys, for SQLite and uploads."],
   ["Object storage", "S3-compatible buckets with a file browser."],
@@ -11,6 +12,8 @@ const ITEMS = [
   ["Offsite backups", "Database backups copied to any S3-compatible bucket."],
   ["Teams and API tokens", "Collaborators, an audit log and an API for CI."],
   ["Two-factor sign-in", "Authenticator codes with recovery codes."],
+  ["Limits", "Memory and CPU per app, so one can't take the others down."],
+  ["Live status", "A home screen that opens on what needs your attention."],
 ];
 
 export function AlsoIncluded() {

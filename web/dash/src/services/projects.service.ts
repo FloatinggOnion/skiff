@@ -43,6 +43,7 @@ export type ProjectDetail = {
   healthTimeout: number
   image?: string
   maxReplicas: number
+  setupNote?: string
   memory: string
   cpu: string
   domains: string[]
@@ -52,6 +53,17 @@ export type RegistryCreds = {
   username: string
   set: boolean
   host: string
+}
+
+export type CatalogApp = {
+  id: string
+  name: string
+  blurb: string
+  category: string
+  image: string
+  memory: string
+  database?: string
+  setup: string
 }
 
 export type ImageProject = {
@@ -136,6 +148,14 @@ class ProjectsService extends BaseService {
 
   update(name: string, settings: ProjectSettings) {
     return this.put('/project', settings, { params: { app: name } })
+  }
+
+  catalog() {
+    return this.get<CatalogApp[]>('/catalog')
+  }
+
+  install(id: string, name: string) {
+    return this.post<{ app: string; id: string }>('/catalog', { id, name })
   }
 
   createFromImage(project: ImageProject) {

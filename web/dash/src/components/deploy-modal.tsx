@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { GitBranch, Search, Plus } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Database, GitBranch, MemoryStick, Search, Plus } from 'lucide-react'
 import { useGithub } from '@/hooks/use-github'
 import { useDeployForm } from '@/hooks/use-deploy-form'
-import { envService, projectsService, type EnvVar, type Repo } from '@/services/api.service'
+import {
+  envService,
+  projectsService,
+  type CatalogApp,
+  type EnvVar,
+  type Repo,
+} from '@/services/api.service'
+import { queryKeys } from '@/constants/query-keys'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,12 +44,13 @@ type Props = {
   onDeployImage: (app: string, id: string) => void
 }
 
-type Mode = 'github' | 'url' | 'image'
+type Mode = 'github' | 'url' | 'image' | 'apps'
 
 const descriptions: Record<Mode, string> = {
   github: 'Deploy from GitHub and auto-deploy on every push.',
   url: 'Clone a repo by URL and run it on your server.',
   image: 'Run an image that is already built, from Docker Hub or any registry.',
+  apps: 'Install a ready-made app, with everything it needs set up for you.',
 }
 
 export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onDeployImage }: Props) {
@@ -109,7 +118,9 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
           <DialogDescription>{descriptions[mode]}</DialogDescription>
         </DialogHeader>
 
-        {mode === 'image' ? (
+        {mode === 'apps' ? (
+          <CatalogPicker onDeployed={onDeployImage} />
+        ) : mode === 'image' ? (
           <ImageForm onDeployed={onDeployImage} />
         ) : mode === 'url' ? (
           <UrlForm onDeploy={onDeployUrl} />
@@ -228,8 +239,8 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
           </div>
         )}
 
-        <div className="text-muted-foreground mt-1 flex items-center justify-center gap-3 text-xs">
-          {(['github', 'url', 'image'] as const)
+        <div className="text-muted-foreground mt-1 flex flex-wrap items-center justify-center gap-3 text-xs">
+          {(['github', 'apps', 'image', 'url'] as const)
             .filter((m) => m !== mode)
             .map((m, i) => (
               <span key={m} className="flex items-center gap-3">
@@ -239,7 +250,9 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
                     ? 'Deploy from GitHub'
                     : m === 'url'
                       ? 'Deploy from a Git URL'
-                      : 'Deploy a Docker image'}
+                      : m === 'apps'
+                        ? 'One-click apps'
+                        : 'Deploy a Docker image'}
                 </button>
               </span>
             ))}
@@ -431,5 +444,103 @@ function ImageForm({ onDeployed }: { onDeployed: (app: string, id: string) => vo
         Deploy
       </Button>
     </form>
+  )
+}
+
+const DB_LABEL: Record<string, string> = { postgres: 'Postgres', mysql: 'MySQL', mongodb: 'MongoDB', redis: 'Redis' }
+
+function CatalogPicker({ onDeployed }: { onDeployed: (app: string, id: string) => void }) {
+  const { data: apps = [], isPending } = useQuery({
+    queryKey: queryKeys.catalog,
+    queryFn: () => projectsService.catalog(),
+  })
+  const [picked, setPicked] = useState<CatalogApp | null>(null)
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  if (isPending) return <p className="text-muted-foreground py-8 text-center text-sm">…</p>
+
+  if (!picked) {
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {apps.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => {
+              setPicked(a)
+              setName(a.id)
+              setError('')
+            }}
+            className="hover:border-foreground/25 flex flex-col gap-1 rounded-lg border border-foreground/10 p-3 text-left transition-colors"
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold">{a.name}</span>
+              <span className="text-muted-foreground text-[11px]">{a.category}</span>
+            </span>
+            <span className="text-muted-foreground text-xs leading-relaxed">{a.blurb}</span>
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  const install = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const { app, id } = await projectsService.install(picked.id, name.trim())
+      onDeployed(app, id)
+    } catch (err) {
+      setError(errText(err, 'Could not install it.'))
+      setBusy(false)
+    }
+  }
+  const validName = /^[a-z0-9][a-z0-9-]*$/.test(name.trim())
+
+  return (
+    <div className="flex flex-col gap-4">
+      <button
+        type="button"
+        onClick={() => setPicked(null)}
+        className="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1.5 text-xs"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> All apps
+      </button>
+      <div>
+        <h3 className="text-base font-semibold">{picked.name}</h3>
+        <p className="text-muted-foreground mt-1 text-sm">{picked.blurb}</p>
+      </div>
+      <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <span className="flex items-center gap-1.5">
+          <MemoryStick className="h-3.5 w-3.5" /> Needs about {picked.memory}
+        </span>
+        {picked.database && (
+          <span className="flex items-center gap-1.5">
+            <Database className="h-3.5 w-3.5" /> Includes a {DB_LABEL[picked.database] ?? picked.database} database
+          </span>
+        )}
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="cat-name">App name</Label>
+        <Input
+          id="cat-name"
+          value={name}
+          aria-invalid={!validName}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <p className="flex gap-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs leading-relaxed">
+        <AlertTriangle className="text-warning mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          <strong className="font-semibold">Do this right after installing.</strong> {picked.setup}
+        </span>
+      </p>
+      {error && <p className="text-danger text-xs">{error}</p>}
+      <Button onClick={install} loading={busy} disabled={!validName}>
+        Install {picked.name}
+      </Button>
+    </div>
   )
 }

@@ -272,6 +272,7 @@ export default function ProjectDetailPage() {
               <span className="font-mono text-[13px]">{project.port || 'From the image'}</span>
             </Fact>
           </dl>
+          {project.setupNote && <SetupNote app={project.name} note={project.setupNote} />}
           {latest?.status === 'failed' && (
             <p className="text-danger pb-5 text-sm">
               {live && project.state === 'running'
@@ -460,6 +461,39 @@ export default function ProjectDetailPage() {
 
       {consoleOpen && <ConsoleDrawer app={project.name} onClose={() => setConsoleOpen(false)} />}
       {term.stream && <Drawer stream={term.stream} onClose={term.close} onStop={term.stop} />}
+    </div>
+  )
+}
+
+// Stays until dismissed: on most catalog apps, the first visitor becomes the admin.
+function SetupNote({ app, note }: { app: string; note: string }) {
+  const key = 'skiff-setup-done-' + app
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1'
+    } catch {
+      return false
+    }
+  })
+  if (hidden) return null
+  return (
+    <div className="border-warning/30 bg-warning/5 mb-5 flex items-start justify-between gap-4 rounded-lg border p-3 text-xs leading-relaxed">
+      <p>
+        <strong className="font-semibold">Do this first.</strong> {note}
+      </p>
+      <button
+        onClick={() => {
+          try {
+            localStorage.setItem(key, '1')
+          } catch {
+            /* it comes back next visit */
+          }
+          setHidden(true)
+        }}
+        className="text-muted-foreground hover:text-foreground shrink-0 underline underline-offset-2"
+      >
+        Done
+      </button>
     </div>
   )
 }

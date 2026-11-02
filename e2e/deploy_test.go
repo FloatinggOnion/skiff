@@ -76,6 +76,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	checkPreviewPassword(t, c, root, panelAddr, routerAddr)
 	checkImageProject(t, c, panelAddr, routerAddr)
 	checkLogDrain(t, c, panelAddr)
+	checkCatalogApp(t, c, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
@@ -285,6 +286,41 @@ func checkLogDrain(t *testing.T, c *http.Client, panelAddr string) {
 	}
 	resp.Body.Close()
 	post(t, c, "http://"+panelAddr+"/api/down?app="+drained, "")
+}
+
+// checkCatalogApp installs a one-click app the way the dashboard does, and expects its own page through the router, with its volume mounted and its setup note on the project.
+func checkCatalogApp(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
+	t.Helper()
+	const name = "e2e-vault"
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter label=skiff.app="+name+") ; docker rmi $(docker images -q skiff-"+name+") ; docker volume rm -f $(docker volume ls -q --filter label=skiff.volume.app="+name+")").Run()
+	})
+	var created struct{ App, ID string }
+	postJSON(t, c, "http://"+panelAddr+"/api/catalog", `{"id":"vaultwarden","name":"`+name+`"}`, &created)
+	stream(t, c, "http://"+panelAddr+"/api/deploys/log?app="+name+"&id="+created.ID)
+	eventually(t, 60*time.Second, func() bool {
+		req, _ := http.NewRequest(http.MethodGet, "http://"+routerAddr+"/", nil)
+		req.Host = name + ".localhost"
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return resp.StatusCode == 200 && strings.Contains(string(b), "Vaultwarden")
+	})
+	var project struct {
+		SetupNote string `json:"setupNote"`
+		Image     string `json:"image"`
+	}
+	getJSON(t, c, "http://"+panelAddr+"/api/project?app="+name, &project)
+	if project.SetupNote == "" || project.Image == "" {
+		t.Fatalf("project view = %+v", project)
+	}
+	if got := dockerExec(t, appContainer(t, name), "test -d /data && echo mounted"); got != "mounted" {
+		t.Fatalf("/data = %q", got)
+	}
+	post(t, c, "http://"+panelAddr+"/api/down?app="+name, "")
 }
 
 func appContainer(t *testing.T, name string) string {
