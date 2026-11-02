@@ -10,12 +10,14 @@ import (
 )
 
 var (
-	brand = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7C3AED"))
-	green = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#16A34A"))
-	red   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#DC2626"))
-	muted = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
-	label = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280")).Width(9).Inline(true)
-	link  = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("#7C3AED"))
+	copper = lipgloss.AdaptiveColor{Light: "#A4531F", Dark: "#E39155"}
+
+	brand = lipgloss.NewStyle().Bold(true).Foreground(copper)
+	green = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#0F6B4A", Dark: "#8FDCB9"})
+	red   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "#B3261E", Dark: "#F4978E"})
+	muted = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#4B655F", Dark: "#A6BCB6"})
+	label = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#4B655F", Dark: "#A6BCB6"}).Width(9).Inline(true)
+	link  = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(copper)
 )
 
 func Banner(version string) {

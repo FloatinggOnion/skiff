@@ -4,12 +4,17 @@
 [![CI](https://github.com/nuelScript/skiff/actions/workflows/test.yml/badge.svg)](https://github.com/nuelScript/skiff/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-black)](#license)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/brand/dashboard-dark.png">
+  <img src="web/brand/dashboard-light.png" alt="The Skiff dashboard: a project's live status above a copper line, its latest deploy log below it">
+</picture>
+
 **Ship it to a server you own.** Push-to-deploy with a web console, automatic HTTPS, managed databases, and preview environments — running on infrastructure you control, not rented. One small Go binary detects your stack, builds it, and runs it on Docker, local or over SSH.
 
 ```
 $ skiff deploy
 
-  Skiff v0.1.0
+  Skiff v0.5.0
 
   Deploying myapp
   target   local docker
