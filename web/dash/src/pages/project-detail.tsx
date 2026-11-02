@@ -1,14 +1,15 @@
 import {
   ChevronRight,
   ExternalLink,
-  GitBranch,
   RotateCcw,
   RotateCw,
   ScrollText,
+  Terminal,
 } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ConsoleTerminal } from '@/components/console-terminal'
+import { ConsoleDrawer } from '@/components/console-drawer'
+import { DeployLogPanel } from '@/components/deploy-log-panel'
 import { Drawer } from '@/components/drawer'
 import { EnvEditor } from '@/components/env-editor'
 import { Button } from '@/components/ui/button'
@@ -26,7 +27,7 @@ import { JobsPanel } from './project/jobs-panel'
 import { WorkersPanel } from './project/workers-panel'
 import { VolumesPanel } from './project/volumes-panel'
 import { RegistryPanel } from './project/registry-panel'
-import { SettingsForm } from './project/settings-form'
+import { DangerZone, SettingsForm } from './project/settings-form'
 import { PreviewsPanel } from './project/previews-panel'
 import { ObservabilityPanel } from './project/observability-panel'
 import { runningPill, deployDot } from './project/status'
@@ -37,6 +38,7 @@ export default function ProjectDetailPage() {
   const { project, isPending, reload } = useProject(name)
   const term = useConsole(reload)
   const confirm = useConfirm()
+  const [consoleOpen, setConsoleOpen] = useState(false)
 
   const deployPages = useAppDeploys(name)
   const appDeploys = useMemo(() => {
@@ -76,12 +78,13 @@ export default function ProjectDetailPage() {
   }
 
   const latest = project.deploys[0]
+  const live = project.deploys.find((d) => d.status === 'live')
   const cli = project.origin === 'cli'
   const fromImage = !!project.image
   const host = project.url.replace(/^https?:\/\//, '')
 
   return (
-    <div className="px-8 py-8">
+    <div className="flex min-h-[calc(100svh-3.5rem)] min-w-0 flex-col px-4 pt-8 sm:px-8">
       {/* breadcrumb */}
       <div className="text-muted-foreground mb-4 flex items-center gap-1.5 text-sm">
         <Link to="/" className="hover:text-foreground transition-colors">
@@ -111,210 +114,176 @@ export default function ProjectDetailPage() {
                     : 'bg-danger')
               }
             />
-            {project.state}
+            {project.state === 'missing' ? 'not running' : project.state}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {project.repo && (
-            <Button size="sm" variant="outline" asChild>
-              <a href={'https://github.com/' + project.repo} target="_blank" rel="noreferrer">
-                <GitBranch />
-                Repository
-              </a>
-            </Button>
-          )}
+          <Button size="sm" variant="outline" asChild>
+            <Link to={`/logs?app=${encodeURIComponent(project.name)}`}>
+              <ScrollText />
+              Logs
+            </Link>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={project.state !== 'running'}
+            title={project.state === 'running' ? 'Open a shell inside the running app' : "The app isn't running"}
+            onClick={() => setConsoleOpen(true)}
+          >
+            <Terminal />
+            Console
+          </Button>
           {!cli && (
             <Button size="sm" variant="outline" onClick={() => term.redeploy(project.name)}>
               <RotateCw />
               Redeploy
             </Button>
           )}
-          <Button size="sm" asChild>
-            <a href={project.url} target="_blank" rel="noreferrer">
-              <ExternalLink />
-              Visit
-            </a>
-          </Button>
+          {project.state !== 'missing' && (
+            <Button size="sm" asChild>
+              <a href={project.url} target="_blank" rel="noreferrer">
+                <ExternalLink />
+                Visit
+              </a>
+            </Button>
+          )}
         </div>
       </header>
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue="overview" className="flex min-w-0 flex-1 flex-col">
         <TabsList
           variant="line"
-          className="mb-6 w-full justify-start gap-6 border-b border-foreground/8"
+          className="mb-6 w-full justify-start gap-6 overflow-x-auto border-b border-foreground/8 *:flex-none"
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="observability">Observability</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
-          {!cli && !fromImage && (
-            <TabsTrigger value="previews">
-              Previews
-              {project.previews.length > 0 && (
-                <span className="text-muted-foreground ml-1.5 rounded-full bg-foreground/8 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
-                  {project.previews.length}
-                </span>
-              )}
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="console">Console</TabsTrigger>
-          <TabsTrigger value="jobs">Jobs</TabsTrigger>
-          <TabsTrigger value="workers">Workers</TabsTrigger>
+          <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          <TabsTrigger value="processes">Jobs &amp; workers</TabsTrigger>
           <TabsTrigger value="environment">Environment</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
 
-        {/* Overview */}
-        <TabsContent value="overview" className="pb-[46vh]">
-          <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-            <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2.5 to-transparent p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-muted-foreground font-mono text-[11px] tracking-wider uppercase">
-                  Production Deployment
-                </h2>
-                {latest && (
-                  <span
-                    className={
-                      'font-mono text-[10px] tracking-wider uppercase ' +
-                      (latest.status === 'live'
-                        ? 'text-success'
-                        : latest.status === 'failed'
-                          ? 'text-danger'
-                          : 'text-warning')
-                    }
-                  >
-                    {latest.status === 'live' ? 'Ready' : latest.status}
+        {/* Above the waterline: what's live. Below it: the work that got it there. */}
+        <TabsContent value="overview" className="flex min-w-0 flex-1 flex-col">
+          <dl className="grid gap-x-8 gap-y-5 pb-7 sm:grid-cols-2 lg:grid-cols-4">
+            <Fact label="Address">
+              <a
+                href={project.url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[13px] hover:underline"
+              >
+                {host}
+              </a>
+            </Fact>
+            <Fact label="Live version">
+              {live ? (
+                <span className="font-mono text-[13px]">
+                  {fromImage ? live.message : live.commit || live.message || 'Deployed'}
+                </span>
+              ) : (
+                <span className="text-muted-foreground text-sm">Nothing live yet</span>
+              )}
+            </Fact>
+            <Fact label="Last deploy">
+              {latest ? (
+                <span
+                  className={
+                    'text-sm ' +
+                    (latest.status === 'failed'
+                      ? 'text-danger'
+                      : latest.status === 'live'
+                        ? ''
+                        : 'text-warning')
+                  }
+                >
+                  {latest.status === 'live' ? 'Succeeded' : capitalize(latest.status)}{' '}
+                  <span className="text-muted-foreground">
+                    {relTime(latest.started)} · {latest.trigger}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-muted-foreground text-sm">None yet</span>
+              )}
+            </Fact>
+            <Fact label="Replicas">
+              <span className="text-sm tabular-nums">
+                {project.state === 'running' ? project.running : 0} running
+                {project.autoscale && (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · autoscaling {project.scaleMin}–{project.scaleMax}
                   </span>
                 )}
-              </div>
-              {latest ? (
-                <div className="flex flex-col gap-4">
-                  <a
-                    href={project.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group hover:text-foreground flex w-fit items-center gap-2 font-mono text-[15px] font-medium transition-colors"
-                  >
-                    <span className={'h-2 w-2 shrink-0 rounded-full ' + deployDot(latest.status)} />
-                    {host}
-                    <ExternalLink className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
-                  </a>
-                  <div className="flex flex-col gap-1.5 border-t border-foreground/5 pt-4">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      {fromImage ? null : project.repo ? (
-                        <a
-                          href={'https://github.com/' + project.repo + '/commit/' + latest.commit}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-sm hover:underline"
-                        >
-                          {latest.commit || '—'}
-                        </a>
-                      ) : (
-                        <span className="font-mono text-sm">{latest.commit || '—'}</span>
-                      )}
-                      <span className="text-muted-foreground font-mono text-xs">
-                        {cli || fromImage ? '' : `on ${project.branch || 'main'} · `}
-                        {latest.trigger} · {relTime(latest.started)}
-                      </span>
-                    </div>
-                    {latest.message && (
-                      <p className="text-foreground/90 text-sm">{latest.message}</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  {cli ? (
-                    <>
-                      No deployments recorded yet — the next{' '}
-                      <span className="font-mono">skiff deploy</span> shows up here.
-                    </>
-                  ) : fromImage ? (
-                    <>No deployments yet — hit Redeploy.</>
-                  ) : (
-                    <>
-                      No deployments yet — push to{' '}
-                      <span className="font-mono">{project.branch || 'main'}</span> or hit Redeploy.
-                    </>
-                  )}
-                </p>
-              )}
-            </section>
-
-            <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2.5 to-transparent p-5">
-              <h2 className="text-muted-foreground mb-2 font-mono text-[11px] tracking-wider uppercase">
-                Source
-              </h2>
+              </span>
+            </Fact>
+            <Fact label="Source">
               {cli ? (
-                <dl className="divide-y divide-foreground/5">
-                  <Row label="Deployed with">
-                    <span className="font-mono text-xs">skiff deploy</span>
-                  </Row>
-                  <Row label="Port">
-                    <span className="font-mono text-xs">{project.port}</span>
-                  </Row>
-                  <p className="text-muted-foreground pt-3 text-xs leading-relaxed">
-                    Builds run on the machine that deploys, and config comes from its{' '}
-                    <span className="font-mono">skiff.toml</span>. Logs, metrics, domains, scaling
-                    and rollback work from here.
-                  </p>
-                </dl>
+                <span className="font-mono text-[13px]">skiff deploy</span>
               ) : fromImage ? (
-                <dl className="divide-y divide-foreground/5">
-                  <Row label="Image">
-                    <span className="truncate font-mono text-xs">{project.image}</span>
-                  </Row>
-                  <Row label="Port">
-                    <span className="font-mono text-xs">{project.port || 'from the image'}</span>
-                  </Row>
-                  <p className="text-muted-foreground pt-3 text-xs leading-relaxed">
-                    Redeploy pulls the image again. To deploy a new tag from CI, call the deploy API
-                    with the image to run.
-                  </p>
-                </dl>
+                <span className="font-mono text-[13px] break-all">{project.image}</span>
+              ) : project.repo ? (
+                <a
+                  href={'https://github.com/' + project.repo}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-[13px] break-all hover:underline"
+                >
+                  {project.repo}
+                </a>
               ) : (
-                <dl className="divide-y divide-foreground/5">
-                  <Row label="Repository">
-                    {project.repo ? (
-                      <a
-                        href={'https://github.com/' + project.repo}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-mono text-xs hover:underline"
-                      >
-                        {project.repo}
-                      </a>
-                    ) : (
-                      <span className="font-mono text-xs">—</span>
-                    )}
-                  </Row>
-                  <Row label="Branch">
-                    <span className="font-mono text-xs">{project.branch || 'main'}</span>
-                  </Row>
-                  <Row label="Root directory">
-                    <span className="font-mono text-xs">{project.rootDir || '/'}</span>
-                  </Row>
-                  <Row label="Port">
-                    <span className="font-mono text-xs">{project.port}</span>
-                  </Row>
-                  <Row label="Auto-deploy">
-                    <span
-                      className={
-                        'font-mono text-xs ' +
-                        (project.auto ? 'text-success' : 'text-muted-foreground')
-                      }
-                    >
-                      {project.auto ? 'On' : 'Off'}
-                    </span>
-                  </Row>
-                </dl>
+                <span className="text-muted-foreground text-sm">Git URL</span>
               )}
-            </section>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="observability" className="pb-[46vh]">
-          <ObservabilityPanel app={project.name} />
+            </Fact>
+            {!cli && !fromImage && (
+              <Fact label="Branch">
+                <span className="font-mono text-[13px]">
+                  {project.branch || 'main'}
+                  {project.rootDir ? ' · ' + project.rootDir : ''}
+                </span>
+              </Fact>
+            )}
+            {!cli && !fromImage && (
+              <Fact label="Auto-deploy">
+                <span className="text-sm">{project.auto ? 'On every push' : 'Off'}</span>
+              </Fact>
+            )}
+            <Fact label="Port">
+              <span className="font-mono text-[13px]">{project.port || 'From the image'}</span>
+            </Fact>
+          </dl>
+          {latest?.status === 'failed' && (
+            <p className="text-danger pb-5 text-sm">
+              {live && project.state === 'running'
+                ? "The last deploy failed, so the previous version is still serving. The log below says why."
+                : "The last deploy failed and nothing is serving. The log below says why."}
+            </p>
+          )}
+          <section className="dark bg-well text-foreground border-seam -mx-4 min-h-[40vh] flex-1 border-t-2 px-4 py-5 sm:-mx-8 sm:px-8">
+            <h2 className="text-muted-foreground mb-3 font-mono text-[11px] tracking-wider uppercase">
+              {latest ? 'Latest deploy' : 'Build log'}
+            </h2>
+            {cli ? (
+              <p className="text-foreground/60 text-sm">
+                This app builds on the machine that runs <span className="font-mono">skiff deploy</span>,
+                so its log stays there.
+              </p>
+            ) : latest ? (
+              <DeployLogPanel app={project.name} id={latest.id} />
+            ) : (
+              <p className="text-foreground/60 text-sm">
+                {fromImage ? (
+                  'No deploys yet. Redeploy pulls the image and the log appears here.'
+                ) : (
+                  <>
+                    No deploys yet. Push to{' '}
+                    <span className="font-mono">{project.branch || 'main'}</span> or hit Redeploy.
+                  </>
+                )}
+              </p>
+            )}
+          </section>
         </TabsContent>
 
         {/* Deployments */}
@@ -393,40 +362,26 @@ export default function ProjectDetailPage() {
               </Button>
             </div>
           )}
-        </TabsContent>
-
-        {/* Previews */}
-        <TabsContent value="previews" className="pb-[46vh]">
-          <PreviewsPanel
-            project={project.name}
-            previews={project.previews}
-            passwordProtected={project.previewProtected}
-            onPasswordChange={reload}
-            onCreate={(branch) => term.preview(project.name, branch)}
-            onTeardown={async (name) => {
-              await projectsService.stop(name)
-              reload()
-            }}
-          />
-        </TabsContent>
-
-        {/* Console */}
-        <TabsContent value="console" className="pb-8">
-          <div className="mb-3">
-            <h2 className="text-sm font-semibold">Console</h2>
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              A shell inside the running container — run migrations, inspect state, debug.
-            </p>
-          </div>
-          {project.state === 'running' ? (
-            <div className="h-[60vh] overflow-hidden rounded-xl dark bg-well p-3">
-              <ConsoleTerminal app={project.name} />
-            </div>
-          ) : (
-            <p className="text-muted-foreground rounded-xl border border-foreground/8 py-16 text-center text-sm">
-              The app isn't running — deploy it to open a console.
-            </p>
+          {!cli && !fromImage && (
+            <section className="mt-10">
+              <h2 className="mb-3 text-sm font-semibold">Preview environments</h2>
+              <PreviewsPanel
+              project={project.name}
+              previews={project.previews}
+              passwordProtected={project.previewProtected}
+              onPasswordChange={reload}
+              onCreate={(branch) => term.preview(project.name, branch)}
+              onTeardown={async (name) => {
+                await projectsService.stop(name)
+                reload()
+              }}
+            />
+            </section>
           )}
+        </TabsContent>
+
+        <TabsContent value="metrics" className="pb-[46vh]">
+          <ObservabilityPanel app={project.name} />
         </TabsContent>
 
         {/* Environment */}
@@ -447,17 +402,13 @@ export default function ProjectDetailPage() {
           )}
         </TabsContent>
 
-        {/* Jobs */}
-        <TabsContent value="jobs" className="pb-[46vh]">
+        <TabsContent value="processes" className="flex flex-col gap-10 pb-[46vh]">
+          <WorkersPanel app={project.name} />
           <JobsPanel app={project.name} />
         </TabsContent>
 
-        <TabsContent value="workers" className="pb-[46vh]">
-          <WorkersPanel app={project.name} />
-        </TabsContent>
-
         {/* Settings */}
-        <TabsContent value="settings" className="pb-[46vh]">
+        <TabsContent value="settings" className="flex flex-col gap-10 pb-[46vh]">
           <SettingsForm
             name={project.name}
             branch={project.branch}
@@ -477,25 +428,29 @@ export default function ProjectDetailPage() {
             healthTimeout={project.healthTimeout}
             image={project.image}
             onSaved={reload}
-            onDeleted={() => navigate('/')}
-            onRedeploy={() => term.redeploy(project.name)}
             cli={cli}
           />
           {fromImage && <RegistryPanel app={project.name} />}
           <VolumesPanel app={project.name} onRedeploy={() => term.redeploy(project.name)} />
+          <DangerZone name={project.name} onDeleted={() => navigate('/')} />
         </TabsContent>
       </Tabs>
 
+      {consoleOpen && <ConsoleDrawer app={project.name} onClose={() => setConsoleOpen(false)} />}
       {term.stream && <Drawer stream={term.stream} onClose={term.close} onStop={term.stop} />}
     </div>
   )
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2.5 text-sm first:pt-0 last:pb-0">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="truncate text-right">{children}</dd>
+    <div className="min-w-0">
+      <dt className="text-muted-foreground mb-1 font-mono text-[10px] tracking-wider uppercase">
+        {label}
+      </dt>
+      <dd className="break-words">{children}</dd>
     </div>
   )
 }
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

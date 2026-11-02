@@ -220,7 +220,7 @@ func TestDrainRefusesPrivateAddresses(t *testing.T) {
 }
 
 func TestDrainDoesNotFollowRedirects(t *testing.T) {
-	t.Setenv("SKIFF_DRAIN_ALLOW_PRIVATE", "1")
+	t.Setenv("SKIFF_ALLOW_PRIVATE_ENDPOINTS", "1")
 	var leaked bool
 	other := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { leaked = r.Header.Get("X-Key") != "" }))
 	defer other.Close()

@@ -41,7 +41,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	push("v1")
 
 	protectExisting(t, home)
-	env := []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_DRAIN_ALLOW_PRIVATE=1"}
+	env := []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_ALLOW_PRIVATE_ENDPOINTS=1"}
 	panelAddr, routerAddr := freeAddr(t), freeAddr(t)
 	start(t, env, bin, "panel", "--addr", panelAddr, "--domain", "localhost")
 	waitHTTP(t, "http://"+panelAddr+"/api/me")
@@ -487,6 +487,10 @@ func checkMCP(t *testing.T, c *http.Client, bin, panelAddr, routerAddr, v2Deploy
 // protectExisting lists the machine's existing skiff containers in the test registry, so the panel's startup reaper treats them as known instead of deleting them.
 func protectExisting(t *testing.T, home string) {
 	t.Helper()
+	// Team networks outlive the panel; left behind, they use up Docker's address pools. Removing one in use fails harmlessly.
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker network rm $(docker network ls -q --filter name=skiff-t-)").Run()
+	})
 	out, err := exec.Command("docker", "ps", "-a", "--filter", "label=skiff=1", "--format", `{{.Names}}|{{.Label "skiff.app"}}`).Output()
 	if err != nil {
 		t.Fatal(err)

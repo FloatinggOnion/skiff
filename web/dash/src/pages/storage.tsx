@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Boxes, Plus, Trash2, X, Copy, Check, Link2, Eye, EyeOff } from 'lucide-react'
+import { Link } from 'react-router'
+import { Boxes, FolderOpen, Plus, Trash2, X, Copy, Check, Link2, Eye, EyeOff } from 'lucide-react'
 import { useApps } from '@/hooks/use-apps'
 import { useStorage } from '@/hooks/use-storage'
 import { useCopy } from '@/hooks/use-copy'
@@ -166,6 +167,12 @@ function BucketCard({
             />
             {running ? 'Running' : b.state}
           </span>
+          <Button size="sm" variant="outline" asChild disabled={!running}>
+            <Link to={'/storage/' + b.id}>
+              <FolderOpen className="h-4 w-4" />
+              Browse files
+            </Link>
+          </Button>
           <button
             onClick={onDelete}
             className="text-muted-foreground p-1 hover:text-danger"

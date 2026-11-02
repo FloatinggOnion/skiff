@@ -90,8 +90,9 @@ export default function LogDrains() {
       <p>
         By default, drains can only reach public addresses over HTTPS, so a teammate can&apos;t point
         one at something inside your server&apos;s network. If you run your own collector on a private
-        address, set <code>SKIFF_DRAIN_ALLOW_PRIVATE=1</code> in the panel&apos;s environment. That
-        allows private addresses and plain HTTP for every team on the server.
+        address, set <code>SKIFF_ALLOW_PRIVATE_ENDPOINTS=1</code> in the panel&apos;s environment.
+        That allows private addresses and plain HTTP for every team on the server, and private
+        addresses for offsite backups too.
       </p>
     </article>
   );

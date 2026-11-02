@@ -1,4 +1,4 @@
-// Package s3 is a minimal client for S3-compatible object storage: put, delete and a write check.
+// Package s3 is a minimal client for S3-compatible object storage: put, get, list, delete and a write check.
 package s3
 
 import (
@@ -6,10 +6,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,9 +38,15 @@ func (c *Client) Put(ctx context.Context, key string, body io.Reader, size int64
 
 // Get opens an object for reading; the caller closes it.
 func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	body, _, err := c.Open(ctx, key)
+	return body, err
+}
+
+// Open is Get with the object's size.
+func (c *Client) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
 	req, err := c.request(ctx, http.MethodGet, key, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	hc := c.HTTP
 	if hc == nil {
@@ -46,14 +54,85 @@ func (c *Client) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		resp.Body.Close()
-		return nil, fmt.Errorf("GET %s: %s %s", key, resp.Status, errorCode(string(msg)))
+		return nil, 0, fmt.Errorf("GET %s: %s %s", key, resp.Status, errorCode(string(msg)))
 	}
-	return resp.Body, nil
+	return resp.Body, resp.ContentLength, nil
+}
+
+// IsNotFound reports whether an error from Get or Open means the object doesn't exist.
+func IsNotFound(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "NoSuchKey")
+}
+
+type Object struct {
+	Key      string
+	Size     int64
+	Modified time.Time
+}
+
+// Listing is one page of a folder: its objects, the folders inside it, and the token for the next page.
+type Listing struct {
+	Objects   []Object
+	Folders   []string
+	NextToken string
+}
+
+// List returns one page of what's directly inside prefix, treating "/" as the folder separator.
+func (c *Client) List(ctx context.Context, prefix, token string, limit int) (Listing, error) {
+	req, err := c.request(ctx, http.MethodGet, "", nil)
+	if err != nil {
+		return Listing{}, err
+	}
+	// In canonical order: SigV4 signs the query string sorted by name.
+	q := []string{}
+	if token != "" {
+		q = append(q, "continuation-token="+escapeQuery(token))
+	}
+	q = append(q, "delimiter=%2F", "list-type=2", "max-keys="+strconv.Itoa(limit), "prefix="+escapeQuery(prefix))
+	req.URL.RawQuery = strings.Join(q, "&")
+	c.sign(req, time.Now().UTC())
+	hc := c.HTTP
+	if hc == nil {
+		hc = &http.Client{Timeout: 30 * time.Minute}
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return Listing{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return Listing{}, fmt.Errorf("list: %s %s", resp.Status, errorCode(string(msg)))
+	}
+	return parseListing(io.LimitReader(resp.Body, 32<<20))
+}
+
+func parseListing(r io.Reader) (Listing, error) {
+	var x struct {
+		Contents []struct {
+			Key          string
+			Size         int64
+			LastModified time.Time
+		}
+		CommonPrefixes []struct{ Prefix string }
+		NextToken      string `xml:"NextContinuationToken"`
+	}
+	if err := xml.NewDecoder(r).Decode(&x); err != nil {
+		return Listing{}, fmt.Errorf("reading the listing: %w", err)
+	}
+	l := Listing{NextToken: x.NextToken}
+	for _, o := range x.Contents {
+		l.Objects = append(l.Objects, Object{Key: o.Key, Size: o.Size, Modified: o.LastModified})
+	}
+	for _, p := range x.CommonPrefixes {
+		l.Folders = append(l.Folders, p.Prefix)
+	}
+	return l, nil
 }
 
 func (c *Client) Delete(ctx context.Context, key string) error {
@@ -165,6 +244,10 @@ func escapePath(p string) string {
 		fmt.Fprintf(&b, "%%%02X", ch)
 	}
 	return b.String()
+}
+
+func escapeQuery(s string) string {
+	return strings.ReplaceAll(escapePath(s), "/", "%2F")
 }
 
 func hmacSHA(key []byte, data string) []byte {

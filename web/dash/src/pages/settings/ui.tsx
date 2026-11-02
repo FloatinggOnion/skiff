@@ -3,7 +3,7 @@ import { Check, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export const inputCls =
-  'h-9 w-full rounded-[6px] border border-foreground/12 bg-inset px-3 text-sm outline-none placeholder:text-foreground/25 focus-visible:border-foreground/30 disabled:opacity-50'
+  'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 aria-invalid:border-destructive h-8 w-full min-w-0 rounded-lg border bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50'
 
 export function RevealInput(props: ComponentProps<'input'>) {
   const [show, setShow] = useState(false)
@@ -45,8 +45,8 @@ export function Section({
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="grid gap-1.5 sm:grid-cols-[7rem_1fr] sm:items-center sm:gap-4">
-      <span className="text-muted-foreground text-xs">{label}</span>
+    <label className="grid gap-1.5">
+      <span className="text-sm font-medium">{label}</span>
       <div>{children}</div>
     </label>
   )

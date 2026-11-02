@@ -135,6 +135,8 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/databases/unmanaged", p.protected(p.handleUnmanagedDatabases))
 	mux.HandleFunc("/api/storage", p.protected(p.handleStorage))
 	mux.HandleFunc("/api/storage/attach", p.protected(p.handleStorageAttach))
+	mux.HandleFunc("/api/storage/objects", p.protected(p.handleBucketObjects))
+	mux.HandleFunc("/api/storage/object", p.protected(p.handleBucketObject))
 	mux.HandleFunc("/api/backups", p.protected(p.handleBackups))
 	mux.HandleFunc("/api/backups/restore", p.protected(p.handleBackupRestore))
 	mux.HandleFunc("/api/backups/download", p.protected(p.handleBackupDownload))

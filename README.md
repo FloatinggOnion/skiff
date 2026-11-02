@@ -94,7 +94,7 @@ platform in the browser:
   wired into your apps, with automatic daily backups (optionally copied to any
   S3-compatible bucket). Databases you started by hand can be brought under
   management too.
-- **Object storage** — S3-compatible buckets.
+- **Object storage** — S3-compatible buckets, with a file browser in the dashboard.
 - **Email forwarding** — point a domain's MX at your server and send
   `hello@yourdomain.com` to any inbox, catch-all included.
 - **Custom domains + automatic HTTPS** — Let's Encrypt certificates, issued and

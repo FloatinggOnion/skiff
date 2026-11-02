@@ -15,6 +15,7 @@ import DomainsPage from '@/pages/domains'
 import EmailPage from '@/pages/email'
 import DatabasesPage from '@/pages/databases'
 import StoragePage from '@/pages/storage'
+import BucketBrowserPage from '@/pages/bucket-browser'
 import EnvPage from '@/pages/env'
 import SettingsPage from '@/pages/settings'
 import CliLoginPage from '@/pages/cli-login'
@@ -63,6 +64,7 @@ export default function App() {
               <Route path="email" element={<EmailPage />} />
               <Route path="databases" element={<DatabasesPage />} />
               <Route path="storage" element={<StoragePage />} />
+              <Route path="storage/:id" element={<BucketBrowserPage />} />
               <Route path="env" element={<EnvPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="cli-login" element={<CliLoginPage />} />

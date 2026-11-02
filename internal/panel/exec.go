@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os/exec"
+	"strings"
 
 	"github.com/coder/websocket"
 	"github.com/creack/pty"
@@ -46,6 +47,12 @@ func (p *Panel) serveContainerShell(w http.ResponseWriter, r *http.Request, cont
 	// r.Context() is canceled once Accept hijacks the connection, so give the session its own context, canceled when either side goes away.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Images without a shell (distroless ones, scratch builds) are normal; say so rather than showing docker's error.
+	if out, err := exec.CommandContext(ctx, "docker", "exec", container, "sh", "-c", "exit 0").CombinedOutput(); err != nil && strings.Contains(string(out), "executable file not found") {
+		_ = c.Write(ctx, websocket.MessageText, []byte("\x1b[33mThis image has no shell, so there's nothing to open a console in.\x1b[0m\r\nThe app itself is fine. Images built without one, like distroless images, can't use the console.\r\n"))
+		return
+	}
 
 	cmd := exec.CommandContext(ctx, "docker", append([]string{"exec", "-it", container}, shellArgs...)...)
 	ptmx, err := pty.Start(cmd)

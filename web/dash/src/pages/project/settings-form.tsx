@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -46,8 +45,6 @@ export function SettingsForm({
   healthTimeout,
   image = '',
   onSaved,
-  onDeleted,
-  onRedeploy,
   cli = false,
 }: {
   name: string
@@ -68,13 +65,10 @@ export function SettingsForm({
   healthTimeout: number
   image?: string
   onSaved: () => void
-  onDeleted: () => void
-  onRedeploy: () => void
   cli?: boolean
 }) {
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const confirm = useConfirm()
   const form = useForm<ProjectSettingsInput>({
     resolver: zodResolver(projectSettingsSchema),
     defaultValues: {
@@ -112,6 +106,7 @@ export function SettingsForm({
     setSaveError('')
     try {
       await projectsService.update(name, data)
+      form.reset(data)
       setSaved(true)
       onSaved()
     } catch (err) {
@@ -120,24 +115,10 @@ export function SettingsForm({
     }
   })
 
-  const del = async () => {
-    if (
-      !(await confirm({
-        title: `Delete ${name}?`,
-        description: 'This stops the app and deletes its config and volumes.',
-        confirmText: 'Delete',
-        destructive: true,
-      }))
-    )
-      return
-    await projectsService.stop(name)
-    onDeleted()
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-xl border border-foreground/8 p-5">
-        <h2 className="mb-4 text-sm font-semibold">Build &amp; deploy</h2>
+        <h2 className="mb-4 text-sm font-semibold">Source</h2>
         <FieldGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {fromImage && (
             <Field data-invalid={!!formState.errors.image} className="sm:col-span-2">
@@ -208,6 +189,24 @@ export function SettingsForm({
               </Field>
             </>
           )}
+        </FieldGroup>
+        {fromImage && (
+          <p className="text-muted-foreground mt-3 text-xs">
+            Redeploy pulls the image again, so a moved tag like{' '}
+            <span className="text-foreground/70 font-mono">latest</span> picks up its new version.
+          </p>
+        )}
+        {!cli && !fromImage && (
+          <p className="text-muted-foreground mt-3 text-xs">
+            Preview deployments spin up an environment automatically for any push to a branch other
+            than <span className="text-foreground/70 font-mono">{values.branch || 'main'}</span>.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-foreground/8 p-5">
+        <h2 className="mb-4 text-sm font-semibold">Scaling</h2>
+        <FieldGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {!values.autoscale && (
             <Field>
               <FieldLabel>Replicas</FieldLabel>
@@ -221,30 +220,15 @@ export function SettingsForm({
         </FieldGroup>
         <p className="text-muted-foreground mt-3 text-xs">
           Replicas run identical copies of the app behind the router, sharing traffic.
-          {cli ? (
+          {cli && (
             <>
               {' '}
               The next <span className="text-foreground/70 font-mono">skiff deploy</span> uses the{' '}
               <span className="text-foreground/70 font-mono">replicas</span> in its{' '}
               <span className="text-foreground/70 font-mono">skiff.toml</span>.
             </>
-          ) : fromImage ? (
-            <>
-              {' '}
-              Redeploy pulls the image again, so a moved tag like{' '}
-              <span className="text-foreground/70 font-mono">latest</span> picks up its new
-              version.
-            </>
-          ) : (
-            <>
-              {' '}
-              Preview deployments spin up an environment automatically for any push to a branch
-              other than{' '}
-              <span className="text-foreground/70 font-mono">{values.branch || 'main'}</span>.
-            </>
           )}
         </p>
-
         <div className="mt-4 rounded-lg border border-foreground/8 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -332,6 +316,11 @@ export function SettingsForm({
             ))}
           </div>
         </div>
+      </section>
+
+      {!cli && (
+        <section className="rounded-xl border border-foreground/8 p-5">
+          <h2 className="text-sm font-semibold">Release and health checks</h2>
         {!cli && (
           <Field className="mt-4">
             <FieldLabel htmlFor="s-release">Release command</FieldLabel>
@@ -383,35 +372,60 @@ export function SettingsForm({
             </Field>
           </div>
         )}
-        <div className="mt-5 flex items-center justify-end gap-3">
-          {saveError && <span className="text-xs text-danger">{saveError}</span>}
-          {saved && <span className="text-muted-foreground text-xs">Saved.</span>}
-          {!cli && (
-            <Button size="sm" variant="outline" onClick={onRedeploy}>
-              <RotateCw />
-              Redeploy
+        </section>
+      )}
+
+      {(formState.isDirty || saved || saveError) && (
+        <div className="bg-card sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border border-foreground/12 p-3 shadow-lg">
+          {saveError ? (
+            <span className="text-danger min-w-0 flex-1 text-xs">{saveError}</span>
+          ) : formState.isDirty ? (
+            <span className="text-muted-foreground min-w-0 flex-1 text-xs">Unsaved changes</span>
+          ) : (
+            <span className="text-muted-foreground min-w-0 flex-1 text-xs">
+              Saved. Build, port and health check changes apply on the next deploy.
+            </span>
+          )}
+          {formState.isDirty && (
+            <Button size="sm" onClick={save} loading={formState.isSubmitting}>
+              Save changes
             </Button>
           )}
-          <Button size="sm" onClick={save}>
-            Save changes
-          </Button>
         </div>
-      </section>
-
-      <section className="rounded-xl border border-danger/20 bg-danger/[0.03] p-5">
-        <h2 className="mb-1 text-sm font-semibold text-danger">Danger zone</h2>
-        <p className="text-muted-foreground mb-4 text-sm">
-          Stop this app and remove its configuration. This cannot be undone.
-        </p>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={del}
-          className="border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
-        >
-          Delete project
-        </Button>
-      </section>
+      )}
     </div>
+  )
+}
+
+export function DangerZone({ name, onDeleted }: { name: string; onDeleted: () => void }) {
+  const confirm = useConfirm()
+  const del = async () => {
+    if (
+      !(await confirm({
+        title: `Delete ${name}?`,
+        description: 'This stops the app and deletes its config, volumes and saved logs.',
+        confirmText: 'Delete',
+        destructive: true,
+      }))
+    )
+      return
+    await projectsService.stop(name)
+    onDeleted()
+  }
+  return (
+    <section className="rounded-xl border border-danger/20 bg-danger/3 p-5">
+      <h2 className="mb-1 text-sm font-semibold text-danger">Danger zone</h2>
+      <p className="text-muted-foreground mb-4 text-sm">
+        Stop this app and remove its configuration. This cannot be undone.
+      </p>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={del}
+        className="border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
+      >
+        Delete project
+      </Button>
+    </section>
   )
 }

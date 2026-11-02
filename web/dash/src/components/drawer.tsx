@@ -4,7 +4,7 @@ import { useAutoScroll } from '@/hooks/use-auto-scroll'
 import type { Stream } from '@/hooks/use-console'
 
 // Colour build/log lines by their leading glyph, matching the panel's output.
-function lineClass(line: string): string {
+export function lineClass(line: string): string {
   const t = line.trimStart()
   if (t.startsWith('✓')) return 'text-success'
   if (t.startsWith('✗')) return 'text-danger'

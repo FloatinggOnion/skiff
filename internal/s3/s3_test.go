@@ -39,3 +39,28 @@ func TestLiveMinio(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParseListing(t *testing.T) {
+	l, err := parseListing(strings.NewReader(`<?xml version="1.0"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <IsTruncated>true</IsTruncated>
+  <Contents><Key>docs/a b.txt</Key><LastModified>2026-11-02T10:00:00Z</LastModified><Size>12</Size></Contents>
+  <CommonPrefixes><Prefix>docs/old/</Prefix></CommonPrefixes>
+  <NextContinuationToken>tok</NextContinuationToken>
+</ListBucketResult>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Objects) != 1 || l.Objects[0].Key != "docs/a b.txt" || l.Objects[0].Size != 12 || l.Objects[0].Modified.Unix() != 1793613600 {
+		t.Fatalf("objects = %+v", l.Objects)
+	}
+	if len(l.Folders) != 1 || l.Folders[0] != "docs/old/" || l.NextToken != "tok" {
+		t.Fatalf("listing = %+v", l)
+	}
+}
+
+func TestEscapeQuery(t *testing.T) {
+	if got := escapeQuery("a b/c+d~"); got != "a%20b%2Fc%2Bd~" {
+		t.Fatalf("escapeQuery = %q", got)
+	}
+}

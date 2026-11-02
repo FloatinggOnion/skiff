@@ -65,7 +65,7 @@ export function RegistryPanel({ app }: { app: string }) {
   }
 
   return (
-    <div className="mt-10 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Registry credentials</h2>

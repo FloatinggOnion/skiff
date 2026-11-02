@@ -227,7 +227,7 @@ func parseDrainLine(app string, line []byte) (drainEntry, bool) {
 	return drainEntry{Timestamp: parts[0], Message: msg, App: app, Stream: parts[2], Container: parts[1]}, true
 }
 
-func drainsAllowPrivate() bool { return os.Getenv("SKIFF_DRAIN_ALLOW_PRIVATE") == "1" }
+func drainsAllowPrivate() bool { return os.Getenv("SKIFF_ALLOW_PRIVATE_ENDPOINTS") == "1" }
 
 // newDrainClient refuses redirects so the auth header can't follow one to another host.
 func newDrainClient() *http.Client {

@@ -16,6 +16,7 @@ export const queryKeys = {
   offsite: ['backups', 'offsite'] as const,
   logDrain: ['logs', 'drain'] as const,
   storage: ['storage'] as const,
+  bucketObjects: (id: string, prefix: string) => ['storage', id, 'objects', prefix] as const,
   members: ['members'] as const,
   alerts: ['alerts'] as const,
   audit: ['audit'] as const,
