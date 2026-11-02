@@ -8,11 +8,16 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/config"
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 func getRegistryCreds(app string) (user, pass string, ok bool) {
 	err := sqlDB.QueryRow(`SELECT username,password FROM registry_creds WHERE app=?`, app).Scan(&user, &pass)
-	return user, pass, err == nil
+	if err != nil {
+		return "", "", false
+	}
+	_ = seal.OpenAll(&pass)
+	return user, pass, true
 }
 
 func setRegistryCreds(app, user, pass string) error {

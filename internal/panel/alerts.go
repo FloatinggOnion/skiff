@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/registry"
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 type AlertConfig struct {
@@ -26,6 +27,7 @@ func getAlerts(team string) AlertConfig {
 	var a AlertConfig
 	_ = sqlDB.QueryRow(`SELECT email,slack_url,webhook_url FROM alerts WHERE team=?`, team).
 		Scan(&a.Email, &a.SlackURL, &a.WebhookURL)
+	_ = seal.OpenAll(&a.SlackURL, &a.WebhookURL)
 	return a
 }
 

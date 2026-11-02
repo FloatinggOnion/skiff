@@ -32,7 +32,7 @@ func newPanelCmd() *cobra.Command {
 			}
 			pn, err := panel.New(pw, domain, docker.Local())
 			if err != nil {
-				return fmt.Errorf("open database: %w", err)
+				return fmt.Errorf("start the panel: %w", err)
 			}
 
 			ui.Banner(version)

@@ -40,6 +40,9 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 		return nil, err
 	}
 	sqlDB = database
+	if err := initSeal(); err != nil {
+		return nil, err
+	}
 	reconcileStuckDeploys()
 	writeMailFile()
 	home, _ := os.UserHomeDir()

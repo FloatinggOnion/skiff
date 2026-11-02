@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 const dbNetwork = "skiff"
@@ -202,6 +203,7 @@ func scanDB(row interface{ Scan(...any) error }) (dbRow, bool) {
 		&d.Username, &d.Password, &d.DBName, &d.Created, &public, &d.PublicPort, &d.Image, &d.Volume, &d.Cmd) != nil {
 		return dbRow{}, false
 	}
+	_ = seal.OpenAll(&d.Password)
 	d.Public = public != 0
 	return d, true
 }

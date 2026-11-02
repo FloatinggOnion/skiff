@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 // Object storage: a team can provision an S3-compatible bucket, backed by its own
@@ -49,6 +50,7 @@ func scanBucket(row interface{ Scan(...any) error }) (bucketRow, bool) {
 	if row.Scan(&b.ID, &b.Team, &b.Name, &b.Container, &b.AccessKey, &b.SecretKey, &b.Created) != nil {
 		return bucketRow{}, false
 	}
+	_ = seal.OpenAll(&b.AccessKey, &b.SecretKey)
 	return b, true
 }
 

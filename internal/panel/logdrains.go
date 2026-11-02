@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 const (
@@ -55,6 +57,7 @@ func scanLogDrain(row interface{ Scan(...any) error }) (LogDrain, bool) {
 	if row.Scan(&d.Team, &d.URL, &d.HeaderName, &d.HeaderValue, &d.LastOK, &d.LastError) != nil {
 		return LogDrain{}, false
 	}
+	_ = seal.OpenAll(&d.URL, &d.HeaderValue)
 	return d, true
 }
 

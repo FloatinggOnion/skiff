@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 var ErrBadCode = errors.New("that code didn't match — try the newest one from your app")
@@ -32,7 +34,7 @@ func (s *Store) BeginTwoFactor(userID string) (string, error) {
 // EnableTwoFactor confirms the pending secret with a code from it and returns new recovery codes.
 func (s *Store) EnableTwoFactor(userID, code string) ([]string, error) {
 	var pending string
-	if err := s.db.QueryRow(`SELECT totp_pending FROM users WHERE id = ?`, userID).Scan(&pending); err != nil || pending == "" {
+	if err := s.db.QueryRow(`SELECT totp_pending FROM users WHERE id = ?`, userID).Scan(&pending); err != nil || pending == "" || seal.OpenAll(&pending) != nil {
 		return nil, errors.New("start two-factor setup again")
 	}
 	step, ok := matchTOTP(pending, code, time.Now(), 0)
@@ -101,7 +103,7 @@ func replaceRecovery(tx *sql.Tx, userID string) ([]string, error) {
 func (s *Store) CheckSecondFactor(userID, code string) bool {
 	var secret string
 	var last int64
-	if s.db.QueryRow(`SELECT totp_secret, totp_step FROM users WHERE id = ?`, userID).Scan(&secret, &last) != nil || secret == "" {
+	if s.db.QueryRow(`SELECT totp_secret, totp_step FROM users WHERE id = ?`, userID).Scan(&secret, &last) != nil || secret == "" || seal.OpenAll(&secret) != nil {
 		return false
 	}
 	if step, ok := matchTOTP(secret, code, time.Now(), last); ok {

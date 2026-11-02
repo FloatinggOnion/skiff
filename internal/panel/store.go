@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 type Source struct {
@@ -314,7 +316,7 @@ func readEnv(table, app string) []EnvVar {
 	for rows.Next() {
 		var e EnvVar
 		var build int
-		if rows.Scan(&e.Key, &e.Value, &build) == nil {
+		if rows.Scan(&e.Key, &e.Value, &build) == nil && seal.OpenAll(&e.Value) == nil {
 			e.Build = build != 0
 			out = append(out, e)
 		}
@@ -358,7 +360,7 @@ func sharedEnv(team string) []EnvVar {
 	for rows.Next() {
 		var e EnvVar
 		var build int
-		if rows.Scan(&e.Key, &e.Value, &build) == nil {
+		if rows.Scan(&e.Key, &e.Value, &build) == nil && seal.OpenAll(&e.Value) == nil {
 			e.Build = build != 0
 			out = append(out, e)
 		}

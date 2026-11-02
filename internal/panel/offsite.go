@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/s3"
+
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 const offsiteRetention = 30
@@ -50,6 +52,7 @@ func getOffsite(team string) OffsiteTarget {
 	var t OffsiteTarget
 	_ = sqlDB.QueryRow(`SELECT endpoint,region,bucket,prefix,access_key,secret_key FROM backup_targets WHERE team=?`, team).
 		Scan(&t.Endpoint, &t.Region, &t.Bucket, &t.Prefix, &t.AccessKey, &t.SecretKey)
+	_ = seal.OpenAll(&t.AccessKey, &t.SecretKey)
 	return t
 }
 

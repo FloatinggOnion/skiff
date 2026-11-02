@@ -1,10 +1,13 @@
 package auth
 
 import (
+	"bytes"
 	"encoding/base32"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 // RFC 6238 appendix B, SHA-1, truncated to six digits.
@@ -59,5 +62,27 @@ func TestRecoveryCodes(t *testing.T) {
 	}
 	if !strings.HasPrefix(TOTPURI("Skiff", "a@b.c", "ABC"), "otpauth://totp/Skiff:a@b.c?") {
 		t.Fatal(TOTPURI("Skiff", "a@b.c", "ABC"))
+	}
+}
+
+func TestSecondFactorReadsSealedSecret(t *testing.T) {
+	if err := seal.Init(bytes.Repeat([]byte{7}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestStore(t)
+	u, _, err := s.CreateUser("sealed@example.com", "Sealed", "password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const secret = "JBSWY3DPEHPK3PXP"
+	sealed, err := seal.Seal(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE users SET totp_secret = ? WHERE id = ?`, sealed, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !s.CheckSecondFactor(u.ID, CodeAt(secret, time.Now())) {
+		t.Fatal("a current code should pass against a sealed secret")
 	}
 }
