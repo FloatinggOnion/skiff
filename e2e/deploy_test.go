@@ -70,6 +70,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	stream(t, c, "http://"+panelAddr+"/api/rollback?app="+app+"&id="+project.Deploys[1].ID)
 	expectServed(t, routerAddr, "v1")
 
+	checkSecretsStayOutOfImage(t, c, panelAddr, routerAddr)
 	checkMCP(t, c, bin, panelAddr, routerAddr, project.Deploys[0].ID)
 	checkVolumes(t, c, panelAddr)
 	checkHealthCheck(t, c, panelAddr, routerAddr)
@@ -451,6 +452,36 @@ func checkGRPC(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
 		t.Fatalf("server stream: %s", got)
 	}
 	post(t, c, "http://"+panelAddr+"/api/down?app="+svc, "")
+}
+
+// checkSecretsStayOutOfImage gives a static site a secret and redeploys: the value must reach the running container's environment, and never its files or the public site.
+func checkSecretsStayOutOfImage(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
+	t.Helper()
+	const secret = "e2e-secret-value-do-not-leak"
+	put(t, c, "http://"+panelAddr+"/api/env?app="+app, `{"vars":[{"key":"E2E_SECRET","value":"`+secret+`","build":false}]}`)
+	stream(t, c, "http://"+panelAddr+"/api/redeploy?app="+app)
+	expectServed(t, routerAddr, "v2")
+
+	req, _ := http.NewRequest(http.MethodGet, "http://"+routerAddr+"/skiff.toml", nil)
+	req.Host = app + ".localhost"
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound || strings.Contains(string(body), secret) {
+		t.Fatalf("the site should answer 404 for its config: %d %s", resp.StatusCode, body)
+	}
+	container := appContainer(t, app)
+	if got := dockerExec(t, container, "grep -rl "+secret+" /site /app 2>/dev/null | head -3"); got != "" {
+		t.Fatalf("the secret is in the image's files: %s", got)
+	}
+	if got := dockerExec(t, container, "env | grep -c "+secret); got != "1" {
+		t.Fatalf("the secret should still reach the app's environment: %q", got)
+	}
+	put(t, c, "http://"+panelAddr+"/api/env?app="+app, `{"vars":[]}`)
+	stream(t, c, "http://"+panelAddr+"/api/redeploy?app="+app)
 }
 
 func appContainer(t *testing.T, name string) string {
