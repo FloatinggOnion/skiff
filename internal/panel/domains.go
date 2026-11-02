@@ -206,6 +206,10 @@ func (p *Panel) handleDomains(w http.ResponseWriter, r *http.Request) {
 			}
 			parent, target = app, name
 		}
+		if src, ok := getSource(app); ok && src.Private {
+			http.Error(w, "this project is private, so a domain wouldn't serve anything; make it public first", http.StatusConflict)
+			return
+		}
 		host, ok := normalizeHost(body.Host, p.domain)
 		if !ok {
 			http.Error(w, "enter a valid domain (not a "+p.domain+" subdomain)", http.StatusBadRequest)

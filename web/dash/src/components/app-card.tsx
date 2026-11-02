@@ -88,14 +88,20 @@ export function AppCard({
             >
               {app.name}
             </Link>
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted-foreground hover:text-foreground block truncate font-mono text-xs transition-colors"
-            >
-              {host}
-            </a>
+            {app.private ? (
+              <span className="text-muted-foreground block truncate font-mono text-xs">
+                private service
+              </span>
+            ) : (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-muted-foreground hover:text-foreground block truncate font-mono text-xs transition-colors"
+              >
+                {host}
+              </a>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">

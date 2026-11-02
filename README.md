@@ -114,6 +114,8 @@ platform in the browser:
   SQLite databases and uploads; previews get empty copies of their own.
 - **Log drains** — send every project's logs to Better Stack, Axiom, Datadog or
   any HTTP endpoint, resuming where it stopped after an outage.
+- **Private services and rate limits** — internal APIs with no public address,
+  reached by a stable name, and per-project limits at the edge.
 - **Limits** — memory and CPU per replica, with a safety cap for apps that set none,
   so one runaway app can't take the others down.
 - **Status pages** — a public page with 30 days of uptime for the projects you

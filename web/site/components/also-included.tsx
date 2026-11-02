@@ -3,6 +3,8 @@ const ITEMS = [
   ["Prebuilt images", "Run any image from Docker Hub or a private registry."],
   ["Persistent volumes", "Files that survive deploys, for SQLite and uploads."],
   ["Object storage", "S3-compatible buckets with a file browser."],
+  ["Private services", "Internal APIs with no public address, reached by name."],
+  ["Rate limits", "Per project, enforced before requests reach your app."],
   ["Workers and cron", "Background processes and scheduled jobs."],
   ["Autoscaling", "Add and retire replicas to hold a target CPU."],
   ["Sleep when idle", "Stop quiet apps; the next visit wakes them."],

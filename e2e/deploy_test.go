@@ -78,6 +78,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	checkLogDrain(t, c, panelAddr)
 	checkCatalogApp(t, c, panelAddr, routerAddr)
 	checkStatusPage(t, c, panelAddr, routerAddr)
+	checkPrivateService(t, c, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
@@ -354,6 +355,69 @@ func checkStatusPage(t *testing.T, c *http.Client, panelAddr, routerAddr string)
 	if code, _ := get(); code != http.StatusNotFound {
 		t.Fatalf("turned off: %d", code)
 	}
+}
+
+// checkPrivateService proves the backend path end to end: a service reached by name from another container on the team network, that the public router refuses once it's private, and a rate limit enforced at the router.
+func checkPrivateService(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
+	t.Helper()
+	const svc = "e2e-svc"
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter label=skiff.app="+svc+") ; docker rmi $(docker images -q skiff-"+svc+")").Run()
+	})
+	var created struct{ App, ID string }
+	postJSON(t, c, "http://"+panelAddr+"/api/projects/image", `{"name":"`+svc+`","image":"traefik/whoami:v1.10.3"}`, &created)
+	stream(t, c, "http://"+panelAddr+"/api/deploys/log?app="+svc+"&id="+created.ID)
+	public := func() int {
+		req, _ := http.NewRequest(http.MethodGet, "http://"+routerAddr+"/", nil)
+		req.Host = svc + ".localhost"
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return 0
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	setAccess := func(private bool, limit int) {
+		t.Helper()
+		var settings map[string]any
+		getJSON(t, c, "http://"+panelAddr+"/api/project?app="+svc, &settings)
+		settings["private"], settings["rateLimit"] = private, limit
+		b, _ := json.Marshal(settings)
+		put(t, c, "http://"+panelAddr+"/api/project?app="+svc, string(b))
+	}
+	eventually(t, 30*time.Second, func() bool { return public() == 200 })
+
+	setAccess(false, 5)
+	eventually(t, 15*time.Second, func() bool {
+		for range 12 {
+			if public() == http.StatusTooManyRequests {
+				return true
+			}
+		}
+		return false
+	})
+	setAccess(true, 0)
+	eventually(t, 15*time.Second, func() bool { return public() == http.StatusNotFound })
+
+	// Still reachable by name from the team's network, with the public route closed.
+	var project struct {
+		InternalURL string `json:"internalUrl"`
+	}
+	getJSON(t, c, "http://"+panelAddr+"/api/project?app="+svc, &project)
+	if project.InternalURL != "http://"+svc+":80" {
+		t.Fatalf("internal url = %q", project.InternalURL)
+	}
+	netOut, err := exec.Command("docker", "inspect", appContainer(t, svc), "--format", "{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	network := strings.Fields(string(netOut))[0]
+	run(t, "", nil, "docker", "pull", "-q", "curlimages/curl:8.10.1")
+	out, err := exec.Command("docker", "run", "--rm", "--network", network, "curlimages/curl:8.10.1", "-s", "-m", "10", project.InternalURL).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "Hostname:") {
+		t.Fatalf("calling it by name: %v %s", err, out)
+	}
+	post(t, c, "http://"+panelAddr+"/api/down?app="+svc, "")
 }
 
 func appContainer(t *testing.T, name string) string {

@@ -80,6 +80,10 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 	}
 	if s.Network != "" {
 		args = append(args, "--network", s.Network)
+		// A stable name for other services on the network; docker spreads lookups across replicas.
+		if s.App != "" {
+			args = append(args, "--network-alias", s.App)
+		}
 	}
 	args = append(args, "--memory", e.memoryOr(s.Memory))
 	if s.CPU != "" {

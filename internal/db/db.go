@@ -77,6 +77,8 @@ var migrations = []string{
 	`ALTER TABLE sources ADD COLUMN memory_limit TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN cpu_limit TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN catalog TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE sources ADD COLUMN rate_limit INTEGER NOT NULL DEFAULT 0`,
 }
 
 const schema = `
@@ -138,7 +140,9 @@ CREATE TABLE IF NOT EXISTS sources (
   image        TEXT NOT NULL DEFAULT '',
   memory_limit TEXT NOT NULL DEFAULT '',
   cpu_limit    TEXT NOT NULL DEFAULT '',
-  catalog      TEXT NOT NULL DEFAULT ''
+  catalog      TEXT NOT NULL DEFAULT '',
+  is_private   INTEGER NOT NULL DEFAULT 0,
+  rate_limit   INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,

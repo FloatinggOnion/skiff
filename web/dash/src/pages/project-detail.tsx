@@ -142,7 +142,7 @@ export default function ProjectDetailPage() {
               Redeploy
             </Button>
           )}
-          {project.state !== 'missing' && (
+          {project.state !== 'missing' && !project.private && (
             <Button size="sm" asChild>
               <a href={visitUrl} target="_blank" rel="noreferrer">
                 <ExternalLink />
@@ -169,7 +169,7 @@ export default function ProjectDetailPage() {
         {/* Above the waterline: what's live. Below it: the work that got it there. */}
         <TabsContent value="overview" className="flex min-w-0 flex-1 flex-col">
           <dl className="grid gap-x-8 gap-y-5 pb-7 sm:grid-cols-2 lg:grid-cols-4">
-            {project.domains.length > 0 && (
+            {project.domains.length > 0 && !project.private && (
               <Fact label={project.domains.length > 1 ? 'Custom domains' : 'Custom domain'}>
                 <div className="flex flex-col gap-0.5">
                   {project.domains.map((d) => (
@@ -186,15 +186,29 @@ export default function ProjectDetailPage() {
                 </div>
               </Fact>
             )}
-            <Fact label="Skiff address">
-              <a
-                href={project.url}
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-[13px] hover:underline"
+            {project.private ? (
+              <Fact label="Public address">
+                <span className="text-sm">None, this service is private</span>
+              </Fact>
+            ) : (
+              <Fact label="Skiff address">
+                <a
+                  href={project.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-[13px] hover:underline"
+                >
+                  {skiffHost}
+                </a>
+              </Fact>
+            )}
+            <Fact label="Internal address">
+              <span
+                className="font-mono text-[13px]"
+                title="How your team's other services reach this one. Needs a deploy after upgrading."
               >
-                {skiffHost}
-              </a>
+                {project.internalUrl}
+              </span>
             </Fact>
             <Fact label="Live version">
               {live ? (
@@ -448,6 +462,8 @@ export default function ProjectDetailPage() {
             healthTimeout={project.healthTimeout}
             image={project.image}
             maxReplicas={project.maxReplicas}
+            isPrivate={project.private}
+            rateLimit={project.rateLimit}
             memory={project.memory}
             cpu={project.cpu}
             onSaved={reload}

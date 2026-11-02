@@ -2,12 +2,16 @@ package panel
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/config"
+	"github.com/nuelScript/skiff/internal/edge"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -33,7 +37,8 @@ type appView struct {
 	Origin  string `json:"origin,omitempty"`
 	Image   string `json:"image,omitempty"`
 	// Domain is the project's main custom domain, shown in place of its Skiff address.
-	Domain string `json:"domain,omitempty"`
+	Domain  string `json:"domain,omitempty"`
+	Private bool   `json:"private,omitempty"`
 }
 
 // displayState reports a sleeping app as asleep rather than as a stopped container.
@@ -84,6 +89,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 		if hosts := domains[a.Name]; len(hosts) > 0 {
 			av.Domain = hosts[0]
 		}
+		av.Private = src.Private
 		if ds := appDeploys(a.Name); len(ds) > 0 {
 			av.Commit = ds[0].Commit
 			av.Message = ds[0].Message
@@ -123,6 +129,10 @@ type projectView struct {
 	// PreviewProtected means its previews ask visitors for a password.
 	PreviewProtected bool `json:"previewProtected"`
 	MaxReplicas      int  `json:"maxReplicas"`
+	Private          bool `json:"private"`
+	RateLimit        int  `json:"rateLimit"`
+	// InternalURL is how other services on the team's network reach it.
+	InternalURL string `json:"internalUrl"`
 	// SetupNote is the first-run step for a project installed from the catalog.
 	SetupNote string `json:"setupNote,omitempty"`
 	Memory    string `json:"memory"`
@@ -144,8 +154,10 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 		src, _ := getSource(app)
 		state := "missing"
 		running := 0
+		containerPort := 0
 		if apps, err := registry.Load(); err == nil {
 			if a, ok := apps[app]; ok {
+				containerPort = a.Port
 				state = p.displayState(app, a.Container)
 				running = len(a.Replicas)
 				if running == 0 {
@@ -167,10 +179,12 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			PreviewProtected: previewPasswordHash(app) != "",
 			Image:            src.Image,
 			MaxReplicas:      maxReplicas(),
-			SetupNote:        catalogNote(src.Catalog),
-			Memory:           src.Memory,
-			CPU:              src.CPU,
-			Domains:          domainsOr(projectDomains(src.Team)[app]),
+			Private:          src.Private, RateLimit: src.RateLimit,
+			InternalURL: internalURL(app, src, containerPort),
+			SetupNote:   catalogNote(src.Catalog),
+			Memory:      src.Memory,
+			CPU:         src.CPU,
+			Domains:     domainsOr(projectDomains(src.Team)[app]),
 		})
 	case http.MethodPut:
 		var body struct {
@@ -191,6 +205,8 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			Image         string `json:"image"`
 			Memory        string `json:"memory"`
 			CPU           string `json:"cpu"`
+			Private       bool   `json:"private"`
+			RateLimit     int    `json:"rateLimit"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		src, ok := getSource(app)
@@ -210,6 +226,11 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		src.Memory, src.CPU = body.Memory, body.CPU
+		if body.RateLimit < 0 || body.RateLimit > maxRateLimit {
+			http.Error(w, "rate limit must be between 0 and 1,000,000 requests a minute", http.StatusBadRequest)
+			return
+		}
+		src.Private, src.RateLimit = body.Private, body.RateLimit
 		if src.Image != "" {
 			// An image project's port may be left empty to use the one the image exposes.
 			img, port := strings.TrimSpace(body.Image), strings.TrimSpace(body.Port)
@@ -251,12 +272,56 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 		if body.SleepAfter == 0 || (body.SleepAfter >= 5 && body.SleepAfter <= 24*60) {
 			src.SleepAfter = body.SleepAfter
 		}
+		// Sleep wakes on a public visit, which a private app never gets, so it would stay asleep for good.
+		if src.Private {
+			src.SleepAfter = 0
+		}
 		_ = putSource(src)
+		_ = writeEdgeFile()
 		p.audit(r, "settings.update", app, "")
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+const maxRateLimit = 1_000_000
+
+func edgeFile() string { return edge.DefaultFile() }
+
+var edgeMu sync.Mutex
+
+// writeEdgeFile tells the router each app's rules. A preview follows its project, so a private service's previews aren't public either.
+func writeEdgeFile() error {
+	edgeMu.Lock()
+	defer edgeMu.Unlock()
+	sources := allSources()
+	byApp := make(map[string]Source, len(sources))
+	for _, s := range sources {
+		byApp[s.App] = s
+	}
+	rules := edge.Rules{}
+	for _, s := range sources {
+		owner := s
+		if parent, ok := byApp[s.Parent]; ok && s.Parent != "" {
+			owner = parent
+		}
+		if owner.Private || owner.RateLimit > 0 {
+			rules[s.App] = edge.Rule{Private: owner.Private, RateLimit: owner.RateLimit}
+		}
+	}
+	return edge.Save(edgeFile(), rules)
+}
+
+// internalURL is the app's address on the team's network; its stable name needs a deploy since this feature arrived.
+func internalURL(app string, src Source, port int) string {
+	if port == 0 {
+		port, _ = strconv.Atoi(src.Port)
+	}
+	if port == 0 {
+		return "http://" + app
+	}
+	return fmt.Sprintf("http://%s:%d", app, port)
 }
 
 func domainsOr(hosts []string) []string {

@@ -166,6 +166,7 @@ func (p *Panel) createPreview(parent Source, branch, commit, message string) (na
 	_ = putSource(pv)
 	// Lock the preview before it has anything to serve.
 	_ = writeGateFile()
+	_ = writeEdgeFile()
 	if rebindBranchDomains(parent.App, branch, name) {
 		writeDomainsFile()
 	}

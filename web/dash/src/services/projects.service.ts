@@ -14,6 +14,7 @@ export type App = {
   origin?: 'cli'
   image?: string
   domain?: string
+  private?: boolean
 }
 
 export type ProjectDetail = {
@@ -44,6 +45,9 @@ export type ProjectDetail = {
   image?: string
   maxReplicas: number
   setupNote?: string
+  private: boolean
+  rateLimit: number
+  internalUrl: string
   memory: string
   cpu: string
   domains: string[]
@@ -144,6 +148,8 @@ export type ProjectSettings = {
   image?: string
   memory: string
   cpu: string
+  private: boolean
+  rateLimit: number
 }
 
 class ProjectsService extends BaseService {

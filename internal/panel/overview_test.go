@@ -1,9 +1,13 @@
 package panel
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/edge"
 )
 
 func TestProjectAttention(t *testing.T) {
@@ -135,5 +139,40 @@ func TestResourcesInToml(t *testing.T) {
 	}
 	if s, _ := getSource("shop"); s.Memory != "1g" || s.CPU != "2" {
 		t.Fatalf("limits didn't round-trip: %+v", s)
+	}
+}
+
+func TestWriteEdgeFile(t *testing.T) {
+	openTestDB(t)
+	t.Setenv("HOME", t.TempDir())
+	_ = os.MkdirAll(filepath.Dir(edgeFile()), 0o755)
+	_ = putSource(Source{App: "api", Port: "80", Private: true, RateLimit: 100})
+	_ = putSource(Source{App: "api-feat", Port: "80", Parent: "api"})
+	_ = putSource(Source{App: "web", Port: "80", RateLimit: 50})
+	_ = putSource(Source{App: "plain", Port: "80"})
+	if err := writeEdgeFile(); err != nil {
+		t.Fatal(err)
+	}
+	got := edge.Load(edgeFile())
+	if !got["api"].Private || got["api"].RateLimit != 100 {
+		t.Errorf("api = %+v", got["api"])
+	}
+	if !got["api-feat"].Private {
+		t.Error("a private project's preview must not be public")
+	}
+	if got["web"].Private || got["web"].RateLimit != 50 {
+		t.Errorf("web = %+v", got["web"])
+	}
+	if _, listed := got["plain"]; listed {
+		t.Error("an app with no rules needn't be listed")
+	}
+	if s, _ := getSource("api"); !s.Private || s.RateLimit != 100 {
+		t.Errorf("didn't round-trip: %+v", s)
+	}
+	if u := internalURL("api", Source{Port: "3000"}, 0); u != "http://api:3000" {
+		t.Errorf("internal url = %q", u)
+	}
+	if u := internalURL("api", Source{}, 8080); u != "http://api:8080" {
+		t.Errorf("internal url = %q", u)
 	}
 }

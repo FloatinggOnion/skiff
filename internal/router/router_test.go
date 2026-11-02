@@ -4,8 +4,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -190,5 +192,141 @@ func TestStatusGoesOnlyToPublicPath(t *testing.T) {
 	want := []string{"GET /public/status/acme", "GET /public/status/", "GET /public/status/acme"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("panel saw %q, want %q", got, want)
+	}
+}
+
+func TestPrivateAppHasNoPublicAddress(t *testing.T) {
+	hit := 0
+	app := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit++ }))
+	defer app.Close()
+	u, _ := url.Parse(app.URL)
+	port, _ := strconv.Atoi(u.Port())
+	dir := t.TempDir()
+	rules := filepath.Join(dir, "edge.json")
+	domains := filepath.Join(dir, "domains.json")
+	_ = os.WriteFile(rules, []byte(`{"api":{"private":true}}`), 0o644)
+	_ = os.WriteFile(domains, []byte(`{"api.acme.dev":"api","web.acme.dev":"web"}`), 0o644)
+	rt := &Router{Domains: []string{"example.com"}, EdgeFile: rules, DomainsFile: domains}
+	rt.routeTable = map[string][]int{"api": {port}, "web": {port}}
+	rt.routeAt = time.Now().Add(time.Hour)
+	get := func(host string) int {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Host = host
+		w := httptest.NewRecorder()
+		rt.ServeHTTP(w, req)
+		return w.Code
+	}
+	if c := get("api.example.com"); c != http.StatusNotFound {
+		t.Errorf("private app by subdomain: %d", c)
+	}
+	if c := get("api.acme.dev"); c != http.StatusNotFound {
+		t.Errorf("private app by custom domain: %d", c)
+	}
+	if hit != 0 {
+		t.Fatalf("a private app received %d public requests", hit)
+	}
+	if c := get("web.example.com"); c != 200 || hit != 1 {
+		t.Errorf("a public app should still work: %d, %d hits", c, hit)
+	}
+	for host, want := range map[string]bool{"api.example.com": false, "api.acme.dev": false, "web.acme.dev": true, "web.example.com": true} {
+		if got := rt.certAllowed(host); got != want {
+			t.Errorf("certAllowed(%s) = %v", host, got)
+		}
+	}
+}
+
+func TestRateLimitThroughRouter(t *testing.T) {
+	hit := 0
+	app := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit++ }))
+	defer app.Close()
+	u, _ := url.Parse(app.URL)
+	port, _ := strconv.Atoi(u.Port())
+	rules := filepath.Join(t.TempDir(), "edge.json")
+	_ = os.WriteFile(rules, []byte(`{"api":{"rateLimit":3}}`), 0o644)
+	rt := &Router{Domains: []string{"example.com"}, EdgeFile: rules}
+	rt.routeTable = map[string][]int{"api": {port}, "web": {port}}
+	rt.routeAt = time.Now().Add(time.Hour)
+	get := func(host, addr string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Host, req.RemoteAddr = host, addr
+		w := httptest.NewRecorder()
+		rt.ServeHTTP(w, req)
+		return w
+	}
+	for i := range 3 {
+		if c := get("api.example.com", "1.1.1.1:5000").Code; c != 200 {
+			t.Fatalf("request %d: %d", i, c)
+		}
+	}
+	w := get("api.example.com", "1.1.1.1:5001")
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") == "" {
+		t.Fatalf("over the limit: %d %v", w.Code, w.Header())
+	}
+	if hit != 3 {
+		t.Fatalf("the app got %d requests", hit)
+	}
+	if c := get("api.example.com", "2.2.2.2:5000").Code; c != 200 {
+		t.Errorf("another visitor shouldn't be limited: %d", c)
+	}
+	if c := get("web.example.com", "1.1.1.1:5000").Code; c != 200 {
+		t.Errorf("another app shouldn't be limited: %d", c)
+	}
+}
+
+func TestRateLimiter(t *testing.T) {
+	l := newRateLimiter()
+	now := time.Now()
+	for i := range 60 {
+		if ok, _ := l.allow("a", "v", 60, now); !ok {
+			t.Fatalf("burst stopped at %d", i)
+		}
+	}
+	ok, wait := l.allow("a", "v", 60, now)
+	if ok || wait <= 0 || wait > time.Second {
+		t.Fatalf("empty bucket: %v %v", ok, wait)
+	}
+	if ok, _ := l.allow("a", "v", 60, now.Add(1100*time.Millisecond)); !ok {
+		t.Fatal("it should refill at a request a second")
+	}
+	if ok, _ := l.allow("a", "v", 60, now.Add(1100*time.Millisecond)); ok {
+		t.Fatal("only one token should have come back")
+	}
+	if ok, _ := l.allow("b", "v", 60, now); !ok {
+		t.Fatal("apps have separate allowances")
+	}
+}
+
+func TestLimiterStaysBounded(t *testing.T) {
+	l := newRateLimiter()
+	now := time.Now()
+	for i := range 2_000_000 {
+		l.allow("a", strconv.Itoa(i), 60, now)
+	}
+	total := 0
+	for i := range l.shards {
+		if n := len(l.shards[i].visitors); n > limiterMaxShard {
+			t.Fatalf("shard %d holds %d", i, n)
+		}
+		total += len(l.shards[i].visitors)
+	}
+	if total > limiterShards*limiterMaxShard {
+		t.Fatalf("total %d", total)
+	}
+}
+
+func TestLimitKeyGroupsIPv6(t *testing.T) {
+	key := func(addr string) string {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = addr
+		return limitKey(req)
+	}
+	if key("[2001:db8:1:2:aaaa::1]:1") != key("[2001:db8:1:2:bbbb::9]:2") {
+		t.Error("the same /64 should count as one visitor")
+	}
+	if key("[2001:db8:1:2::1]:1") == key("[2001:db8:1:3::1]:1") {
+		t.Error("different /64s are different visitors")
+	}
+	if key("1.2.3.4:1") != "1.2.3.4" {
+		t.Errorf("ipv4 key = %q", key("1.2.3.4:1"))
 	}
 }

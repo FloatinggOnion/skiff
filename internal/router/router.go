@@ -18,6 +18,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/edge"
 	"github.com/nuelScript/skiff/internal/mail"
 	"github.com/nuelScript/skiff/internal/sleep"
 )
@@ -42,6 +43,14 @@ type Router struct {
 	SMTPAddr string
 	// GateFile lists previews that ask visitors for a password first.
 	GateFile string
+	// EdgeFile holds per-app rules: private apps and rate limits.
+	EdgeFile string
+
+	limiter      *rateLimiter
+	limiterOnce  sync.Once
+	edgeMu       sync.RWMutex
+	cachedEdge   edge.Rules
+	cachedEdgeAt time.Time
 
 	metrics       *Metrics
 	reqlog        *ReqLog
@@ -271,7 +280,37 @@ func (rt *Router) refreshRoutes() {
 	rt.routeTable, rt.routeAt = table, time.Now()
 }
 
+// edgeRules reads the panel's per-app rules, cached briefly so requests don't touch the disk.
+func (rt *Router) edgeRules() edge.Rules {
+	if rt.EdgeFile == "" {
+		return nil
+	}
+	rt.edgeMu.RLock()
+	rules, at := rt.cachedEdge, rt.cachedEdgeAt
+	rt.edgeMu.RUnlock()
+	if rules != nil && time.Since(at) < 2*time.Second {
+		return rules
+	}
+	rules = edge.Load(rt.EdgeFile)
+	rt.edgeMu.Lock()
+	rt.cachedEdge, rt.cachedEdgeAt = rules, time.Now()
+	rt.edgeMu.Unlock()
+	return rules
+}
+
 func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string) bool {
+	rule := rt.edgeRules()[app]
+	if rule.Private {
+		http.Error(w, "skiff: no app named "+app, http.StatusNotFound)
+		return false
+	}
+	if rule.RateLimit > 0 {
+		rt.limiterOnce.Do(func() { rt.limiter = newRateLimiter() })
+		if ok, wait := rt.limiter.allow(app, limitKey(r), rule.RateLimit, time.Now()); !ok {
+			tooManyRequests(w, wait)
+			return true
+		}
+	}
 	if !rt.admit(w, r, app) {
 		return true
 	}
@@ -349,8 +388,8 @@ func (rt *Router) subFor(host string) (string, bool) {
 
 // certAllowed limits certificates to names Skiff actually serves. Wildcard DNS sends every name here, and scanners trying random subdomains would otherwise use up the certificate authority's weekly limit for the whole domain.
 func (rt *Router) certAllowed(host string) bool {
-	if _, ok := rt.customDomains()[host]; ok {
-		return true
+	if app, ok := rt.customDomains()[host]; ok {
+		return !rt.edgeRules()[app].Private
 	}
 	if host == rt.MailHost() {
 		return true
@@ -363,7 +402,7 @@ func (rt *Router) certAllowed(host string) bool {
 	case "", "www", "dash", "status":
 		return true
 	}
-	if strings.Contains(sub, ".") {
+	if strings.Contains(sub, ".") || rt.edgeRules()[sub].Private {
 		return false
 	}
 	if len(rt.portsFor(sub)) > 0 {

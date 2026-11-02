@@ -54,6 +54,8 @@ export function SettingsForm({
   maxReplicas = 10,
   memory = '',
   cpu = '',
+  isPrivate = false,
+  rateLimit = 0,
   onSaved,
   cli = false,
 }: {
@@ -77,6 +79,8 @@ export function SettingsForm({
   maxReplicas?: number
   memory?: string
   cpu?: string
+  isPrivate?: boolean
+  rateLimit?: number
   onSaved: () => void
   cli?: boolean
 }) {
@@ -102,6 +106,8 @@ export function SettingsForm({
       image,
       memory: memory || '',
       cpu: cpu || '',
+      private: isPrivate,
+      rateLimit: rateLimit || 0,
     },
   })
   const { register, handleSubmit, watch, setValue, formState } = form
@@ -216,6 +222,52 @@ export function SettingsForm({
             Preview deployments spin up an environment automatically for any push to a branch other
             than <span className="text-foreground/70 font-mono">{values.branch || 'main'}</span>.
           </p>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-foreground/8 p-5">
+        <h2 className="mb-4 text-sm font-semibold">Access</h2>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-medium">Private service</h3>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              No public address and no custom domains. Your team&apos;s other services still reach
+              it by name, which is right for internal APIs. Takes effect within seconds, and turns
+              off sleep when idle.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-pressed={values.private}
+            onClick={() => {
+              setValue('private', !values.private, { shouldDirty: true })
+              if (!values.private) setValue('sleepAfter', 0, { shouldDirty: true })
+            }}
+            className={toggleClass(values.private) + ' shrink-0'}
+          >
+            {values.private ? 'On' : 'Off'}
+          </button>
+        </div>
+        {!values.private && (
+          <Field data-invalid={!!formState.errors.rateLimit} className="mt-4 max-w-xs">
+            <FieldLabel htmlFor="s-rate">Rate limit (requests a minute per visitor)</FieldLabel>
+            <Input
+              id="s-rate"
+              type="number"
+              min={0}
+              placeholder="0"
+              className="font-mono"
+              aria-invalid={!!formState.errors.rateLimit}
+              {...register('rateLimit', {
+                setValueAs: (v) => (v === '' || v === null ? 0 : Number(v)),
+              })}
+            />
+            <FieldError errors={[formState.errors.rateLimit]} />
+            <FieldDescription>
+              Over the limit, visitors get a 429 before the request reaches your app. 0 means no
+              limit. Calls between your own services aren&apos;t counted.
+            </FieldDescription>
+          </Field>
         )}
       </section>
 
@@ -347,7 +399,9 @@ export function SettingsForm({
           <div>
             <h3 className="text-sm font-medium">Sleep when idle</h3>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              {values.autoscale
+              {values.private
+                ? "Not available for a private service: only a public visit can wake an app."
+                : values.autoscale
                 ? 'Not available while autoscaling is on.'
                 : 'Stop the app after a stretch with no visitors, freeing its memory. The next visit wakes it — that first request waits a few seconds while it starts.'}
             </p>
@@ -357,7 +411,7 @@ export function SettingsForm({
               <button
                 key={o.v}
                 type="button"
-                disabled={values.autoscale}
+                disabled={values.autoscale || values.private}
                 onClick={() => setValue('sleepAfter', o.v, { shouldDirty: true })}
                 className={
                   'rounded px-2.5 py-1 font-mono text-[11px] transition-colors disabled:opacity-40 ' +

@@ -55,7 +55,8 @@ func probe(url string) probeResult {
 }
 
 func (p *Panel) probeURL(a registry.App) string {
-	if p.domain != "" && p.domain != "localhost" && strings.Contains(p.domain, ".") {
+	src, _ := getSource(a.Name)
+	if !src.Private && p.domain != "" && p.domain != "localhost" && strings.Contains(p.domain, ".") {
 		return "https://" + a.Name + "." + p.domain + "/"
 	}
 	port := a.HostPort

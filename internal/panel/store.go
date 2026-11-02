@@ -37,6 +37,10 @@ type Source struct {
 	CPU    string `json:"cpu,omitempty"`
 	// Catalog is the one-click recipe this project was created from.
 	Catalog string `json:"catalog,omitempty"`
+	// Private means no public address; other services on the team's network still reach it by name.
+	Private bool `json:"private,omitempty"`
+	// RateLimit is requests per minute per visitor at the router; 0 means none.
+	RateLimit int `json:"rateLimit,omitempty"`
 }
 
 type Deploy struct {
@@ -67,7 +71,7 @@ func logPath(app, id string) string {
 	return filepath.Join(skiffDir(), "deploys", sanitizeName(app), sanitizeID(id)+".log")
 }
 
-const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after,health_path,health_timeout,image,memory_limit,cpu_limit,catalog`
+const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after,health_path,health_timeout,image,memory_limit,cpu_limit,catalog,is_private,rate_limit`
 
 func putSource(s Source) error {
 	if s.Replicas < 1 {
@@ -75,7 +79,7 @@ func putSource(s Source) error {
 	}
 	_, err := sqlDB.Exec(`
 		INSERT INTO sources(`+sourceCols+`)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(app) DO UPDATE SET
 			team=excluded.team, repo=excluded.repo, branch=excluded.branch,
 			root_dir=excluded.root_dir, port=excluded.port,
@@ -84,22 +88,24 @@ func putSource(s Source) error {
 			autoscale=excluded.autoscale, scale_min=excluded.scale_min, scale_max=excluded.scale_max, scale_cpu=excluded.scale_cpu,
 			origin=excluded.origin, sleep_after=excluded.sleep_after,
 			health_path=excluded.health_path, health_timeout=excluded.health_timeout, image=excluded.image,
-			memory_limit=excluded.memory_limit, cpu_limit=excluded.cpu_limit, catalog=excluded.catalog`,
+			memory_limit=excluded.memory_limit, cpu_limit=excluded.cpu_limit, catalog=excluded.catalog,
+			is_private=excluded.is_private, rate_limit=excluded.rate_limit`,
 		s.App, s.Team, s.Repo, s.Branch, s.RootDir, s.Port, s.CloneURL, b2i(s.Auto), s.Parent, b2i(s.PreviewAuto), s.Replicas, s.Release,
-		b2i(s.Autoscale), s.ScaleMin, s.ScaleMax, s.ScaleCPU, s.Origin, s.SleepAfter, s.HealthPath, s.HealthTimeout, s.Image, s.Memory, s.CPU, s.Catalog)
+		b2i(s.Autoscale), s.ScaleMin, s.ScaleMax, s.ScaleCPU, s.Origin, s.SleepAfter, s.HealthPath, s.HealthTimeout, s.Image, s.Memory, s.CPU, s.Catalog, b2i(s.Private), s.RateLimit)
 	return err
 }
 
 func scanSource(row interface{ Scan(...any) error }) (Source, bool) {
 	var s Source
-	var auto, previewAuto, autoscale int
+	var auto, previewAuto, autoscale, private int
 	if row.Scan(&s.App, &s.Team, &s.Repo, &s.Branch, &s.RootDir, &s.Port, &s.CloneURL, &auto, &s.Parent, &previewAuto, &s.Replicas, &s.Release,
-		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin, &s.SleepAfter, &s.HealthPath, &s.HealthTimeout, &s.Image, &s.Memory, &s.CPU, &s.Catalog) != nil {
+		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin, &s.SleepAfter, &s.HealthPath, &s.HealthTimeout, &s.Image, &s.Memory, &s.CPU, &s.Catalog, &private, &s.RateLimit) != nil {
 		return Source{}, false
 	}
 	s.Auto = auto != 0
 	s.PreviewAuto = previewAuto != 0
 	s.Autoscale = autoscale != 0
+	s.Private = private != 0
 	if s.Replicas < 1 {
 		s.Replicas = 1
 	}
