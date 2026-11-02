@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"bytes"
 	"encoding/base32"
 	"strings"
 	"testing"
@@ -66,9 +65,6 @@ func TestRecoveryCodes(t *testing.T) {
 }
 
 func TestSecondFactorReadsSealedSecret(t *testing.T) {
-	if err := seal.Init(bytes.Repeat([]byte{7}, 32)); err != nil {
-		t.Fatal(err)
-	}
 	s := newTestStore(t)
 	u, _, err := s.CreateUser("sealed@example.com", "Sealed", "password123")
 	if err != nil {

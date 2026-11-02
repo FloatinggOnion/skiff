@@ -91,10 +91,18 @@ func saveLogDrain(d LogDrain) error {
 	if had && prev.URL != d.URL {
 		d.LastOK, d.LastError = 0, ""
 	}
-	_, err := sqlDB.Exec(`INSERT INTO log_drains(`+logDrainCols+`) VALUES(?,?,?,?,?,?)
+	url, err := seal.Seal(d.URL)
+	if err != nil {
+		return err
+	}
+	headerValue, err := seal.Seal(d.HeaderValue)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(`INSERT INTO log_drains(`+logDrainCols+`) VALUES(?,?,?,?,?,?)
 		ON CONFLICT(team) DO UPDATE SET url=excluded.url, header_name=excluded.header_name,
 			header_value=excluded.header_value, last_ok=excluded.last_ok, last_error=excluded.last_error`,
-		d.Team, d.URL, d.HeaderName, d.HeaderValue, d.LastOK, d.LastError)
+		d.Team, url, d.HeaderName, headerValue, d.LastOK, d.LastError)
 	if err != nil {
 		return err
 	}

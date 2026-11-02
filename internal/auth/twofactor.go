@@ -27,7 +27,11 @@ func (s *Store) RecoveryLeft(userID string) int {
 // BeginTwoFactor stores a fresh secret that only takes effect once a code from it is confirmed.
 func (s *Store) BeginTwoFactor(userID string) (string, error) {
 	secret := NewTOTPSecret()
-	_, err := s.db.Exec(`UPDATE users SET totp_pending = ? WHERE id = ?`, secret, userID)
+	sealed, err := seal.Seal(secret)
+	if err != nil {
+		return "", err
+	}
+	_, err = s.db.Exec(`UPDATE users SET totp_pending = ? WHERE id = ?`, sealed, userID)
 	return secret, err
 }
 
@@ -41,12 +45,16 @@ func (s *Store) EnableTwoFactor(userID, code string) ([]string, error) {
 	if !ok {
 		return nil, ErrBadCode
 	}
+	sealed, err := seal.Seal(pending)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback() //nolint:errcheck
-	if _, err := tx.Exec(`UPDATE users SET totp_secret = ?, totp_pending = '', totp_step = ? WHERE id = ?`, pending, step, userID); err != nil {
+	if _, err := tx.Exec(`UPDATE users SET totp_secret = ?, totp_pending = '', totp_step = ? WHERE id = ?`, sealed, step, userID); err != nil {
 		return nil, err
 	}
 	codes, err := replaceRecovery(tx, userID)

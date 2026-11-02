@@ -231,8 +231,12 @@ func listDBs(team string) []dbRow {
 }
 
 func putDB(d dbRow) error {
-	_, err := sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		d.ID, d.Team, d.Name, d.Engine, d.Container, d.Host, d.Port, d.Username, d.Password,
+	password, err := seal.Seal(d.Password)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		d.ID, d.Team, d.Name, d.Engine, d.Container, d.Host, d.Port, d.Username, password,
 		d.DBName, d.Created, b2i(d.Public), d.PublicPort, d.Image, d.Volume, d.Cmd)
 	return err
 }
@@ -285,7 +289,11 @@ func detachDB(id, app string) (string, bool) {
 }
 
 func upsertEnvVar(app, key, value string, build bool) error {
-	_, err := sqlDB.Exec(`INSERT INTO env_vars(app,key,value,build) VALUES(?,?,?,?)
+	value, err := seal.Seal(value)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(`INSERT INTO env_vars(app,key,value,build) VALUES(?,?,?,?)
 		ON CONFLICT(app,key) DO UPDATE SET value=excluded.value, build=excluded.build`, app, key, value, b2i(build))
 	return err
 }

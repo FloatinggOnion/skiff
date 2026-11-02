@@ -32,11 +32,19 @@ func getAlerts(team string) AlertConfig {
 }
 
 func setAlerts(team string, a AlertConfig) error {
-	_, err := sqlDB.Exec(`
+	slack, err := seal.Seal(a.SlackURL)
+	if err != nil {
+		return err
+	}
+	webhook, err := seal.Seal(a.WebhookURL)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(`
 		INSERT INTO alerts(team,email,slack_url,webhook_url) VALUES(?,?,?,?)
 		ON CONFLICT(team) DO UPDATE SET
 			email=excluded.email, slack_url=excluded.slack_url, webhook_url=excluded.webhook_url`,
-		team, a.Email, a.SlackURL, a.WebhookURL)
+		team, a.Email, slack, webhook)
 	return err
 }
 

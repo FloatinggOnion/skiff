@@ -300,9 +300,30 @@ func setPreviewEnv(app string, vars []EnvVar) error { return writeEnv(`preview_e
 
 // dropCopiedPreviewEnv removes vars previews were given as a copy of their project's when they were created; they now read the project's live, and a stale copy would hide later changes and the preview overrides.
 func dropCopiedPreviewEnv() {
-	_, _ = sqlDB.Exec(`DELETE FROM env_vars WHERE app IN (SELECT app FROM sources WHERE parent<>'')
-		AND EXISTS (SELECT 1 FROM sources s JOIN env_vars pe ON pe.app = s.parent
-			WHERE s.app = env_vars.app AND pe.key = env_vars.key AND pe.value = env_vars.value AND pe.build = env_vars.build)`)
+	rows, err := sqlDB.Query(`SELECT app, parent FROM sources WHERE parent<>''`)
+	if err != nil {
+		return
+	}
+	type preview struct{ app, parent string }
+	var previews []preview
+	for rows.Next() {
+		var p preview
+		if rows.Scan(&p.app, &p.parent) == nil {
+			previews = append(previews, p)
+		}
+	}
+	rows.Close()
+	for _, p := range previews {
+		parent := map[string]EnvVar{}
+		for _, e := range getEnv(p.parent) {
+			parent[e.Key] = e
+		}
+		for _, e := range getEnv(p.app) {
+			if pe, ok := parent[e.Key]; ok && pe.Value == e.Value && pe.Build == e.Build {
+				deleteEnvVar(p.app, e.Key)
+			}
+		}
+	}
 }
 
 // readEnv and writeEnv take the table name from the constants above, never from input.
@@ -341,9 +362,13 @@ func writeEnv(table, app string, vars []EnvVar) error {
 		if key == "" {
 			continue
 		}
+		value, err := seal.Seal(e.Value)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(
 			`INSERT INTO `+table+`(app,key,value,build) VALUES(?,?,?,?)`,
-			app, key, e.Value, b2i(e.Build)); err != nil {
+			app, key, value, b2i(e.Build)); err != nil {
 			return err
 		}
 	}
@@ -385,9 +410,13 @@ func setSharedEnv(team string, vars []EnvVar) error {
 		if key == "" {
 			continue
 		}
+		value, err := seal.Seal(e.Value)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(
 			`INSERT INTO shared_env(team,key,value,build) VALUES(?,?,?,?)`,
-			team, key, e.Value, b2i(e.Build)); err != nil {
+			team, key, value, b2i(e.Build)); err != nil {
 			return err
 		}
 	}

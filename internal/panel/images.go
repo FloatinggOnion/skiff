@@ -21,7 +21,11 @@ func getRegistryCreds(app string) (user, pass string, ok bool) {
 }
 
 func setRegistryCreds(app, user, pass string) error {
-	_, err := sqlDB.Exec(`INSERT INTO registry_creds(app,username,password) VALUES(?,?,?)
+	pass, err := seal.Seal(pass)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(`INSERT INTO registry_creds(app,username,password) VALUES(?,?,?)
 		ON CONFLICT(app) DO UPDATE SET username=excluded.username, password=excluded.password`, app, user, pass)
 	return err
 }

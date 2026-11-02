@@ -97,9 +97,17 @@ func listBuckets(team string) []bucketRow {
 }
 
 func putBucket(b bucketRow) error {
-	_, err := sqlDB.Exec(
+	access, err := seal.Seal(b.AccessKey)
+	if err != nil {
+		return err
+	}
+	secret, err := seal.Seal(b.SecretKey)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(
 		`INSERT INTO buckets(id,team,name,container,access_key,secret_key,created) VALUES(?,?,?,?,?,?,?)`,
-		b.ID, b.Team, b.Name, b.Container, b.AccessKey, b.SecretKey, b.Created)
+		b.ID, b.Team, b.Name, b.Container, access, secret, b.Created)
 	return err
 }
 

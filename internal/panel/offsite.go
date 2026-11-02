@@ -57,11 +57,19 @@ func getOffsite(team string) OffsiteTarget {
 }
 
 func setOffsite(team string, t OffsiteTarget) error {
-	_, err := sqlDB.Exec(`INSERT INTO backup_targets(team,endpoint,region,bucket,prefix,access_key,secret_key,updated)
+	access, err := seal.Seal(t.AccessKey)
+	if err != nil {
+		return err
+	}
+	secret, err := seal.Seal(t.SecretKey)
+	if err != nil {
+		return err
+	}
+	_, err = sqlDB.Exec(`INSERT INTO backup_targets(team,endpoint,region,bucket,prefix,access_key,secret_key,updated)
 		VALUES(?,?,?,?,?,?,?,?)
 		ON CONFLICT(team) DO UPDATE SET endpoint=excluded.endpoint, region=excluded.region, bucket=excluded.bucket,
 			prefix=excluded.prefix, access_key=excluded.access_key, secret_key=excluded.secret_key, updated=excluded.updated`,
-		team, t.Endpoint, t.Region, t.Bucket, t.Prefix, t.AccessKey, t.SecretKey, time.Now().Unix())
+		team, t.Endpoint, t.Region, t.Bucket, t.Prefix, access, secret, time.Now().Unix())
 	return err
 }
 

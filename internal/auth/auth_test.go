@@ -1,15 +1,20 @@
 package auth
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/db"
+	"github.com/nuelScript/skiff/internal/seal"
 )
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
+	if err := seal.Init(bytes.Repeat([]byte{7}, 32)); err != nil {
+		t.Fatal(err)
+	}
 	database, err := db.OpenAt(filepath.Join(t.TempDir(), "auth.db"))
 	if err != nil {
 		t.Fatalf("db.OpenAt: %v", err)

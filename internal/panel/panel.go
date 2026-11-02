@@ -43,6 +43,10 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	if err := initSeal(); err != nil {
 		return nil, err
 	}
+	dropCopiedPreviewEnv()
+	if err := sealExisting(); err != nil {
+		log.Printf("skiff: encrypting stored secrets: %v", err)
+	}
 	reconcileStuckDeploys()
 	writeMailFile()
 	home, _ := os.UserHomeDir()
@@ -69,7 +73,6 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go guard("writeGateFile", func() { _ = writeGateFile() })
 	go guard("writeEdgeFile", func() { _ = writeEdgeFile() })
 	go guard("removeStaleDeployConfigs", func() { removeStaleDeployConfigs(p.buildsDir, time.Now()) })
-	go guard("dropCopiedPreviewEnv", dropCopiedPreviewEnv)
 	go p.backupLoop()
 	go p.jobLoop()
 	go p.resourceLoop()

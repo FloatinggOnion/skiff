@@ -19,6 +19,7 @@ func openTestDB(t *testing.T) {
 		t.Fatalf("db.OpenAt: %v", err)
 	}
 	sqlDB = database
+	sealTestKey(t)
 }
 
 func TestSourceRoundTrip(t *testing.T) {
