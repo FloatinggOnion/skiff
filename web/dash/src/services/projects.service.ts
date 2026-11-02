@@ -12,6 +12,7 @@ export type App = {
   message?: string
   updated?: number
   origin?: 'cli'
+  image?: string
 }
 
 export type ProjectDetail = {
@@ -39,6 +40,21 @@ export type ProjectDetail = {
   previewProtected: boolean
   healthPath: string
   healthTimeout: number
+  image?: string
+}
+
+export type RegistryCreds = {
+  username: string
+  set: boolean
+  host: string
+}
+
+export type ImageProject = {
+  name: string
+  image: string
+  port: string
+  username: string
+  password: string
 }
 
 export type Job = {
@@ -99,6 +115,7 @@ export type ProjectSettings = {
   sleepAfter: number
   healthPath: string
   healthTimeout: number
+  image?: string
 }
 
 class ProjectsService extends BaseService {
@@ -112,6 +129,22 @@ class ProjectsService extends BaseService {
 
   update(name: string, settings: ProjectSettings) {
     return this.put('/project', settings, { params: { app: name } })
+  }
+
+  createFromImage(project: ImageProject) {
+    return this.post<{ app: string; id: string }>('/projects/image', project)
+  }
+
+  registry(name: string) {
+    return this.get<RegistryCreds>('/project/registry', { params: { app: name } })
+  }
+
+  setRegistry(name: string, username: string, password: string) {
+    return this.put('/project/registry', { username, password }, { params: { app: name } })
+  }
+
+  removeRegistry(name: string) {
+    return this.delete('/project/registry', { params: { app: name } })
   }
 
   setPreviewPassword(name: string, password: string) {

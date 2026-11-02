@@ -30,6 +30,8 @@ type Source struct {
 	// HealthPath must answer 2xx/3xx before a new version takes traffic; HealthTimeout is in seconds (0 = default).
 	HealthPath    string `json:"healthPath,omitempty"`
 	HealthTimeout int    `json:"healthTimeout,omitempty"`
+	// Image is a prebuilt image the project runs instead of building from a repo.
+	Image string `json:"image,omitempty"`
 }
 
 type Deploy struct {
@@ -60,7 +62,7 @@ func logPath(app, id string) string {
 	return filepath.Join(skiffDir(), "deploys", sanitizeName(app), sanitizeID(id)+".log")
 }
 
-const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after,health_path,health_timeout`
+const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after,health_path,health_timeout,image`
 
 func putSource(s Source) error {
 	if s.Replicas < 1 {
@@ -68,7 +70,7 @@ func putSource(s Source) error {
 	}
 	_, err := sqlDB.Exec(`
 		INSERT INTO sources(`+sourceCols+`)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(app) DO UPDATE SET
 			team=excluded.team, repo=excluded.repo, branch=excluded.branch,
 			root_dir=excluded.root_dir, port=excluded.port,
@@ -76,9 +78,9 @@ func putSource(s Source) error {
 			preview_auto=excluded.preview_auto, replicas=excluded.replicas, release=excluded.release,
 			autoscale=excluded.autoscale, scale_min=excluded.scale_min, scale_max=excluded.scale_max, scale_cpu=excluded.scale_cpu,
 			origin=excluded.origin, sleep_after=excluded.sleep_after,
-			health_path=excluded.health_path, health_timeout=excluded.health_timeout`,
+			health_path=excluded.health_path, health_timeout=excluded.health_timeout, image=excluded.image`,
 		s.App, s.Team, s.Repo, s.Branch, s.RootDir, s.Port, s.CloneURL, b2i(s.Auto), s.Parent, b2i(s.PreviewAuto), s.Replicas, s.Release,
-		b2i(s.Autoscale), s.ScaleMin, s.ScaleMax, s.ScaleCPU, s.Origin, s.SleepAfter, s.HealthPath, s.HealthTimeout)
+		b2i(s.Autoscale), s.ScaleMin, s.ScaleMax, s.ScaleCPU, s.Origin, s.SleepAfter, s.HealthPath, s.HealthTimeout, s.Image)
 	return err
 }
 
@@ -86,7 +88,7 @@ func scanSource(row interface{ Scan(...any) error }) (Source, bool) {
 	var s Source
 	var auto, previewAuto, autoscale int
 	if row.Scan(&s.App, &s.Team, &s.Repo, &s.Branch, &s.RootDir, &s.Port, &s.CloneURL, &auto, &s.Parent, &previewAuto, &s.Replicas, &s.Release,
-		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin, &s.SleepAfter, &s.HealthPath, &s.HealthTimeout) != nil {
+		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin, &s.SleepAfter, &s.HealthPath, &s.HealthTimeout, &s.Image) != nil {
 		return Source{}, false
 	}
 	s.Auto = auto != 0
@@ -153,7 +155,8 @@ func deleteSource(app string) {
 		del(`DELETE FROM db_attachments WHERE app=?`) &&
 		del(`DELETE FROM preview_passwords WHERE app=?`) &&
 		del(`DELETE FROM preview_env WHERE app=?`) &&
-		del(`DELETE FROM volumes WHERE app=?`) {
+		del(`DELETE FROM volumes WHERE app=?`) &&
+		del(`DELETE FROM registry_creds WHERE app=?`) {
 		_ = tx.Commit()
 	}
 }

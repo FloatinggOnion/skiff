@@ -62,10 +62,13 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 	fmt.Println()
 
 	contextDir := filepath.Dir(configPath)
+	prebuilt := cfg.Build.Image
 	var b builder.Builder
-	if bc := cfg.Build; bc.Start != "" || bc.Static != "" {
+	switch bc := cfg.Build; {
+	case prebuilt != "":
+	case bc.Start != "" || bc.Static != "":
 		b = builder.Custom(bc.Base, bc.Install, bc.Build, bc.Start, bc.Static)
-	} else {
+	default:
 		b, err = builder.Select(contextDir, cfg.Build.Dockerfile)
 		if err != nil {
 			ui.Fail(err.Error())
@@ -74,7 +77,11 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 	}
 
 	ui.Field("target", cfg.TargetLabel())
-	ui.Field("build", b.Name())
+	if prebuilt != "" {
+		ui.Field("image", prebuilt)
+	} else {
+		ui.Field("build", b.Name())
+	}
 	panel, signedIn := panelFor(cfg)
 	if signedIn {
 		if n := pullDashboardEnv(panel, cfg, contextDir); n > 0 {
@@ -91,13 +98,6 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 	start := time.Now()
 	image := fmt.Sprintf("skiff-%s:latest", cfg.Name)
 
-	buildEnv := cfg.Environment(contextDir)
-	dockerfile, err := b.Dockerfile(cfg.Build.Port, buildEnv)
-	if err != nil {
-		ui.Fail("Couldn't prepare the build")
-		return err
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	if buildTimeout > 0 {
@@ -106,19 +106,30 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 		defer cancel()
 	}
 
-	ui.Step("Building " + image)
-	if err := eng.BuildFromDockerfile(ctx, image, dockerfile, contextDir, os.Stdout); err != nil {
-		switch ctx.Err() {
-		case context.DeadlineExceeded:
-			ui.Fail(fmt.Sprintf("Build exceeded %s — canceled", buildTimeout))
-		case context.Canceled:
-			ui.Fail("Build canceled")
-		default:
-			ui.Fail("Build failed")
+	if prebuilt != "" {
+		if err := pullPrebuilt(ctx, eng, prebuilt, image, buildTimeout); err != nil {
+			return err
 		}
-		return err
+	} else {
+		dockerfile, err := b.Dockerfile(cfg.Build.Port, cfg.Environment(contextDir))
+		if err != nil {
+			ui.Fail("Couldn't prepare the build")
+			return err
+		}
+		ui.Step("Building " + image)
+		if err := eng.BuildFromDockerfile(ctx, image, dockerfile, contextDir, os.Stdout); err != nil {
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				ui.Fail(fmt.Sprintf("Build exceeded %s — canceled", buildTimeout))
+			case context.Canceled:
+				ui.Fail("Build canceled")
+			default:
+				ui.Fail("Build failed")
+			}
+			return err
+		}
+		ui.Done("Built " + image)
 	}
-	ui.Done("Built " + image)
 
 	deployID := os.Getenv("SKIFF_DEPLOY_ID")
 	labels := map[string]string{}
@@ -136,6 +147,42 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 	if signedIn {
 		reportDeploy(panel, cfg, deployID, labels)
 	}
+	return nil
+}
+
+// pullPrebuilt fetches a prebuilt image and tags it as the app's build, so the release and rollback paths treat it like one Skiff built.
+func pullPrebuilt(ctx context.Context, eng *docker.Engine, ref, image string, timeout time.Duration) error {
+	ui.Step("Pulling " + ref)
+	var auth *docker.RegistryAuth
+	if user := os.Getenv("SKIFF_REGISTRY_USER"); user != "" {
+		auth = &docker.RegistryAuth{Host: config.RegistryHost(ref), Username: user, Password: os.Getenv("SKIFF_REGISTRY_PASSWORD")}
+	}
+	var out strings.Builder
+	if err := eng.Pull(ctx, ref, auth, &out); err != nil {
+		switch ctx.Err() {
+		case context.DeadlineExceeded:
+			ui.Fail(fmt.Sprintf("Pull exceeded %s — canceled", timeout))
+		case context.Canceled:
+			ui.Fail("Pull canceled")
+		default:
+			ui.Fail("Couldn't pull " + ref)
+			if s := strings.TrimSpace(out.String()); s != "" {
+				fmt.Println(s)
+			}
+			if auth == nil {
+				ui.Note("for a private image, sign in to its registry first (docker login), or set SKIFF_REGISTRY_USER and SKIFF_REGISTRY_PASSWORD")
+			}
+		}
+		return err
+	}
+	if err := eng.Tag(ref, image); err != nil {
+		ui.Fail("Couldn't tag " + ref)
+		return err
+	}
+	if d := eng.ImageDigest(ref); d != "" {
+		ui.Field("digest", d)
+	}
+	ui.Done("Pulled " + ref)
 	return nil
 }
 
@@ -177,6 +224,13 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 		if cfg.Deploy.HealthTimeout > 0 {
 			timeout = time.Duration(cfg.Deploy.HealthTimeout) * time.Second
 		}
+	}
+	if cfg.Build.Port == 0 {
+		cfg.Build.Port = eng.ImagePort(image)
+		if cfg.Build.Port == 0 {
+			cfg.Build.Port = config.DefaultPort
+		}
+		ui.Field("port", fmt.Sprintf("%d", cfg.Build.Port))
 	}
 	labels := map[string]string{}
 	for k, v := range spec.labels {

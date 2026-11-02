@@ -1,4 +1,4 @@
-import { GitBranch, Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { AppCard } from '@/components/app-card'
@@ -67,8 +67,8 @@ export default function ProjectsPage() {
             />
           </div>
           <Button size="sm" onClick={() => setOpen(true)}>
-            <GitBranch />
-            Deploy from Git
+            <Plus />
+            New project
           </Button>
         </div>
       </header>
@@ -113,12 +113,12 @@ export default function ProjectsPage() {
                 <div className="space-y-1">
                   <p className="text-sm font-medium">No projects yet</p>
                   <p className="text-muted-foreground text-sm">
-                    Deploy your first app straight from a Git repository.
+                    Deploy your first app from a Git repository or a Docker image.
                   </p>
                 </div>
                 <Button size="sm" onClick={() => setOpen(true)}>
-                  <GitBranch />
-                  Deploy from Git
+                  <Plus />
+                  New project
                 </Button>
               </div>
             )}
@@ -142,6 +142,10 @@ export default function ProjectsPage() {
         onDeployRepo={(repo, clone, branch, name, port, auto, rootDir) => {
           setOpen(false)
           term.deployRepo(repo, clone, branch, name, port, auto, rootDir)
+        }}
+        onDeployImage={(app, id) => {
+          setOpen(false)
+          term.follow(app, id)
         }}
       />
 

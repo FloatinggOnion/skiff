@@ -31,6 +31,7 @@ type appView struct {
 	Message string `json:"message,omitempty"`
 	Updated int64  `json:"updated,omitempty"`
 	Origin  string `json:"origin,omitempty"`
+	Image   string `json:"image,omitempty"`
 }
 
 // displayState reports a sleeping app as asleep rather than as a stopped container.
@@ -75,6 +76,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			Branch: src.Branch,
 			Auto:   src.Auto,
 			Origin: src.Origin,
+			Image:  src.Image,
 		}
 		if ds := appDeploys(a.Name); len(ds) > 0 {
 			av.Commit = ds[0].Commit
@@ -114,6 +116,8 @@ type projectView struct {
 	HealthTimeout int `json:"healthTimeout"`
 	// PreviewProtected means its previews ask visitors for a password.
 	PreviewProtected bool `json:"previewProtected"`
+	// Image is set for a project that runs a prebuilt image instead of building a repo.
+	Image string `json:"image,omitempty"`
 }
 
 func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +152,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			SleepAfter: src.SleepAfter, Sleeping: isSleeping(app),
 			HealthPath: src.HealthPath, HealthTimeout: src.HealthTimeout,
 			PreviewProtected: previewPasswordHash(app) != "",
+			Image:            src.Image,
 		})
 	case http.MethodPut:
 		var body struct {
@@ -165,6 +170,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			SleepAfter    int    `json:"sleepAfter"`
 			HealthPath    string `json:"healthPath"`
 			HealthTimeout int    `json:"healthTimeout"`
+			Image         string `json:"image"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		src, ok := getSource(app)
@@ -178,10 +184,24 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		src.HealthPath, src.HealthTimeout = body.HealthPath, body.HealthTimeout
-		src.Branch = strings.TrimSpace(body.Branch)
-		src.RootDir = strings.TrimSpace(body.RootDir)
-		if port := strings.TrimSpace(body.Port); port != "" {
-			src.Port = port
+		if src.Image != "" {
+			// An image project's port may be left empty to use the one the image exposes.
+			img, port := strings.TrimSpace(body.Image), strings.TrimSpace(body.Port)
+			if err := config.ValidateImage(img); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if !validPort(port) {
+				http.Error(w, "port must be a number from 1 to 65535", http.StatusBadRequest)
+				return
+			}
+			src.Image, src.Port = img, port
+		} else {
+			src.Branch = strings.TrimSpace(body.Branch)
+			src.RootDir = strings.TrimSpace(body.RootDir)
+			if port := strings.TrimSpace(body.Port); port != "" {
+				src.Port = port
+			}
 		}
 		if body.Replicas >= 1 && body.Replicas <= 10 {
 			src.Replicas = body.Replicas

@@ -73,6 +73,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	checkVolumes(t, c, panelAddr)
 	checkHealthCheck(t, c, panelAddr, routerAddr)
 	checkPreviewPassword(t, c, root, panelAddr, routerAddr)
+	checkImageProject(t, c, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
@@ -147,6 +148,71 @@ func checkHealthCheck(t *testing.T, c *http.Client, panelAddr, routerAddr string
 	setHealth("/index.html", 0)
 	stream(t, c, "http://"+panelAddr+"/api/redeploy?app="+app)
 	expectServed(t, routerAddr, "v2")
+}
+
+// checkImageProject deploys a prebuilt image with its port read from the image, then moves it to a new tag through the API the way CI would.
+func checkImageProject(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
+	t.Helper()
+	const img = "e2e-img"
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter label=skiff.app="+img+") ; docker rmi $(docker images -q skiff-"+img+")").Run()
+	})
+	var created struct{ App, ID string }
+	postJSON(t, c, "http://"+panelAddr+"/api/projects/image", `{"name":"`+img+`","image":"traefik/whoami:v1.10.2"}`, &created)
+	stream(t, c, "http://"+panelAddr+"/api/deploys/log?app="+img+"&id="+created.ID)
+	served := func() bool {
+		req, _ := http.NewRequest(http.MethodGet, "http://"+routerAddr+"/", nil)
+		req.Host = img + ".localhost"
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return resp.StatusCode == 200 && strings.Contains(string(b), "Hostname:")
+	}
+	eventually(t, 30*time.Second, served)
+
+	resp, err := c.Get("http://" + panelAddr + "/api/preview?app=" + img + "&branch=feat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("a preview of an image project should be refused, got %d", resp.StatusCode)
+	}
+
+	var tok struct{ Token string }
+	postJSON(t, c, "http://"+panelAddr+"/api/tokens", `{"name":"e2e-ci"}`, &tok)
+	req, _ := http.NewRequest(http.MethodPost, "http://"+panelAddr+"/api/v1/apps/"+img+"/deploy", strings.NewReader(`{"image":"traefik/whoami:v1.10.3"}`))
+	req.Header.Set("Authorization", "Bearer "+tok.Token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var queued struct{ ID string }
+	_ = json.NewDecoder(resp.Body).Decode(&queued)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted || queued.ID == "" {
+		t.Fatalf("API deploy with a new image: %d", resp.StatusCode)
+	}
+	stream(t, c, "http://"+panelAddr+"/api/deploys/log?app="+img+"&id="+queued.ID)
+	var project struct {
+		Image   string `json:"image"`
+		Deploys []struct {
+			Message string `json:"message"`
+		} `json:"deploys"`
+	}
+	getJSON(t, c, "http://"+panelAddr+"/api/project?app="+img, &project)
+	if project.Image != "traefik/whoami:v1.10.3" || len(project.Deploys) == 0 || project.Deploys[0].Message != project.Image {
+		t.Fatalf("after the API deploy: %+v", project)
+	}
+	if out, _ := exec.Command("docker", "inspect", "-f", "{{index .Config.Labels \"skiff.port\"}}", appContainer(t, img)).Output(); strings.TrimSpace(string(out)) != "80" {
+		t.Fatalf("port read from the image = %q, want 80", out)
+	}
+	eventually(t, 30*time.Second, served)
+	post(t, c, "http://"+panelAddr+"/api/down?app="+img, "")
 }
 
 func appContainer(t *testing.T, name string) string {

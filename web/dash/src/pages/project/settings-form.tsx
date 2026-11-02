@@ -44,6 +44,7 @@ export function SettingsForm({
   sleepAfter,
   healthPath,
   healthTimeout,
+  image = '',
   onSaved,
   onDeleted,
   onRedeploy,
@@ -65,6 +66,7 @@ export function SettingsForm({
   sleepAfter: number
   healthPath: string
   healthTimeout: number
+  image?: string
   onSaved: () => void
   onDeleted: () => void
   onRedeploy: () => void
@@ -90,10 +92,12 @@ export function SettingsForm({
       sleepAfter: sleepAfter || 0,
       healthPath: healthPath || '',
       healthTimeout: healthTimeout || 0,
+      image,
     },
   })
   const { register, handleSubmit, watch, setValue, formState } = form
   const values = watch()
+  const fromImage = !!image
   const setReplicas = (n: number) =>
     setValue('replicas', Math.min(10, Math.max(1, n)), { shouldDirty: true })
   const setNum = (field: 'scaleMin' | 'scaleMax', n: number) =>
@@ -135,7 +139,20 @@ export function SettingsForm({
       <section className="rounded-xl border border-white/8 p-5">
         <h2 className="mb-4 text-sm font-semibold">Build &amp; deploy</h2>
         <FieldGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {!cli && (
+          {fromImage && (
+            <Field data-invalid={!!formState.errors.image} className="sm:col-span-2">
+              <FieldLabel htmlFor="s-image">Image</FieldLabel>
+              <Input
+                id="s-image"
+                placeholder="ghcr.io/you/app:latest"
+                className="font-mono"
+                aria-invalid={!!formState.errors.image}
+                {...register('image')}
+              />
+              <FieldError errors={[formState.errors.image]} />
+            </Field>
+          )}
+          {!cli && !fromImage && (
             <>
               <Field>
                 <FieldLabel htmlFor="s-branch">Branch</FieldLabel>
@@ -156,14 +173,14 @@ export function SettingsForm({
             <FieldLabel htmlFor="s-port">Port</FieldLabel>
             <Input
               id="s-port"
-              placeholder="3000"
+              placeholder={fromImage ? 'From the image' : '3000'}
               className="font-mono"
               aria-invalid={!!formState.errors.port}
               {...register('port')}
             />
             <FieldError errors={[formState.errors.port]} />
           </Field>
-          {!cli && (
+          {!cli && !fromImage && (
             <>
               <Field>
                 <FieldLabel htmlFor="s-auto">Auto-deploy on push</FieldLabel>
@@ -210,6 +227,13 @@ export function SettingsForm({
               The next <span className="text-foreground/70 font-mono">skiff deploy</span> uses the{' '}
               <span className="text-foreground/70 font-mono">replicas</span> in its{' '}
               <span className="text-foreground/70 font-mono">skiff.toml</span>.
+            </>
+          ) : fromImage ? (
+            <>
+              {' '}
+              Redeploy pulls the image again, so a moved tag like{' '}
+              <span className="text-foreground/70 font-mono">latest</span> picks up its new
+              version.
             </>
           ) : (
             <>

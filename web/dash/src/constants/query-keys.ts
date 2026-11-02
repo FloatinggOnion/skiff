@@ -29,6 +29,7 @@ export const queryKeys = {
   jobs: (app: string) => ['jobs', app] as const,
   workers: (app: string) => ['workers', app] as const,
   volumes: (app: string) => ['volumes', app] as const,
+  registry: (app: string) => ['registry', app] as const,
   backups: (dbId: string) => ['backups', dbId] as const,
   deploys: (app: string | null) => ['deploys', app] as const,
   deploysPaged: (app: string) => ['deploys', app, 'page'] as const,

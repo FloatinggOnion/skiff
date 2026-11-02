@@ -84,6 +84,9 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	defer f.Close()
 	logln := func(s string) { fmt.Fprintln(f, s) }
 
+	if src.Image != "" && message == "" {
+		message = src.Image
+	}
 	addDeploy(Deploy{
 		ID: id, App: src.App, Commit: shortCommit(commit), Message: message,
 		Trigger: trigger, Status: "building", Started: time.Now().Unix(),
@@ -115,6 +118,61 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		})
 	}
 
+	var ctxDir string
+	var childEnv []string
+	if src.Image != "" {
+		if ctxDir = p.imageWorkDir(src); ctxDir == "" {
+			finish("✗ couldn't prepare the deploy")
+			return
+		}
+		if user, pass, ok := getRegistryCreds(src.App); ok {
+			childEnv = append(childEnv, "SKIFF_REGISTRY_USER="+user, "SKIFF_REGISTRY_PASSWORD="+pass)
+		}
+	} else {
+		var ok bool
+		if ctxDir, sha, ok = p.cloneSource(ctx, src, authURL, sha, logln, finish, status); !ok {
+			return
+		}
+	}
+	tomlPath := filepath.Join(ctxDir, "skiff.toml")
+	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src), teamNetwork(src.Team), p.volumeDefs(src))), 0o644)
+
+	if src.Image != "" {
+		logln("→ deploying " + src.Image)
+	} else {
+		logln("→ building & deploying")
+	}
+	self, _ := os.Executable()
+	cmd := exec.CommandContext(ctx, self, "deploy", "-c", tomlPath)
+	// On supersede, SIGINT so the build cancels gracefully; WaitDelay hard-kills it if it doesn't exit promptly.
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = 10 * time.Second
+	cmd.Env = append(append(os.Environ(), "SKIFF_DEPLOY_ID="+id), childEnv...) // retain this build for rollback
+	pr, pw := io.Pipe()
+	cmd.Stdout, cmd.Stderr = pw, pw
+	errc := make(chan error, 1)
+	go func() { errc <- cmd.Run(); _ = pw.Close() }()
+	sc := bufio.NewScanner(pr)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for sc.Scan() {
+		logln(sc.Text())
+	}
+	// Drain the remainder (e.g. a line past the scanner's 1 MB cap stops Scan early) so the child can't block on a full pipe and wedge the build.
+	_, _ = io.Copy(io.Discard, pr)
+	if e := <-errc; e != nil {
+		finish("✗ deploy failed")
+		return
+	}
+	logln("✓ live")
+	setDeployStatus(src.App, id, "live")
+	p.reconcileWorkers(src.App)
+	p.pruneVolumes(src)
+	go p.commentOnPR(src, shortCommit(commit), "live")
+	status(sha, "live")
+}
+
+// cloneSource checks out a repo source and returns the directory to build from, with the commit it resolved to.
+func (p *Panel) cloneSource(ctx context.Context, src Source, authURL, sha string, logln, finish func(string), status func(string, string)) (string, string, bool) {
 	clone := authURL
 	if clone == "" {
 		clone = src.CloneURL
@@ -145,7 +203,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	cl.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ALLOW_PROTOCOL=https:http")
 	if out, e := cl.CombinedOutput(); e != nil {
 		finish("✗ clone failed: " + cloneError(out))
-		return
+		return "", sha, false
 	}
 	if sha == "" {
 		if out, err := exec.Command("git", "-C", work, "rev-parse", "HEAD").Output(); err == nil {
@@ -158,39 +216,19 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	ctxDir := filepath.Join(work, filepath.Clean("/"+src.RootDir))
 	if fi, err := os.Stat(ctxDir); err != nil || !fi.IsDir() {
 		finish("✗ root directory not found in the repo: " + orRoot(src.RootDir))
-		return
+		return "", sha, false
 	}
-	tomlPath := filepath.Join(ctxDir, "skiff.toml")
-	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src), teamNetwork(src.Team), p.volumeDefs(src))), 0o644)
+	return ctxDir, sha, true
+}
 
-	logln("→ building & deploying")
-	self, _ := os.Executable()
-	cmd := exec.CommandContext(ctx, self, "deploy", "-c", tomlPath)
-	// On supersede, SIGINT so the build cancels gracefully; WaitDelay hard-kills it if it doesn't exit promptly.
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-	cmd.WaitDelay = 10 * time.Second
-	cmd.Env = append(os.Environ(), "SKIFF_DEPLOY_ID="+id) // retain this build for rollback
-	pr, pw := io.Pipe()
-	cmd.Stdout, cmd.Stderr = pw, pw
-	errc := make(chan error, 1)
-	go func() { errc <- cmd.Run(); _ = pw.Close() }()
-	sc := bufio.NewScanner(pr)
-	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
-	for sc.Scan() {
-		logln(sc.Text())
+// imageWorkDir is an empty directory to hold the generated skiff.toml for a project that runs a prebuilt image.
+func (p *Panel) imageWorkDir(src Source) string {
+	work := filepath.Join(p.buildsDir, sanitizeName(src.App))
+	_ = os.RemoveAll(work)
+	if os.MkdirAll(work, 0o755) != nil {
+		return ""
 	}
-	// Drain the remainder (e.g. a line past the scanner's 1 MB cap stops Scan early) so the child can't block on a full pipe and wedge the build.
-	_, _ = io.Copy(io.Discard, pr)
-	if e := <-errc; e != nil {
-		finish("✗ deploy failed")
-		return
-	}
-	logln("✓ live")
-	setDeployStatus(src.App, id, "live")
-	p.reconcileWorkers(src.App)
-	p.pruneVolumes(src)
-	go p.commentOnPR(src, shortCommit(commit), "live")
-	status(sha, "live")
+	return work
 }
 
 func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
@@ -390,7 +428,13 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if src.Replicas > 1 {
 		fmt.Fprintf(&b, "replicas = %d\n", src.Replicas)
 	}
-	fmt.Fprintf(&b, "\n[build]\nport = %s\n", src.Port)
+	b.WriteString("\n[build]\n")
+	if src.Port != "" {
+		fmt.Fprintf(&b, "port = %s\n", src.Port)
+	}
+	if src.Image != "" {
+		fmt.Fprintf(&b, "image = %q\n", src.Image)
+	}
 	b.WriteString("\n[deploy]\n")
 	fmt.Fprintf(&b, "network = %q\n", network)
 	if strings.TrimSpace(src.Release) != "" {

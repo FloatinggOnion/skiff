@@ -25,6 +25,7 @@ import { projectsService, type Deploy } from '@/services/api.service'
 import { JobsPanel } from './project/jobs-panel'
 import { WorkersPanel } from './project/workers-panel'
 import { VolumesPanel } from './project/volumes-panel'
+import { RegistryPanel } from './project/registry-panel'
 import { SettingsForm } from './project/settings-form'
 import { PreviewsPanel } from './project/previews-panel'
 import { ObservabilityPanel } from './project/observability-panel'
@@ -76,6 +77,7 @@ export default function ProjectDetailPage() {
 
   const latest = project.deploys[0]
   const cli = project.origin === 'cli'
+  const fromImage = !!project.image
   const host = project.url.replace(/^https?:\/\//, '')
 
   return (
@@ -144,7 +146,7 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="observability">Observability</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
-          {!cli && (
+          {!cli && !fromImage && (
             <TabsTrigger value="previews">
               Previews
               {project.previews.length > 0 && (
@@ -198,7 +200,7 @@ export default function ProjectDetailPage() {
                   </a>
                   <div className="flex flex-col gap-1.5 border-t border-white/5 pt-4">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      {project.repo ? (
+                      {fromImage ? null : project.repo ? (
                         <a
                           href={'https://github.com/' + project.repo + '/commit/' + latest.commit}
                           target="_blank"
@@ -211,7 +213,7 @@ export default function ProjectDetailPage() {
                         <span className="font-mono text-sm">{latest.commit || '—'}</span>
                       )}
                       <span className="text-muted-foreground font-mono text-xs">
-                        {cli ? '' : `on ${project.branch || 'main'} · `}
+                        {cli || fromImage ? '' : `on ${project.branch || 'main'} · `}
                         {latest.trigger} · {relTime(latest.started)}
                       </span>
                     </div>
@@ -227,6 +229,8 @@ export default function ProjectDetailPage() {
                       No deployments recorded yet — the next{' '}
                       <span className="font-mono">skiff deploy</span> shows up here.
                     </>
+                  ) : fromImage ? (
+                    <>No deployments yet — hit Redeploy.</>
                   ) : (
                     <>
                       No deployments yet — push to{' '}
@@ -253,6 +257,19 @@ export default function ProjectDetailPage() {
                     Builds run on the machine that deploys, and config comes from its{' '}
                     <span className="font-mono">skiff.toml</span>. Logs, metrics, domains, scaling
                     and rollback work from here.
+                  </p>
+                </dl>
+              ) : fromImage ? (
+                <dl className="divide-y divide-white/5">
+                  <Row label="Image">
+                    <span className="truncate font-mono text-xs">{project.image}</span>
+                  </Row>
+                  <Row label="Port">
+                    <span className="font-mono text-xs">{project.port || 'from the image'}</span>
+                  </Row>
+                  <p className="text-muted-foreground pt-3 text-xs leading-relaxed">
+                    Redeploy pulls the image again. To deploy a new tag from CI, call the deploy API
+                    with the image to run.
                   </p>
                 </dl>
               ) : (
@@ -422,7 +439,7 @@ export default function ProjectDetailPage() {
             </p>
           )}
           <EnvEditor app={project.name} />
-          {!cli && (
+          {!cli && !fromImage && (
             <section className="mt-10 border-t border-white/8 pt-6">
               <h2 className="mb-3 text-sm font-semibold">Preview overrides</h2>
               <EnvEditor app={project.name} scope="preview" />
@@ -458,11 +475,13 @@ export default function ProjectDetailPage() {
             sleepAfter={project.sleepAfter}
             healthPath={project.healthPath}
             healthTimeout={project.healthTimeout}
+            image={project.image}
             onSaved={reload}
             onDeleted={() => navigate('/')}
             onRedeploy={() => term.redeploy(project.name)}
             cli={cli}
           />
+          {fromImage && <RegistryPanel app={project.name} />}
           <VolumesPanel app={project.name} onRedeploy={() => term.redeploy(project.name)} />
         </TabsContent>
       </Tabs>

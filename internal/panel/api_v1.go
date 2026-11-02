@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -68,6 +70,7 @@ type apiApp struct {
 	URL       string `json:"url"`
 	Repo      string `json:"repo,omitempty"`
 	Branch    string `json:"branch,omitempty"`
+	Image     string `json:"image,omitempty"`
 	Replicas  int    `json:"replicas"`
 	Running   int    `json:"running"`
 	Autoscale bool   `json:"autoscale"`
@@ -79,7 +82,7 @@ func (p *Panel) apiAppView(a registry.App, src Source) apiApp {
 	v := apiApp{
 		Name: a.Name, State: p.displayState(a.Name, a.Container),
 		URL:  "https://" + a.Name + "." + p.domain,
-		Repo: src.Repo, Branch: src.Branch,
+		Repo: src.Repo, Branch: src.Branch, Image: src.Image,
 		Replicas: src.Replicas, Running: len(a.Replicas), Autoscale: src.Autoscale,
 	}
 	if v.Running == 0 {
@@ -130,6 +133,31 @@ func (p *Panel) apiDeploy(w http.ResponseWriter, r *http.Request) {
 	if src.Origin == originCLI {
 		apiErr(w, http.StatusConflict, cliOnlyMsg)
 		return
+	}
+	// An image project can be pointed at a new tag in the same call, e.g. from CI after pushing it.
+	var body struct {
+		Image string `json:"image"`
+	}
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&body); err != nil && err != io.EOF {
+			apiErr(w, http.StatusBadRequest, "body must be JSON, e.g. {\"image\": \"ghcr.io/you/app:v2\"}")
+			return
+		}
+	}
+	if img := strings.TrimSpace(body.Image); img != "" {
+		if src.Image == "" {
+			apiErr(w, http.StatusConflict, "this app builds from a repository; image only applies to apps that run a prebuilt image")
+			return
+		}
+		if err := config.ValidateImage(img); err != nil {
+			apiErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		src.Image = img
+		if err := putSource(src); err != nil {
+			apiErr(w, http.StatusInternalServerError, "couldn't save the image")
+			return
+		}
 	}
 	id := newDeployID()
 	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "deploy", Target: name, Detail: "via api"})

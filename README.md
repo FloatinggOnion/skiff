@@ -69,7 +69,8 @@ No Dockerfile required — Skiff detects the stack and generates the build:
 | **Static** | `index.html` |
 
 Have a `Dockerfile`? Skiff uses it instead. Need to tweak a step? Set `[build]`
-commands in `skiff.toml` — the escape hatch short of a full Dockerfile.
+commands in `skiff.toml` — the escape hatch short of a full Dockerfile. Already
+built? Set `image` under `[build]` and Skiff pulls it instead.
 
 ## The platform
 
@@ -100,6 +101,8 @@ platform in the browser:
   renewed for you.
 - **Autoscaling** — add and retire replicas to hold each app near a target CPU.
 - **Workers & cron** — long-running background processes and scheduled jobs.
+- **Prebuilt images** — run any image from Docker Hub or a private registry, and
+  point it at a new tag from CI with one API call.
 - **Persistent volumes** — directories that keep their files across deploys, for
   SQLite databases and uploads; previews get empty copies of their own.
 - **Alerts** — email, Slack, or webhook when a deploy fails, an app goes down, or
@@ -143,6 +146,7 @@ name = "myapp"
 [build]
 port = 3000              # the port your app listens on
 # dockerfile = "Dockerfile"
+# image = "ghcr.io/you/app:1.4"   # run a prebuilt image instead of building
 
 [env]                    # available at build + runtime
 API_URL = "https://api.example.com"

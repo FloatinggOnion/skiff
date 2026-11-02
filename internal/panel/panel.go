@@ -120,6 +120,8 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/apps", p.protected(p.handleApps))
 	mux.HandleFunc("/api/project", p.protected(p.handleProject))
 	mux.HandleFunc("/api/project/preview-password", p.protected(p.handlePreviewPassword))
+	mux.HandleFunc("/api/project/registry", p.protected(p.handleRegistry))
+	mux.HandleFunc("/api/projects/image", p.protected(p.handleImageProject))
 	mux.HandleFunc("/api/redeploy", p.protected(p.handleRedeploy))
 	mux.HandleFunc("/api/rollback", p.protected(p.handleRollback))
 	mux.HandleFunc("/api/cancel", p.protected(p.handleCancel))

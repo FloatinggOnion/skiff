@@ -35,7 +35,7 @@ export function OnboardingChecklist({
     {
       done: appsCount > 0,
       label: 'Deploy your first project',
-      desc: 'Ship an app straight from a Git repository.',
+      desc: 'Ship an app from a Git repository or a Docker image.',
       icon: Rocket,
       action: onDeploy,
     },

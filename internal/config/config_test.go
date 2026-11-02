@@ -154,3 +154,45 @@ func TestLoadHealth(t *testing.T) {
 		t.Error("rejected a valid health check")
 	}
 }
+
+func TestImageConfig(t *testing.T) {
+	p := write(t, "skiff.toml", "name = \"web\"\n[build]\nimage = \"nginx:1.27\"\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.Build.Image != "nginx:1.27" || c.Build.Port != 0 {
+		t.Errorf("image deploy should leave the port to the image, got image=%q port=%d", c.Build.Image, c.Build.Port)
+	}
+	if _, err := Load(write(t, "skiff.toml", "name = \"web\"\n[build]\nimage = \"nginx latest\"\n")); err == nil {
+		t.Error("an image reference with a space was accepted")
+	}
+}
+
+func TestValidateImage(t *testing.T) {
+	for _, ok := range []string{"nginx", "nginx:1.27", "ghcr.io/you/api:sha-1a2b", "localhost:5000/app", "you/app@sha256:abc123"} {
+		if err := ValidateImage(ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "-flag", "a b", "app;rm", "app\n"} {
+		if ValidateImage(bad) == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}
+
+func TestRegistryHost(t *testing.T) {
+	for ref, want := range map[string]string{
+		"nginx":                    "docker.io",
+		"you/app:1":                "docker.io",
+		"ghcr.io/you/app":          "ghcr.io",
+		"localhost:5000/app":       "localhost:5000",
+		"registry.example.com/a/b": "registry.example.com",
+		"localhost/app":            "localhost",
+	} {
+		if got := RegistryHost(ref); got != want {
+			t.Errorf("RegistryHost(%q) = %q, want %q", ref, got, want)
+		}
+	}
+}

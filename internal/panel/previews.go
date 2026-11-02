@@ -136,6 +136,10 @@ func (p *Panel) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, cliOnlyMsg, http.StatusConflict)
 		return
 	}
+	if src.Image != "" {
+		http.Error(w, "previews deploy a branch of a repository; this project runs a prebuilt image", http.StatusConflict)
+		return
+	}
 	if branch == "" {
 		http.Error(w, "a branch is required", http.StatusBadRequest)
 		return

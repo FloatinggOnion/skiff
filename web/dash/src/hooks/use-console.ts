@@ -85,6 +85,11 @@ export function useConsole(onDeployed: () => void) {
     [start, onDeployed],
   )
 
+  const follow = useCallback(
+    (app: string, id: string) => start('Deploying ' + app, deployLogUrl(app, id), onDeployed, app),
+    [start, onDeployed],
+  )
+
   const showLogs = useCallback((name: string) => start('Logs: ' + name, logsUrl(name)), [start])
 
   const showBuildLog = useCallback(
@@ -98,6 +103,7 @@ export function useConsole(onDeployed: () => void) {
     stop,
     deploy,
     deployRepo,
+    follow,
     redeploy,
     rollback,
     preview,

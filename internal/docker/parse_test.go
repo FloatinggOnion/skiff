@@ -1,6 +1,9 @@
 package docker
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParsePercent(t *testing.T) {
 	cases := map[string]float64{
@@ -74,5 +77,30 @@ func TestParseVolumeSizes(t *testing.T) {
 	}
 	if len(parseVolumeSizes([]byte("null"))) != 0 {
 		t.Fatal("null output should give no sizes")
+	}
+}
+
+func TestParseExposedPort(t *testing.T) {
+	for in, want := range map[string]int{
+		`{"80/tcp":{}}`:                80,
+		`{"8080/tcp":{},"443/tcp":{}}`: 443,
+		`{"53/udp":{},"9000/tcp":{}}`:  9000,
+		`{"53/udp":{}}`:                0,
+		`null`:                         0,
+		``:                             0,
+	} {
+		if got := parseExposedPort([]byte(in)); got != want {
+			t.Errorf("parseExposedPort(%s) = %d, want %d", in, got, want)
+		}
+	}
+}
+
+func TestDockerAuthConfig(t *testing.T) {
+	got := string(dockerAuthConfig(RegistryAuth{Host: "ghcr.io", Username: "u", Password: "p"}))
+	if got != `{"auths":{"ghcr.io":{"auth":"dTpw"}}}` {
+		t.Errorf("ghcr config = %s", got)
+	}
+	if hub := string(dockerAuthConfig(RegistryAuth{Host: "docker.io", Username: "u", Password: "p"})); !strings.Contains(hub, "https://index.docker.io/v1/") {
+		t.Errorf("docker hub config = %s", hub)
 	}
 }

@@ -76,9 +76,9 @@ export default function CommandPalette({
           </CommandGroup>
         )}
         <CommandGroup heading="Actions">
-          <CommandItem value="deploy from git" onSelect={() => go('/')}>
+          <CommandItem value="new project deploy from git image" onSelect={() => go('/')}>
             <GitBranch />
-            Deploy from Git
+            New project
           </CommandItem>
         </CommandGroup>
       </CommandList>

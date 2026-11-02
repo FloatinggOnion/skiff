@@ -73,6 +73,7 @@ var migrations = []string{
 	`ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE users ADD COLUMN totp_pending TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE users ADD COLUMN totp_step INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE sources ADD COLUMN image TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -130,7 +131,8 @@ CREATE TABLE IF NOT EXISTS sources (
   origin       TEXT NOT NULL DEFAULT '',
   sleep_after  INTEGER NOT NULL DEFAULT 0,
   health_path  TEXT NOT NULL DEFAULT '',
-  health_timeout INTEGER NOT NULL DEFAULT 0
+  health_timeout INTEGER NOT NULL DEFAULT 0,
+  image        TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,
@@ -358,6 +360,11 @@ CREATE TABLE IF NOT EXISTS volumes (
   path    TEXT NOT NULL,
   created INTEGER NOT NULL,
   PRIMARY KEY (app, name)
+);
+CREATE TABLE IF NOT EXISTS registry_creds (
+  app      TEXT PRIMARY KEY,
+  username TEXT NOT NULL,
+  password TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS preview_passwords (
   app  TEXT PRIMARY KEY,

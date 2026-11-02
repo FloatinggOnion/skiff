@@ -114,6 +114,31 @@ func ValidateHealth(path string, timeout int) error {
 	return nil
 }
 
+// DefaultPort is the port an app is assumed to listen on when nothing says otherwise.
+const DefaultPort = 8080
+
+// ValidateImage checks an image reference like nginx:1.27 or ghcr.io/you/api@sha256:… without contacting a registry.
+func ValidateImage(ref string) error {
+	if ref == "" || len(ref) > 255 || ref[0] == '-' {
+		return fmt.Errorf("image must be a reference like nginx:1.27 or ghcr.io/you/app:latest")
+	}
+	for _, r := range ref {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._-/:@", r)) {
+			return fmt.Errorf("image %q contains %q — use a reference like nginx:1.27", ref, r)
+		}
+	}
+	return nil
+}
+
+// RegistryHost is the registry an image reference is pulled from; Docker Hub when the first part isn't a hostname.
+func RegistryHost(ref string) string {
+	first, _, found := strings.Cut(ref, "/")
+	if found && (strings.ContainsAny(first, ".:") || first == "localhost") {
+		return first
+	}
+	return "docker.io"
+}
+
 type Resources struct {
 	Memory string `toml:"memory"`
 	CPU    string `toml:"cpu"`
@@ -126,6 +151,9 @@ type Server struct {
 type Build struct {
 	Dockerfile string `toml:"dockerfile"`
 	Port       int    `toml:"port"`
+
+	// Image, when set, deploys a prebuilt image instead of building; with no port set, the one the image exposes is used.
+	Image string `toml:"image"`
 
 	// Optional recipe overrides: setting start or static skips auto-detection and builds from these instead of a Dockerfile.
 	Base    string `toml:"base"`
@@ -157,8 +185,8 @@ func (c *Config) applyDefaults() {
 	if c.Build.Dockerfile == "" {
 		c.Build.Dockerfile = "Dockerfile"
 	}
-	if c.Build.Port == 0 {
-		c.Build.Port = 8080
+	if c.Build.Port == 0 && c.Build.Image == "" {
+		c.Build.Port = DefaultPort
 	}
 	if c.Replicas < 1 {
 		c.Replicas = 1
@@ -168,6 +196,11 @@ func (c *Config) applyDefaults() {
 func (c *Config) validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("skiff.toml is missing required field: name")
+	}
+	if c.Build.Image != "" {
+		if err := ValidateImage(c.Build.Image); err != nil {
+			return err
+		}
 	}
 	if err := ValidateHealth(c.Deploy.HealthPath, c.Deploy.HealthTimeout); err != nil {
 		return err
