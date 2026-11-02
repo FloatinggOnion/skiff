@@ -13,6 +13,7 @@ export type App = {
   updated?: number
   origin?: 'cli'
   image?: string
+  domain?: string
 }
 
 export type ProjectDetail = {
@@ -42,6 +43,7 @@ export type ProjectDetail = {
   healthTimeout: number
   image?: string
   maxReplicas: number
+  domains: string[]
 }
 
 export type RegistryCreds = {

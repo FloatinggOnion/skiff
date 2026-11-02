@@ -50,6 +50,54 @@ func normalizeHost(host, served string) (string, bool) {
 	return h, true
 }
 
+// primaryDomain picks the address to show for a project with several: the bare domain over its www twin, then the shortest.
+func primaryDomain(hosts []string) string {
+	best := ""
+	rank := func(h string) (bool, int, string) { return strings.HasPrefix(h, "www."), len(h), h }
+	for _, h := range hosts {
+		if best == "" {
+			best = h
+			continue
+		}
+		bw, bl, bs := rank(best)
+		hw, hl, hs := rank(h)
+		if (bw && !hw) || (bw == hw && (hl < bl || (hl == bl && hs < bs))) {
+			best = h
+		}
+	}
+	return best
+}
+
+// projectDomains lists each of a team's projects' custom domains, primary first. Domains bound to a branch belong to its preview, so they don't count.
+func projectDomains(team string) map[string][]string {
+	rows, err := sqlDB.Query(`SELECT host, app FROM domains WHERE team=? AND parent='' AND branch=''`, team)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var host, app string
+		if rows.Scan(&host, &app) == nil {
+			out[app] = append(out[app], host)
+		}
+	}
+	if rows.Err() != nil {
+		return nil
+	}
+	for app, hosts := range out {
+		first := primaryDomain(hosts)
+		sort.Slice(hosts, func(i, j int) bool {
+			if (hosts[i] == first) != (hosts[j] == first) {
+				return hosts[i] == first
+			}
+			return hosts[i] < hosts[j]
+		})
+		out[app] = hosts
+	}
+	return out
+}
+
 func domainsFilePath() string { return filepath.Join(skiffDir(), "domains.json") }
 
 func writeDomainsFile() {

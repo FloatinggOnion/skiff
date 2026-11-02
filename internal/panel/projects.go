@@ -32,6 +32,8 @@ type appView struct {
 	Updated int64  `json:"updated,omitempty"`
 	Origin  string `json:"origin,omitempty"`
 	Image   string `json:"image,omitempty"`
+	// Domain is the project's main custom domain, shown in place of its Skiff address.
+	Domain string `json:"domain,omitempty"`
 }
 
 // displayState reports a sleeping app as asleep rather than as a stopped container.
@@ -59,6 +61,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	domains := projectDomains(team)
 	out := make([]appView, 0)
 	for _, a := range apps {
 		src, ok := getSource(a.Name)
@@ -77,6 +80,9 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			Auto:   src.Auto,
 			Origin: src.Origin,
 			Image:  src.Image,
+		}
+		if hosts := domains[a.Name]; len(hosts) > 0 {
+			av.Domain = hosts[0]
 		}
 		if ds := appDeploys(a.Name); len(ds) > 0 {
 			av.Commit = ds[0].Commit
@@ -117,6 +123,8 @@ type projectView struct {
 	// PreviewProtected means its previews ask visitors for a password.
 	PreviewProtected bool `json:"previewProtected"`
 	MaxReplicas      int  `json:"maxReplicas"`
+	// Domains are the project's custom domains, main one first; URL stays its Skiff address.
+	Domains []string `json:"domains"`
 	// Image is set for a project that runs a prebuilt image instead of building a repo.
 	Image string `json:"image,omitempty"`
 }
@@ -155,6 +163,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			PreviewProtected: previewPasswordHash(app) != "",
 			Image:            src.Image,
 			MaxReplicas:      maxReplicas(),
+			Domains:          domainsOr(projectDomains(src.Team)[app]),
 		})
 	case http.MethodPut:
 		var body struct {
@@ -233,6 +242,13 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func domainsOr(hosts []string) []string {
+	if hosts == nil {
+		return []string{}
+	}
+	return hosts
 }
 
 func (p *Panel) handleRedeploy(w http.ResponseWriter, r *http.Request) {

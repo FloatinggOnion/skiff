@@ -112,3 +112,35 @@ func TestAddBranchDomainBindsToPreview(t *testing.T) {
 		t.Fatalf("expected rejection for a branch domain on an unknown project, got 200")
 	}
 }
+
+func TestPrimaryDomain(t *testing.T) {
+	for want, hosts := range map[string][]string{
+		"":                {},
+		"shop.com":        {"shop.com"},
+		"acme.dev":        {"www.acme.dev", "acme.dev"},
+		"shop.example.io": {"www.a.io", "shop.example.io"},
+		"a.io":            {"b.io", "a.io", "longer.example.io"},
+	} {
+		if got := primaryDomain(hosts); got != want {
+			t.Errorf("primaryDomain(%v) = %q, want %q", hosts, got, want)
+		}
+	}
+}
+
+func TestProjectDomains(t *testing.T) {
+	openTestDB(t)
+	for _, row := range [][]string{
+		{"www.shop.com", "shop", "t1", "", ""},
+		{"shop.com", "shop", "t1", "", ""},
+		{"beta.shop.com", "shop-beta", "t1", "shop", "beta"},
+		{"other.com", "other", "t2", "", ""},
+	} {
+		if _, err := sqlDB.Exec(`INSERT INTO domains(host,app,team,parent,branch,created) VALUES(?,?,?,?,?,1)`, row[0], row[1], row[2], row[3], row[4]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := projectDomains("t1")
+	if len(got) != 1 || len(got["shop"]) != 2 || got["shop"][0] != "shop.com" {
+		t.Fatalf("domains = %v", got)
+	}
+}

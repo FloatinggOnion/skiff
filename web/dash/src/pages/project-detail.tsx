@@ -81,7 +81,9 @@ export default function ProjectDetailPage() {
   const live = project.deploys.find((d) => d.status === 'live')
   const cli = project.origin === 'cli'
   const fromImage = !!project.image
-  const host = project.url.replace(/^https?:\/\//, '')
+  const skiffHost = project.url.replace(/^https?:\/\//, '')
+  const primary = project.domains[0]
+  const visitUrl = primary ? 'https://' + primary : project.url
 
   return (
     <div className="flex min-h-[calc(100svh-3.5rem)] min-w-0 flex-col px-4 pt-8 sm:px-8">
@@ -142,7 +144,7 @@ export default function ProjectDetailPage() {
           )}
           {project.state !== 'missing' && (
             <Button size="sm" asChild>
-              <a href={project.url} target="_blank" rel="noreferrer">
+              <a href={visitUrl} target="_blank" rel="noreferrer">
                 <ExternalLink />
                 Visit
               </a>
@@ -167,14 +169,31 @@ export default function ProjectDetailPage() {
         {/* Above the waterline: what's live. Below it: the work that got it there. */}
         <TabsContent value="overview" className="flex min-w-0 flex-1 flex-col">
           <dl className="grid gap-x-8 gap-y-5 pb-7 sm:grid-cols-2 lg:grid-cols-4">
-            <Fact label="Address">
+            {project.domains.length > 0 && (
+              <Fact label={project.domains.length > 1 ? 'Custom domains' : 'Custom domain'}>
+                <div className="flex flex-col gap-0.5">
+                  {project.domains.map((d) => (
+                    <a
+                      key={d}
+                      href={'https://' + d}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[13px] hover:underline"
+                    >
+                      {d}
+                    </a>
+                  ))}
+                </div>
+              </Fact>
+            )}
+            <Fact label="Skiff address">
               <a
                 href={project.url}
                 target="_blank"
                 rel="noreferrer"
                 className="font-mono text-[13px] hover:underline"
               >
-                {host}
+                {skiffHost}
               </a>
             </Fact>
             <Fact label="Live version">

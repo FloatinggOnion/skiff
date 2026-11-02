@@ -65,7 +65,8 @@ export function AppCard({
   onStop: (name: string) => void
 }) {
   const s = statusStyle(app.state)
-  const host = app.url.replace(/^https?:\/\//, '')
+  const host = app.domain ?? app.url.replace(/^https?:\/\//, '')
+  const href = app.domain ? 'https://' + app.domain : app.url
   const date = fmtDate(app.updated)
 
   return (
@@ -88,7 +89,7 @@ export function AppCard({
               {app.name}
             </Link>
             <a
-              href={app.url}
+              href={href}
               target="_blank"
               rel="noreferrer"
               className="text-muted-foreground hover:text-foreground block truncate font-mono text-xs transition-colors"
@@ -166,6 +167,10 @@ export function AppCard({
       <div className="min-h-[2.25rem] border-t border-foreground/5 pt-3">
         {app.message ? (
           <p className="text-foreground/90 line-clamp-2 text-sm">{app.message}</p>
+        ) : app.updated ? (
+          <p className="text-muted-foreground text-sm">
+            {app.origin === 'cli' ? 'Deployed with skiff deploy.' : 'Deployed.'}
+          </p>
         ) : (
           <p className="text-muted-foreground text-sm">No deployments yet.</p>
         )}
