@@ -28,24 +28,25 @@ func newDeployCmd() *cobra.Command {
 	var configPath string
 	var timeout time.Duration
 	var buildTimeout time.Duration
-	var name string
+	var name, buildContext string
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Build and deploy the current app to your server",
 		Long: `Deploy builds your app, runs it, and serves it at a URL.
 Reads config from skiff.toml.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDeploy(configPath, timeout, buildTimeout, name)
+			return runDeploy(configPath, buildContext, timeout, buildTimeout, name)
 		},
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", config.DefaultFile, "path to skiff.toml")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "how long to wait for the new version to become healthy (default: health_timeout in skiff.toml, else 30s)")
 	cmd.Flags().DurationVar(&buildTimeout, "build-timeout", defaultBuildTimeout, "cancel the build if it runs longer than this")
 	cmd.Flags().StringVar(&name, "name", "", "override the app name (e.g. for preview environments)")
+	cmd.Flags().StringVar(&buildContext, "context", "", "directory to build from (default: the directory holding skiff.toml)")
 	return cmd
 }
 
-func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverride string) error {
+func runDeploy(configPath, buildContext string, timeout, buildTimeout time.Duration, nameOverride string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		ui.Fail("Couldn't load config")
@@ -61,7 +62,10 @@ func runDeploy(configPath string, timeout, buildTimeout time.Duration, nameOverr
 	fmt.Println("  " + ui.Accent("Deploying "+cfg.Name))
 	fmt.Println()
 
-	contextDir := filepath.Dir(configPath)
+	contextDir := buildContext
+	if contextDir == "" {
+		contextDir = filepath.Dir(configPath)
+	}
 	prebuilt := cfg.Build.Image
 	var b builder.Builder
 	switch bc := cfg.Build; {

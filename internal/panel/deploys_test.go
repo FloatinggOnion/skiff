@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nuelScript/skiff/internal/config"
 )
@@ -130,5 +131,43 @@ func TestProjectTomlHealth(t *testing.T) {
 	}
 	if strings.Contains(projectToml(Source{App: "web", Port: "8080"}, nil, teamNetwork(""), nil), "health") {
 		t.Error("a project without a health check shouldn't set one")
+	}
+}
+
+func TestDeployConfigIsPrivateAndTemporary(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	_ = os.MkdirAll(skiffDir(), 0o700)
+	path, clean, err := writeDeployConfig("secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(path); info == nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v", info)
+	}
+	clean()
+	if _, err := os.Stat(filepath.Dir(path)); err == nil {
+		t.Fatal("the config should be gone after the deploy")
+	}
+}
+
+func TestRemoveStaleDeployConfigs(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	builds := filepath.Join(skiffDir(), "builds")
+	old := filepath.Join(builds, "shop", "skiff.toml")
+	nested := filepath.Join(builds, "mono", "apps", "web", "skiff.toml")
+	fresh := filepath.Join(builds, "busy", "skiff.toml")
+	other := filepath.Join(builds, "shop", "package.json")
+	for _, f := range []string{old, nested, fresh, other} {
+		_ = os.MkdirAll(filepath.Dir(f), 0o755)
+		_ = os.WriteFile(f, []byte("x"), 0o600)
+	}
+	long := time.Now().Add(-3 * deployDeadline)
+	_ = os.Chtimes(old, long, long)
+	_ = os.Chtimes(nested, long, long)
+	removeStaleDeployConfigs(builds, time.Now())
+	for f, want := range map[string]bool{old: false, nested: false, fresh: true, other: true} {
+		if _, err := os.Stat(f); (err == nil) != want {
+			t.Errorf("%s exists = %v, want %v", f, err == nil, want)
+		}
 	}
 }

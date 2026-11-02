@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -108,5 +110,31 @@ func TestDockerAuthConfig(t *testing.T) {
 func TestSafetyCap(t *testing.T) {
 	if got := safetyCap(4 << 30); got < 3200000000 || got > 3221225472 {
 		t.Fatalf("cap on 4 GB = %d", got)
+	}
+}
+
+func TestDockerignoreKeepsConfigOut(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".dockerignore")
+	clean := ensureDockerignore(dir)
+	b, _ := os.ReadFile(path)
+	if !strings.Contains(string(b), "skiff.toml") {
+		t.Fatalf("default file = %q", b)
+	}
+	clean()
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("the default file should be removed afterwards")
+	}
+
+	const own = "dist\n!keep"
+	_ = os.WriteFile(path, []byte(own), 0o644)
+	clean = ensureDockerignore(dir)
+	b, _ = os.ReadFile(path)
+	if !strings.HasPrefix(string(b), own) || !strings.HasSuffix(string(b), "\nskiff.toml\n") {
+		t.Fatalf("during the build = %q", b)
+	}
+	clean()
+	if b, _ = os.ReadFile(path); string(b) != own {
+		t.Fatalf("the app's own file should come back unchanged: %q", b)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -165,8 +166,12 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 			return
 		}
 	}
-	tomlPath := filepath.Join(ctxDir, "skiff.toml")
-	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src), teamNetwork(src.Team), p.volumeDefs(src))), 0o644)
+	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, deployEnv(src), teamNetwork(src.Team), p.volumeDefs(src)))
+	if err != nil {
+		finish("✗ couldn't prepare the deploy: " + err.Error())
+		return
+	}
+	defer cleanToml()
 
 	release, ok := waitForBuildSlot(ctx, logln)
 	if !ok {
@@ -180,7 +185,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		logln("→ building & deploying")
 	}
 	self, _ := os.Executable()
-	cmd := exec.CommandContext(ctx, self, "deploy", "-c", tomlPath)
+	cmd := exec.CommandContext(ctx, self, "deploy", "-c", tomlPath, "--context", ctxDir)
 	// On supersede, SIGINT so the build cancels gracefully; WaitDelay hard-kills it if it doesn't exit promptly.
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 10 * time.Second
@@ -258,6 +263,49 @@ func (p *Panel) cloneSource(ctx context.Context, src Source, authURL, sha string
 	return ctxDir, sha, true
 }
 
+// writeDeployConfig puts a deploy's generated skiff.toml, which holds the app's secrets, in a private directory of its own: outside what gets built, so it can't end up in the image, and gone when the deploy ends.
+func writeDeployConfig(toml string) (path string, clean func(), err error) {
+	dir, err := os.MkdirTemp(skiffDir(), "deploy-")
+	if err != nil {
+		return "", nil, err
+	}
+	clean = func() { _ = os.RemoveAll(dir) }
+	path = filepath.Join(dir, "skiff.toml")
+	if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+		clean()
+		return "", nil, err
+	}
+	return path, clean, nil
+}
+
+// removeStaleDeployConfigs clears secrets left on disk by earlier versions, which kept the generated skiff.toml in each build directory, and any config a crash left behind. Old enough that no deploy can be using them.
+func removeStaleDeployConfigs(buildsDir string, now time.Time) {
+	cutoff := now.Add(-2 * deployDeadline)
+	_ = filepath.WalkDir(buildsDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == ".git" || d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == "skiff.toml" {
+			if info, err := d.Info(); err == nil && info.ModTime().Before(cutoff) {
+				_ = os.Remove(path)
+			}
+		}
+		return nil
+	})
+	dirs, _ := filepath.Glob(filepath.Join(skiffDir(), "deploy-*"))
+	for _, dir := range dirs {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() && info.ModTime().Before(cutoff) {
+			_ = os.RemoveAll(dir)
+		}
+	}
+}
+
 // imageWorkDir is an empty directory to hold the generated skiff.toml for a project that runs a prebuilt image.
 func (p *Panel) imageWorkDir(src Source) string {
 	work := filepath.Join(p.buildsDir, sanitizeName(src.App))
@@ -288,16 +336,14 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 	ctx, superseded, done := beginBuild(src.App, id)
 	defer done()
 
-	work := filepath.Join(p.buildsDir, sanitizeName(src.App)+"-rollback")
-	_ = os.RemoveAll(work)
-	if err := os.MkdirAll(work, 0o755); err != nil {
+	env, net := p.appRuntime(src)
+	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, envList(env), net, p.volumeDefs(src)))
+	if err != nil {
 		logln("✗ rollback failed: " + err.Error())
 		setDeployStatus(src.App, id, "failed")
 		return
 	}
-	tomlPath := filepath.Join(work, "skiff.toml")
-	env, net := p.appRuntime(src)
-	_ = os.WriteFile(tomlPath, []byte(projectToml(src, envList(env), net, p.volumeDefs(src))), 0o644)
+	defer cleanToml()
 
 	image := fmt.Sprintf("skiff-%s:%s", src.App, targetID)
 	logln("→ rolling back to " + image)
