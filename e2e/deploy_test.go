@@ -77,6 +77,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	checkImageProject(t, c, panelAddr, routerAddr)
 	checkLogDrain(t, c, panelAddr)
 	checkCatalogApp(t, c, panelAddr, routerAddr)
+	checkStatusPage(t, c, panelAddr, routerAddr)
 
 	post(t, c, "http://"+panelAddr+"/api/down?app="+app, "")
 	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
@@ -321,6 +322,38 @@ func checkCatalogApp(t *testing.T, c *http.Client, panelAddr, routerAddr string)
 		t.Fatalf("/data = %q", got)
 	}
 	post(t, c, "http://"+panelAddr+"/api/down?app="+name, "")
+}
+
+// checkStatusPage publishes a page through the real router: only chosen projects appear, and turning it off leaves nothing behind.
+func checkStatusPage(t *testing.T, c *http.Client, panelAddr, routerAddr string) {
+	t.Helper()
+	get := func() (int, string) {
+		req, _ := http.NewRequest(http.MethodGet, "http://"+routerAddr+"/", nil)
+		req.Host = "status.localhost"
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return resp.StatusCode, string(b)
+	}
+	if code, body := get(); code != http.StatusNotFound || strings.Contains(body, app) {
+		t.Fatalf("with nothing published: %d %s", code, body)
+	}
+	put(t, c, "http://"+panelAddr+"/api/status-page", `{"enabled":true,"title":"E2E status","apps":["`+app+`"]}`)
+	code, body := get()
+	if code != http.StatusOK || !strings.Contains(body, "E2E status") || !strings.Contains(body, app) {
+		t.Fatalf("published: %d %s", code, body)
+	}
+	put(t, c, "http://"+panelAddr+"/api/status-page", `{"enabled":true,"title":"E2E status","apps":[]}`)
+	if _, body := get(); strings.Contains(body, app) {
+		t.Fatalf("a project that's no longer chosen still shows: %s", body)
+	}
+	put(t, c, "http://"+panelAddr+"/api/status-page", `{"enabled":false}`)
+	if code, _ := get(); code != http.StatusNotFound {
+		t.Fatalf("turned off: %d", code)
+	}
 }
 
 func appContainer(t *testing.T, name string) string {

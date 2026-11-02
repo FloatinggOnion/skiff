@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/router"
 )
 
 type Domain struct {
@@ -116,6 +118,9 @@ func writeDomainsFile() {
 	if rows.Err() != nil {
 		return // don't mirror a truncated map to the router
 	}
+	for host, slug := range statusDomains() {
+		m[host] = router.StatusDomainPrefix + slug
+	}
 	if b, err := json.Marshal(m); err == nil {
 		_ = os.WriteFile(domainsFilePath(), b, 0o644)
 	}
@@ -204,6 +209,10 @@ func (p *Panel) handleDomains(w http.ResponseWriter, r *http.Request) {
 		host, ok := normalizeHost(body.Host, p.domain)
 		if !ok {
 			http.Error(w, "enter a valid domain (not a "+p.domain+" subdomain)", http.StatusBadRequest)
+			return
+		}
+		if _, usedByStatus := statusDomains()[host]; usedByStatus {
+			http.Error(w, "that domain is already used by a status page", http.StatusConflict)
 			return
 		}
 		if _, taken := domainOwner(host); taken {

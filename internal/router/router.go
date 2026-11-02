@@ -132,6 +132,30 @@ func (rt *Router) panelUpstream() string {
 	return up
 }
 
+// StatusDomainPrefix marks a custom domain as a team's status page rather than an app.
+const StatusDomainPrefix = "@status:"
+
+// proxyStatus hands a status page to the panel, which serves them publicly; only that path, and only for reading.
+func (rt *Router) proxyStatus(w http.ResponseWriter, r *http.Request, slug string) {
+	up := rt.panelUpstream()
+	if up == "" || (r.Method != http.MethodGet && r.Method != http.MethodHead) || !validStatusSlug(slug) {
+		http.NotFound(w, r)
+		return
+	}
+	out := r.Clone(r.Context())
+	out.URL.Path, out.URL.RawPath, out.URL.RawQuery = "/public/status/"+slug, "", ""
+	proxyTo(w, out, up)
+}
+
+func validStatusSlug(s string) bool {
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 	start := time.Now()
@@ -149,6 +173,10 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (rt *Router) serve(w http.ResponseWriter, r *http.Request) string {
 	// A custom domain pointed at one of the apps wins over subdomain routing.
 	if app, ok := rt.customDomains()[hostOnly(r.Host)]; ok {
+		if slug, isStatus := strings.CutPrefix(app, StatusDomainPrefix); isStatus {
+			rt.proxyStatus(w, r, slug)
+			return "status"
+		}
 		if !rt.proxyToApp(w, r, app) {
 			return ""
 		}
@@ -163,7 +191,7 @@ func (rt *Router) serve(w http.ResponseWriter, r *http.Request) string {
 
 	switch sub {
 	case "status":
-		rt.serveStatus(w, r)
+		rt.proxyStatus(w, r, strings.Trim(r.URL.Path, "/"))
 		return "status"
 	case "dash":
 		if up := rt.panelUpstream(); up != "" {

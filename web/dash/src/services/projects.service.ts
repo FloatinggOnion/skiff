@@ -55,6 +55,15 @@ export type RegistryCreds = {
   host: string
 }
 
+export type StatusPage = {
+  enabled: boolean
+  title: string
+  host: string
+  apps: string[]
+  url: string
+  slug: string
+}
+
 export type CatalogApp = {
   id: string
   name: string
@@ -148,6 +157,14 @@ class ProjectsService extends BaseService {
 
   update(name: string, settings: ProjectSettings) {
     return this.put('/project', settings, { params: { app: name } })
+  }
+
+  statusPage() {
+    return this.get<StatusPage>('/status-page')
+  }
+
+  saveStatusPage(page: { enabled: boolean; title: string; host: string; apps: string[] }) {
+    return this.put('/status-page', page)
   }
 
   catalog() {

@@ -116,6 +116,8 @@ platform in the browser:
   any HTTP endpoint, resuming where it stopped after an outage.
 - **Limits** — memory and CPU per replica, with a safety cap for apps that set none,
   so one runaway app can't take the others down.
+- **Status pages** — a public page with 30 days of uptime for the projects you
+  choose, on your own domain if you like.
 - **Alerts** — email, Slack, or webhook when a deploy fails, an app goes down or runs
   out of memory, or 5xx errors spike.
 - **Teams, audit log, and API tokens** — collaborators, an activity trail, and a

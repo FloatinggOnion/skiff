@@ -59,7 +59,7 @@ export function AlertsSection() {
   return (
     <Section
       title="Alerts"
-      description="Get notified when a deploy fails, an app goes down, or 5xx errors spike."
+      description="Get notified when a deploy fails, an app goes down or runs out of memory, or 5xx errors spike."
     >
       <form onSubmit={submit} className="space-y-3">
         <Field label="Email">

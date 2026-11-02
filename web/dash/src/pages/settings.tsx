@@ -11,6 +11,7 @@ import { TeamSection } from './settings/team-section'
 import { MembersSection } from './settings/members-section'
 import { AlertsSection } from './settings/alerts-section'
 import { LogDrainSection } from './settings/log-drain-section'
+import { StatusPageSection } from './settings/status-page-section'
 import { OffsiteSection } from './settings/offsite-section'
 import { TokensSection } from './settings/tokens-section'
 import { ConnectionsSection } from './settings/connections-section'
@@ -62,6 +63,7 @@ export default function SettingsPage() {
             onChange={reloadMembers}
           />
           <AlertsSection />
+          {isOwner && <StatusPageSection />}
           {isOwner && <LogDrainSection />}
           <OffsiteSection isOwner={isOwner} />
         </TabsContent>

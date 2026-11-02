@@ -7,6 +7,7 @@ const ITEMS = [
   ["Autoscaling", "Add and retire replicas to hold a target CPU."],
   ["Sleep when idle", "Stop quiet apps; the next visit wakes them."],
   ["Log drains", "Send logs to Better Stack, Axiom, Datadog or your own endpoint."],
+  ["Status pages", "A public page with uptime history, on your own domain if you like."],
   ["Alerts", "Email, Slack or webhook when something goes wrong."],
   ["Email forwarding", "hello@yourdomain.com to any inbox."],
   ["Offsite backups", "Database backups copied to any S3-compatible bucket."],

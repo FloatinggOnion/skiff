@@ -161,3 +161,34 @@ func TestUpstreamReusesConnections(t *testing.T) {
 		t.Fatalf("20 sequential requests used %d connections, want 1", conns)
 	}
 }
+
+// The status address only ever reaches the panel's public status path.
+func TestStatusGoesOnlyToPublicPath(t *testing.T) {
+	var got []string
+	panel := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { got = append(got, r.Method+" "+r.URL.RequestURI()) }))
+	defer panel.Close()
+	dir := t.TempDir()
+	domains := filepath.Join(dir, "domains.json")
+	_ = os.WriteFile(domains, []byte(`{"status.acme.dev":"@status:acme"}`), 0o644)
+	rt := &Router{Domains: []string{"example.com"}, Panel: strings.TrimPrefix(panel.URL, "http://"), DomainsFile: domains}
+	do := func(method, host, path string) int {
+		req := httptest.NewRequest(method, path, nil)
+		req.Host = host
+		w := httptest.NewRecorder()
+		rt.ServeHTTP(w, req)
+		return w.Code
+	}
+	do("GET", "status.example.com", "/acme?x=1")
+	do("GET", "status.example.com", "/")
+	if c := do("GET", "status.example.com", "/../api/apps"); c != http.StatusNotFound {
+		t.Errorf("a path with other characters should stop at the router, got %d", c)
+	}
+	do("GET", "status.acme.dev", "/api/apps")
+	if c := do("POST", "status.acme.dev", "/"); c != http.StatusNotFound {
+		t.Errorf("a POST should go nowhere, got %d", c)
+	}
+	want := []string{"GET /public/status/acme", "GET /public/status/", "GET /public/status/acme"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("panel saw %q, want %q", got, want)
+	}
+}

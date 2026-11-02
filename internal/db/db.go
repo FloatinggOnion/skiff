@@ -382,6 +382,14 @@ CREATE TABLE IF NOT EXISTS log_drain_cursors (
   pos  INTEGER NOT NULL,
   PRIMARY KEY (team, app)
 );
+CREATE TABLE IF NOT EXISTS status_pages (
+  team    TEXT PRIMARY KEY,
+  slug    TEXT NOT NULL UNIQUE,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  title   TEXT NOT NULL DEFAULT '',
+  host    TEXT NOT NULL DEFAULT '',
+  apps    TEXT NOT NULL DEFAULT '[]'
+);
 CREATE TABLE IF NOT EXISTS registry_creds (
   app      TEXT PRIMARY KEY,
   username TEXT NOT NULL,
