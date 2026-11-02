@@ -224,6 +224,10 @@ database is recreated and loaded from its newest offsite backup.
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) to get set up, and please follow our [Code of Conduct](CODE_OF_CONDUCT.md). Found a security issue? Report it privately per [SECURITY.md](SECURITY.md) — not in a public issue.
 
+## Releases
+
+Minor versions come out in batches, once they have run on a real server for about a week. Patch versions are fixes only. See [RELEASING.md](RELEASING.md).
+
 ## License
 
 Dual-licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
