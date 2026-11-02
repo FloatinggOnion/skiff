@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -44,7 +45,7 @@ type Router struct {
 
 	metrics       *Metrics
 	reqlog        *ReqLog
-	mu            sync.Mutex
+	mu            sync.RWMutex
 	cachedPanel   string
 	cachedAt      time.Time
 	cachedDomains map[string]string
@@ -59,10 +60,13 @@ type Router struct {
 	cachedRules   mail.Rules
 	cachedRulesAt time.Time
 
-	// routesMu is separate from mu so the slow Docker fetch never blocks lookups, and concurrent cache misses coalesce into a single `docker ps` instead of one per request.
-	routesMu      sync.Mutex
-	cachedRoutes  []docker.Route
-	cachedRouteAt time.Time
+	// routesMu is separate from mu so a Docker fetch never blocks lookups: requests are served from the last table while one refresh runs in the background.
+	routesMu   sync.Mutex
+	routeTable map[string][]int
+	routeAt    time.Time
+	refreshing bool
+
+	rrMu sync.Mutex
 
 	gate gateState
 }
@@ -83,12 +87,18 @@ func (rt *Router) customDomains() map[string]string {
 	if rt.DomainsFile == "" {
 		return nil
 	}
+	rt.mu.RLock()
+	m, at := rt.cachedDomains, rt.cachedDomAt
+	rt.mu.RUnlock()
+	if m != nil && time.Since(at) < 2*time.Second {
+		return m
+	}
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 	if rt.cachedDomains != nil && time.Since(rt.cachedDomAt) < 2*time.Second {
 		return rt.cachedDomains
 	}
-	m := map[string]string{}
+	m = map[string]string{}
 	if b, err := os.ReadFile(rt.DomainsFile); err == nil {
 		_ = json.Unmarshal(b, &m)
 	}
@@ -177,19 +187,60 @@ func (rt *Router) serve(w http.ResponseWriter, r *http.Request) string {
 	return app
 }
 
-// routes returns the current app→hostport mappings, cached briefly so a burst doesn't fork `docker ps` (plus a `docker port` per replica) on every request.
-func (rt *Router) routes() ([]docker.Route, error) {
+const (
+	routesFresh = 2 * time.Second
+	// A table older than this means the edge has been idle; it could point at retired containers, so wait for a new one rather than serve it.
+	routesTooOld = 15 * time.Second
+)
+
+// routes returns the app→ports table. A stale table is served while one background refresh replaces it, so no request ever waits on Docker, however many containers there are. If Docker can't answer, the last table keeps serving.
+func (rt *Router) routes() (map[string][]int, error) {
 	rt.routesMu.Lock()
 	defer rt.routesMu.Unlock()
-	if rt.cachedRoutes != nil && time.Since(rt.cachedRouteAt) < 2*time.Second {
-		return rt.cachedRoutes, nil
+	age := time.Since(rt.routeAt)
+	if rt.routeTable != nil && age < routesFresh {
+		return rt.routeTable, nil
 	}
+	if rt.routeTable != nil && age < routesTooOld {
+		if !rt.refreshing {
+			rt.refreshing = true
+			go rt.refreshRoutes()
+		}
+		return rt.routeTable, nil
+	}
+	table, err := rt.fetchRoutes()
+	if err != nil {
+		if rt.routeTable != nil {
+			return rt.routeTable, nil
+		}
+		return nil, err
+	}
+	rt.routeTable, rt.routeAt = table, time.Now()
+	return table, nil
+}
+
+func (rt *Router) fetchRoutes() (map[string][]int, error) {
 	routes, err := rt.Engine.Routes()
 	if err != nil {
 		return nil, err
 	}
-	rt.cachedRoutes, rt.cachedRouteAt = routes, time.Now()
-	return routes, nil
+	table := make(map[string][]int, len(routes))
+	for _, r := range routes {
+		table[r.App] = append(table[r.App], r.HostPort)
+	}
+	return table, nil
+}
+
+func (rt *Router) refreshRoutes() {
+	table, err := rt.fetchRoutes()
+	rt.routesMu.Lock()
+	defer rt.routesMu.Unlock()
+	rt.refreshing = false
+	if err != nil {
+		log.Printf("router: reading routes from docker: %v", err)
+		return
+	}
+	rt.routeTable, rt.routeAt = table, time.Now()
 }
 
 func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string) bool {
@@ -208,24 +259,47 @@ func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string)
 		http.Error(w, "skiff: no app named "+app, http.StatusNotFound)
 		return false
 	}
-	rt.mu.Lock()
+	rt.rrMu.Lock()
 	if rt.rr == nil {
 		rt.rr = map[string]uint64{}
 	}
 	port := ports[rt.rr[app]%uint64(len(ports))]
 	rt.rr[app]++
-	rt.mu.Unlock()
+	rt.rrMu.Unlock()
 	proxyTo(w, r, fmt.Sprintf("127.0.0.1:%d", port))
 	return true
 }
 
+// upstream keeps connections to apps open between requests. The default keeps two per app, so under load almost every request opens a new one and the box runs out of local ports.
+var upstream = &http.Transport{
+	DialContext:         (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+	MaxIdleConns:        8192,
+	MaxIdleConnsPerHost: 2048,
+	IdleConnTimeout:     60 * time.Second,
+	DisableCompression:  true,
+}
+
+type proxyBuffers struct{ sync.Pool }
+
+func (b *proxyBuffers) Get() []byte  { return *(b.Pool.Get().(*[]byte)) }
+func (b *proxyBuffers) Put(p []byte) { b.Pool.Put(&p) }
+
+var proxyBufs = &proxyBuffers{Pool: sync.Pool{New: func() any {
+	b := make([]byte, 32*1024)
+	return &b
+}}}
+
 func proxyTo(w http.ResponseWriter, r *http.Request, hostport string) {
-	target, _ := url.Parse("http://" + hostport)
-	rp := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
-		pr.SetURL(target)
-		pr.SetXForwarded()
-		pr.Out.Host = pr.In.Host
-	}}
+	target := &url.URL{Scheme: "http", Host: hostport}
+	rp := &httputil.ReverseProxy{
+		Transport:  upstream,
+		BufferPool: proxyBufs,
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.SetXForwarded()
+			pr.Out.Host = pr.In.Host
+		},
+	}
 	rp.ServeHTTP(w, r)
 }
 

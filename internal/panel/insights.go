@@ -17,7 +17,13 @@ import (
 	"time"
 )
 
-const requestsKeep = 7 * 24 * time.Hour
+const (
+	requestsKeep = 7 * 24 * time.Hour
+	// requestsMaxRows bounds per-request detail on a busy server, where seven days of it could fill the disk: past this, the oldest goes first. Totals in Analytics come from the router and aren't affected.
+	requestsMaxRows = 3_000_000
+	ingestBatch     = 2 << 20
+	pruneBatch      = 20_000
+)
 
 type reqLine struct {
 	T  int64  `json:"t"`
@@ -49,10 +55,16 @@ func ingestRequests(dir string) (int, error) {
 	sort.Strings(names)
 	total := 0
 	for _, name := range names {
-		n, err := ingestFile(filepath.Join(dir, name), name)
-		total += n
-		if err != nil {
-			return total, err
+		for {
+			n, err := ingestFile(filepath.Join(dir, name), name)
+			total += n
+			if err != nil {
+				return total, err
+			}
+			if n == 0 {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
 		}
 	}
 	return total, nil
@@ -72,7 +84,8 @@ func ingestFile(path, name string) (int, error) {
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {
 		return 0, err
 	}
-	data, err := io.ReadAll(io.LimitReader(f, 32<<20))
+	// Small batches: the database has one connection, so a long transaction would freeze the dashboard for its whole length.
+	data, err := io.ReadAll(io.LimitReader(f, ingestBatch))
 	if err != nil {
 		return 0, err
 	}
@@ -114,9 +127,23 @@ func ingestFile(path, name string) (int, error) {
 }
 
 func pruneRequests(now time.Time) {
-	cutoff := now.Add(-requestsKeep)
-	_, _ = sqlDB.Exec(`DELETE FROM requests WHERE t < ?`, cutoff.UnixMilli())
-	_, _ = sqlDB.Exec(`DELETE FROM request_ingest WHERE file < ?`, cutoff.UTC().Format("2006-01-02")+".jsonl")
+	cutoff := now.Add(-requestsKeep).UnixMilli()
+	var byCount int64
+	if sqlDB.QueryRow(`SELECT t FROM requests ORDER BY t DESC LIMIT 1 OFFSET ?`, requestsMaxRows).Scan(&byCount) == nil && byCount > cutoff {
+		cutoff = byCount
+	}
+	// In small deletes with a gap between, for the same reason ingest is batched.
+	for {
+		res, err := sqlDB.Exec(`DELETE FROM requests WHERE rowid IN (SELECT rowid FROM requests WHERE t < ? LIMIT ?)`, cutoff, pruneBatch)
+		if err != nil {
+			break
+		}
+		if n, _ := res.RowsAffected(); n < pruneBatch {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	_, _ = sqlDB.Exec(`DELETE FROM request_ingest WHERE file < ?`, now.Add(-requestsKeep).UTC().Format("2006-01-02")+".jsonl")
 }
 
 func (p *Panel) requestsLoop() {

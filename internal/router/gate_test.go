@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nuelScript/skiff/internal/docker"
 	"github.com/nuelScript/skiff/internal/gate"
 )
 
@@ -26,8 +25,8 @@ func gatedRouter(t *testing.T) *Router {
 		t.Fatal(err)
 	}
 	rt := &Router{Domains: []string{"example.com"}, GateFile: file}
-	rt.cachedRoutes = []docker.Route{{App: "shop-feat", HostPort: port}, {App: "shop", HostPort: port}}
-	rt.cachedRouteAt = time.Now().Add(time.Hour)
+	rt.routeTable = map[string][]int{"shop-feat": {port}, "shop": {port}}
+	rt.routeAt = time.Now().Add(time.Hour)
 	return rt
 }
 

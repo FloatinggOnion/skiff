@@ -116,6 +116,7 @@ type projectView struct {
 	HealthTimeout int `json:"healthTimeout"`
 	// PreviewProtected means its previews ask visitors for a password.
 	PreviewProtected bool `json:"previewProtected"`
+	MaxReplicas      int  `json:"maxReplicas"`
 	// Image is set for a project that runs a prebuilt image instead of building a repo.
 	Image string `json:"image,omitempty"`
 }
@@ -153,6 +154,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			HealthPath: src.HealthPath, HealthTimeout: src.HealthTimeout,
 			PreviewProtected: previewPasswordHash(app) != "",
 			Image:            src.Image,
+			MaxReplicas:      maxReplicas(),
 		})
 	case http.MethodPut:
 		var body struct {
@@ -203,17 +205,17 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 				src.Port = port
 			}
 		}
-		if body.Replicas >= 1 && body.Replicas <= 10 {
+		if body.Replicas >= 1 && body.Replicas <= maxReplicas() {
 			src.Replicas = body.Replicas
 		}
 		src.Release = strings.TrimSpace(body.Release)
 		src.Auto = body.Auto
 		src.PreviewAuto = body.PreviewAuto
 		src.Autoscale = body.Autoscale
-		if body.ScaleMin >= 1 && body.ScaleMin <= 10 {
+		if body.ScaleMin >= 1 && body.ScaleMin <= maxReplicas() {
 			src.ScaleMin = body.ScaleMin
 		}
-		if body.ScaleMax >= 1 && body.ScaleMax <= 10 {
+		if body.ScaleMax >= 1 && body.ScaleMax <= maxReplicas() {
 			src.ScaleMax = body.ScaleMax
 		}
 		if src.ScaleMax < src.ScaleMin {

@@ -23,6 +23,11 @@ func (e *Engine) HostPort(name string, containerPort int) (int, error) {
 }
 
 func (e *Engine) State(container string) string {
+	if c := e.api(); c != nil {
+		if state, ok := apiState(c, container); ok {
+			return state
+		}
+	}
 	out, err := e.command("inspect", "-f", "{{.State.Status}}", container).Output()
 	if err != nil {
 		return "missing"
@@ -84,6 +89,11 @@ func parseSkiffContainers(out []byte) []ContainerInfo {
 }
 
 func (e *Engine) Routes() ([]Route, error) {
+	if c := e.api(); c != nil {
+		if list, err := apiList(c, false, "skiff.app"); err == nil {
+			return routesFromList(list), nil
+		}
+	}
 	out, err := e.command("ps", "--filter", "label=skiff.app", "--format", `{{.Label "skiff.app"}} {{.Label "skiff.port"}} {{.Names}}`).Output()
 	if err != nil {
 		return nil, err

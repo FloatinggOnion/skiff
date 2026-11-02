@@ -45,6 +45,9 @@ func (e *Engine) StreamLogsSSE(ctx context.Context, container string, w io.Write
 
 // FollowLogs streams a container's output from since onward, calling line for each one with docker's timestamp; it returns when the container stops or ctx ends.
 func (e *Engine) FollowLogs(ctx context.Context, container string, since time.Time, line func(ts time.Time, stream, text string)) error {
+	if c := e.api(); c != nil {
+		return apiFollowLogs(ctx, c, container, since, line)
+	}
 	args := []string{"logs", "--follow", "--timestamps"}
 	if !since.IsZero() {
 		args = append(args, "--since", since.UTC().Format(time.RFC3339Nano))

@@ -24,6 +24,7 @@ type Route struct {
 }
 
 func (e *Engine) Run(s RunSpec) (int, error) {
+	defer invalidateStates()
 	_ = e.command("rm", "-f", s.Name).Run()
 
 	bind := "127.0.0.1"

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,8 +53,8 @@ func TestHostOnly(t *testing.T) {
 
 func TestServeOnlyCountsRealApps(t *testing.T) {
 	rt := &Router{Domains: []string{"example.com"}, SiteApp: "www"}
-	rt.cachedRoutes = []docker.Route{{App: "shop", HostPort: 1}}
-	rt.cachedRouteAt = time.Now().Add(time.Hour)
+	rt.routeTable = map[string][]int{"shop": {1}}
+	rt.routeAt = time.Now().Add(time.Hour)
 
 	r := httptest.NewRequest("GET", "https://www.www.x7k2.dash.example.com/", nil)
 	w := httptest.NewRecorder()
@@ -97,8 +98,8 @@ func TestCertAllowedOnlyForServedNames(t *testing.T) {
 	sleeping := filepath.Join(dir, "sleeping.json")
 	_ = os.WriteFile(sleeping, []byte(`{"napper":["c1"]}`), 0o644)
 	rt := &Router{Domains: []string{"useskiff.xyz", "1-2-3-4.sslip.io"}, DomainsFile: domains, SleepFile: sleeping}
-	rt.cachedRoutes = []docker.Route{{App: "shop", HostPort: 1}}
-	rt.cachedRouteAt = time.Now().Add(time.Hour)
+	rt.routeTable = map[string][]int{"shop": {1}}
+	rt.routeAt = time.Now().Add(time.Hour)
 
 	for host, want := range map[string]bool{
 		"useskiff.xyz":                   true,
@@ -120,5 +121,43 @@ func TestCertAllowedOnlyForServedNames(t *testing.T) {
 		if got := rt.certAllowed(host); got != want {
 			t.Errorf("certAllowed(%q) = %v, want %v", host, got, want)
 		}
+	}
+}
+
+// A stale table is served at once: no request waits on Docker, and a failed refresh keeps the last good routes.
+func TestRoutesServedWhileStale(t *testing.T) {
+	rt := &Router{Engine: docker.Remote("nobody@127.0.0.1:1")}
+	rt.routeTable = map[string][]int{"shop": {9000}}
+	rt.routeAt = time.Now().Add(-5 * time.Second)
+	start := time.Now()
+	ports := rt.portsFor("shop")
+	if len(ports) != 1 || ports[0] != 9000 {
+		t.Fatalf("ports = %v", ports)
+	}
+	if d := time.Since(start); d > 200*time.Millisecond {
+		t.Fatalf("a stale lookup blocked for %v", d)
+	}
+}
+
+func TestUpstreamReusesConnections(t *testing.T) {
+	conns := 0
+	backend := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	backend.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+		if s == http.StateNew {
+			conns++
+		}
+	}
+	backend.Start()
+	defer backend.Close()
+	hostport := strings.TrimPrefix(backend.URL, "http://")
+	for range 20 {
+		w := httptest.NewRecorder()
+		proxyTo(w, httptest.NewRequest("GET", "/", nil), hostport)
+		if w.Code != 200 {
+			t.Fatalf("status %d", w.Code)
+		}
+	}
+	if conns != 1 {
+		t.Fatalf("20 sequential requests used %d connections, want 1", conns)
 	}
 }

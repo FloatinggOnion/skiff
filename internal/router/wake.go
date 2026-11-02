@@ -38,7 +38,7 @@ func (rt *Router) wake(app string) []int {
 	deadline := time.Now().Add(wakeTimeout)
 	for time.Now().Before(deadline) {
 		rt.routesMu.Lock()
-		rt.cachedRouteAt = time.Time{}
+		rt.routeAt = time.Time{}
 		rt.routesMu.Unlock()
 		if ports := rt.portsFor(app); len(ports) > 0 {
 			for _, port := range ports {
@@ -69,15 +69,9 @@ func answers(port int) bool {
 }
 
 func (rt *Router) portsFor(app string) []int {
-	routes, err := rt.routes()
+	table, err := rt.routes()
 	if err != nil {
 		return nil
 	}
-	var ports []int
-	for _, r := range routes {
-		if r.App == app {
-			ports = append(ports, r.HostPort)
-		}
-	}
-	return ports
+	return table[app]
 }

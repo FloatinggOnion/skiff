@@ -44,6 +44,7 @@ export function SettingsForm({
   healthPath,
   healthTimeout,
   image = '',
+  maxReplicas = 10,
   onSaved,
   cli = false,
 }: {
@@ -64,6 +65,7 @@ export function SettingsForm({
   healthPath: string
   healthTimeout: number
   image?: string
+  maxReplicas?: number
   onSaved: () => void
   cli?: boolean
 }) {
@@ -93,9 +95,9 @@ export function SettingsForm({
   const values = watch()
   const fromImage = !!image
   const setReplicas = (n: number) =>
-    setValue('replicas', Math.min(10, Math.max(1, n)), { shouldDirty: true })
+    setValue('replicas', Math.min(maxReplicas, Math.max(1, n)), { shouldDirty: true })
   const setNum = (field: 'scaleMin' | 'scaleMax', n: number) =>
-    setValue(field, Math.min(10, Math.max(1, n)), { shouldDirty: true })
+    setValue(field, Math.min(maxReplicas, Math.max(1, n)), { shouldDirty: true })
   const toggleClass = (on: boolean) =>
     'h-9 rounded-md border px-3 font-mono text-xs uppercase transition-colors ' +
     (on

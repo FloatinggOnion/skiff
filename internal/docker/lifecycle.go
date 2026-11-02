@@ -1,6 +1,7 @@
 package docker
 
 func (e *Engine) Stop(container string) error {
+	defer invalidateStates()
 	out, err := e.command("stop", container).CombinedOutput()
 	if err != nil {
 		return cmdErr(out, err)
@@ -9,6 +10,7 @@ func (e *Engine) Stop(container string) error {
 }
 
 func (e *Engine) Remove(name string) error {
+	defer invalidateStates()
 	out, err := e.command("rm", "-f", name).CombinedOutput()
 	if err != nil {
 		return cmdErr(out, err)
@@ -49,6 +51,7 @@ func (e *Engine) RemoveImage(tag string) error {
 }
 
 func (e *Engine) Start(container string) error {
+	defer invalidateStates()
 	out, err := e.command("start", container).CombinedOutput()
 	if err != nil {
 		return cmdErr(out, err)

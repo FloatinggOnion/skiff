@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"runtime"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/docker"
@@ -83,6 +84,10 @@ func (p *Panel) autoscaleTick() {
 			if now-autoscaleLast[name] < autoscaleUpCool {
 				continue
 			}
+			if !roomToScale(procMem()) {
+				log.Printf("autoscale %s: staying at %d replicas, the server is nearly out of memory", name, current)
+				continue
+			}
 			if added := p.scaleUp(app, src, desired-current); added > 0 {
 				autoscaleLast[name] = now
 				log.Printf("autoscale %s: %d→%d replicas (cpu %.0f%%, target %.0f%%)", name, current, current+added, cpu, target)
@@ -111,6 +116,19 @@ func desiredReplicas(cpu, target float64, min, max int) int {
 	return d
 }
 
+// maxReplicas grows with the server, so a bigger box isn't held to a small one's limit.
+func maxReplicas() int {
+	if n := 2 * runtime.NumCPU(); n > 10 {
+		return n
+	}
+	return 10
+}
+
+// roomToScale refuses another replica when memory is nearly gone: adding one then pushes every app on the box toward the kernel's OOM killer.
+func roomToScale(u resourceUsage) bool {
+	return u.Total <= 0 || pct(u) < memWarnPct
+}
+
 func scaleBounds(src Source) (min, max int, target float64) {
 	min, max = src.ScaleMin, src.ScaleMax
 	if min < 1 {
@@ -119,8 +137,8 @@ func scaleBounds(src Source) (min, max int, target float64) {
 	if max < min {
 		max = min
 	}
-	if max > 10 {
-		max = 10
+	if limit := maxReplicas(); max > limit {
+		max = limit
 	}
 	target = float64(src.ScaleCPU)
 	if target < 1 {

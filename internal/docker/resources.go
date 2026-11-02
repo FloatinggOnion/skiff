@@ -25,6 +25,7 @@ type DBRunSpec struct {
 
 // RunDatabase (re)creates a managed database container, returning the published host port when Publish is set (0 otherwise); reusing the same name + volume preserves the data.
 func (e *Engine) RunDatabase(s DBRunSpec) (int, error) {
+	defer invalidateStates()
 	_ = e.command("rm", "-f", s.Name).Run()
 	args := []string{"run", "-d", "--name", s.Name, "--restart", "unless-stopped"}
 	if s.Entrypoint != "" {

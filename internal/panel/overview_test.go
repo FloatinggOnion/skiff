@@ -1,6 +1,9 @@
 package panel
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestProjectAttention(t *testing.T) {
 	failed := &Deploy{Status: "failed", Started: 100}
@@ -46,5 +49,49 @@ func TestUsageAttention(t *testing.T) {
 	// A platform that can't report memory (total 0) is no alarm.
 	if got := usageAttention(serverUsage{}); len(got) != 0 {
 		t.Fatalf("no data: %+v", got)
+	}
+}
+
+func TestBuildConcurrency(t *testing.T) {
+	const gb = int64(1 << 30)
+	for _, c := range []struct {
+		cpus int
+		mem  int64
+		want int
+	}{{2, 4 * gb, 1}, {4, 8 * gb, 2}, {16, 8 * gb, 4}, {16, 64 * gb, 8}, {1, gb, 1}, {8, 0, 4}} {
+		if got := buildConcurrency(c.cpus, c.mem); got != c.want {
+			t.Errorf("%d cpus %d GB = %d, want %d", c.cpus, c.mem/gb, got, c.want)
+		}
+	}
+}
+
+func TestRoomToScale(t *testing.T) {
+	if roomToScale(resourceUsage{Total: 100, Used: 90}) || !roomToScale(resourceUsage{Total: 100, Used: 89}) {
+		t.Fatal("the memory limit should stop scaling at 90%")
+	}
+	if !roomToScale(resourceUsage{}) {
+		t.Fatal("a platform that reports no memory shouldn't block scaling")
+	}
+	if maxReplicas() < 10 {
+		t.Fatalf("maxReplicas = %d", maxReplicas())
+	}
+}
+
+func TestPruneRequestsByCount(t *testing.T) {
+	openTestDB(t)
+	now := time.Now()
+	tx, _ := sqlDB.Begin()
+	for i := range 50 {
+		_, _ = tx.Exec(`INSERT INTO requests(t,app,method,path,status,dur,bytes,ref,visitor,bot) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+			now.Add(-time.Duration(i)*time.Second).UnixMilli(), "a", "GET", "/", 200, 1, 1, "", "v", 0)
+	}
+	_, _ = tx.Exec(`INSERT INTO requests(t,app,method,path,status,dur,bytes,ref,visitor,bot) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		now.Add(-8*24*time.Hour).UnixMilli(), "a", "GET", "/old", 200, 1, 1, "", "v", 0)
+	_ = tx.Commit()
+	pruneRequests(now)
+	var n int
+	_ = sqlDB.QueryRow(`SELECT count(*) FROM requests`).Scan(&n)
+	if n != 50 {
+		t.Fatalf("rows after pruning = %d, want the 50 inside the window", n)
 	}
 }

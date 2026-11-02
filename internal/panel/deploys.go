@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +34,36 @@ var (
 
 // deployDeadline bounds the whole pipeline (clone+build+release); set above the build's own 15-minute cap so it only fires on a genuine hang, freeing the in-flight slot rather than leaving a deploy stuck "building".
 const deployDeadline = 30 * time.Minute
+
+// buildSlots limits builds running at once, sized to the server: enough parallel compiles on a small box would run it out of memory and take the live apps down with it.
+var buildSlots = make(chan struct{}, buildConcurrency(runtime.NumCPU(), procMem().Total))
+
+func buildConcurrency(cpus int, memBytes int64) int {
+	n := cpus / 2
+	if memBytes > 0 {
+		if byMem := int(memBytes / (2 << 30)); byMem < n {
+			n = byMem
+		}
+	}
+	if n < 1 {
+		n = 1
+	}
+	return n
+}
+
+func waitForBuildSlot(ctx context.Context, logln func(string)) (release func(), ok bool) {
+	select {
+	case buildSlots <- struct{}{}:
+	default:
+		logln("→ waiting for another build to finish")
+		select {
+		case buildSlots <- struct{}{}:
+		case <-ctx.Done():
+			return nil, false
+		}
+	}
+	return func() { <-buildSlots }, true
+}
 
 func cancelInflight(app, id string) bool {
 	inflightMu.Lock()
@@ -137,6 +168,12 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	tomlPath := filepath.Join(ctxDir, "skiff.toml")
 	_ = os.WriteFile(tomlPath, []byte(projectToml(src, deployEnv(src), teamNetwork(src.Team), p.volumeDefs(src))), 0o644)
 
+	release, ok := waitForBuildSlot(ctx, logln)
+	if !ok {
+		finish("✗ deploy canceled while waiting for its turn")
+		return
+	}
+	defer release()
 	if src.Image != "" {
 		logln("→ deploying " + src.Image)
 	} else {

@@ -59,12 +59,12 @@ func TestReqLogPrunesOldDays(t *testing.T) {
 	dir := t.TempDir()
 	l := &ReqLog{dir: dir}
 	now := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
-	for _, d := range []string{"2026-10-20", "2026-10-24", "2026-10-25", "2026-10-31"} {
+	for _, d := range []string{"2026-10-20", "2026-10-28", "2026-10-29", "2026-10-31"} {
 		_ = os.WriteFile(filepath.Join(dir, d+".jsonl"), nil, 0o600)
 	}
 	l.prune(now)
 	left, _ := os.ReadDir(dir)
-	if len(left) != 3 {
+	if len(left) != 2 {
 		t.Fatalf("kept %d files", len(left))
 	}
 }

@@ -34,8 +34,8 @@ func TestScaleBounds(t *testing.T) {
 		t.Errorf("max<min not normalized: %d,%d", min, max)
 	}
 	_, max, _ = scaleBounds(Source{ScaleMin: 1, ScaleMax: 99}) // over cap
-	if max != 10 {
-		t.Errorf("max cap = %d, want 10", max)
+	if max != maxReplicas() {
+		t.Errorf("max cap = %d, want %d", max, maxReplicas())
 	}
 }
 

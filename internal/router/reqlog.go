@@ -16,7 +16,12 @@ import (
 	"time"
 )
 
-const reqLogKeepDays = 7
+const (
+	// The panel copies these into its database within seconds, so they only need to outlast a panel restart.
+	reqLogKeepDays = 2
+	// reqLogDayCap stops a very busy day filling the disk. Per-request detail past it is lost; the router's own totals stay exact.
+	reqLogDayCap = 1 << 30
+)
 
 // ReqEntry is one proxied request, as appended to <dir>/<YYYY-MM-DD>.jsonl.
 type ReqEntry struct {
@@ -93,6 +98,7 @@ func (l *ReqLog) Run() {
 		f       *os.File
 		w       *bufio.Writer
 		day     string
+		size    int64
 		flush   = time.NewTicker(2 * time.Second)
 		cleanup = time.NewTicker(time.Hour)
 	)
@@ -115,9 +121,17 @@ func (l *ReqLog) Run() {
 					continue
 				}
 				w, day = bufio.NewWriterSize(f, 64*1024), d
+				size = 0
+				if fi, err := f.Stat(); err == nil {
+					size = fi.Size()
+				}
+			}
+			if size >= reqLogDayCap {
+				continue
 			}
 			b, _ := json.Marshal(e)
 			_, _ = w.Write(append(b, '\n'))
+			size += int64(len(b)) + 1
 		case <-flush.C:
 			if w != nil {
 				_ = w.Flush()

@@ -41,6 +41,7 @@ export type ProjectDetail = {
   healthPath: string
   healthTimeout: number
   image?: string
+  maxReplicas: number
 }
 
 export type RegistryCreds = {
