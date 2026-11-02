@@ -39,7 +39,32 @@ export type ControlPlane = {
   recoveryKey?: string
 }
 
+export type AttentionItem = {
+  kind: 'deploy.failed' | 'app.down' | 'disk' | 'memory'
+  app?: string
+  state?: string
+  at?: number
+  serving?: boolean
+  percent?: number
+}
+
+export type Overview = {
+  projects: number
+  running: number
+  sleeping: number
+  building: string[]
+  attention: AttentionItem[]
+}
+
 class ServerService extends BaseService {
+  overview() {
+    return this.get<Overview>('/overview')
+  }
+
+  usage() {
+    return this.get<{ mem: ResourceUsage; disk: ResourceUsage }>('/server/usage')
+  }
+
   info() {
     return this.get<ServerInfo>('/server')
   }

@@ -7,6 +7,8 @@ export const queryKeys = {
   project: (name: string) => ['project', name] as const,
   system: ['system'] as const,
   server: ['server'] as const,
+  serverUsage: ['server', 'usage'] as const,
+  overview: ['overview'] as const,
   domains: ['domains'] as const,
   mail: ['mail'] as const,
   databases: ['databases'] as const,

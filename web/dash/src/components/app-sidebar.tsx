@@ -1,5 +1,4 @@
 import type { ComponentType } from 'react'
-import { Fragment } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import {
   LayoutGrid,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react'
 import type { Me } from '@/services/api.service'
 import { Logo } from '@/components/logo'
+import { ServerGauge } from '@/components/server-gauge'
 import TeamSwitcher from '@/components/team-switcher'
 import UserMenu from '@/components/user-menu'
 import {
@@ -27,10 +27,10 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarSeparator,
 } from '@/components/ui/sidebar'
 
 type NavItem = {
@@ -40,23 +40,38 @@ type NavItem = {
   end?: boolean
 }
 
-const SECTIONS: NavItem[][] = [
-  [
-    { to: '/', label: 'Projects', icon: LayoutGrid, end: true },
-    { to: '/deployments', label: 'Deployments', icon: Rocket },
-    { to: '/logs', label: 'Logs', icon: ScrollText },
-    { to: '/analytics', label: 'Analytics', icon: Activity },
-    { to: '/activity', label: 'Activity', icon: History },
-  ],
-  [
-    { to: '/server', label: 'Server', icon: Server },
-    { to: '/domains', label: 'Domains', icon: Globe },
-    { to: '/email', label: 'Email', icon: Mail },
-    { to: '/databases', label: 'Databases', icon: Database },
-    { to: '/storage', label: 'Storage', icon: Boxes },
-    { to: '/env', label: 'Environment', icon: KeyRound },
-  ],
-  [{ to: '/settings', label: 'Settings', icon: Settings }],
+const SECTIONS: { label?: string; items: NavItem[] }[] = [
+  {
+    label: 'Ship',
+    items: [
+      { to: '/', label: 'Projects', icon: LayoutGrid, end: true },
+      { to: '/deployments', label: 'Deployments', icon: Rocket },
+    ],
+  },
+  {
+    label: 'Run',
+    items: [
+      { to: '/databases', label: 'Databases', icon: Database },
+      { to: '/storage', label: 'Storage', icon: Boxes },
+      { to: '/domains', label: 'Domains', icon: Globe },
+      { to: '/email', label: 'Email', icon: Mail },
+      { to: '/env', label: 'Environment', icon: KeyRound },
+    ],
+  },
+  {
+    label: 'Watch',
+    items: [
+      { to: '/logs', label: 'Logs', icon: ScrollText },
+      { to: '/analytics', label: 'Analytics', icon: Activity },
+      { to: '/activity', label: 'Activity', icon: History },
+    ],
+  },
+  {
+    items: [
+      { to: '/server', label: 'Server', icon: Server },
+      { to: '/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ]
 
 export default function AppSidebar({
@@ -104,33 +119,36 @@ export default function AppSidebar({
 
       <SidebarContent>
         {SECTIONS.map((section, i) => (
-          <Fragment key={i}>
-            {i > 0 && <SidebarSeparator className="mx-3 my-1.5" />}
-            <SidebarGroup className="py-1.5">
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-1.5">
-                  {section.map((n) => (
-                    <SidebarMenuItem key={n.to}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={active(n.to, n.end)}
-                        className="h-9 gap-2.5"
-                      >
-                        <NavLink to={n.to} end={n.end}>
-                          <n.icon />
-                          <span>{n.label}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </Fragment>
+          <SidebarGroup key={section.label ?? i} className="py-1">
+            {section.label && (
+              <SidebarGroupLabel className="h-6 font-mono text-[10px] tracking-wider uppercase">
+                {section.label}
+              </SidebarGroupLabel>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {section.items.map((n) => (
+                  <SidebarMenuItem key={n.to}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active(n.to, n.end)}
+                      className="h-8 gap-2.5"
+                    >
+                      <NavLink to={n.to} end={n.end}>
+                        <n.icon />
+                        <span>{n.label}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         ))}
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="gap-1">
+        <ServerGauge />
         <UserMenu me={me} logout={logout} />
       </SidebarFooter>
     </Sidebar>

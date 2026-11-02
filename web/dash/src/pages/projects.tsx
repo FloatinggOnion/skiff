@@ -18,6 +18,8 @@ import { useApps } from '@/hooks/use-apps'
 import { useConsole } from '@/hooks/use-console'
 import { useDeploys } from '@/hooks/use-deploys'
 import { useSystem } from '@/hooks/use-system'
+import { useOverview } from '@/hooks/use-overview'
+import { AttentionList, FleetHeadline } from '@/components/fleet-status'
 
 export default function ProjectsPage() {
   const { me } = useAuthContext()
@@ -25,6 +27,7 @@ export default function ProjectsPage() {
   const term = useConsole(reload)
   const history = useDeploys()
   const { info: system } = useSystem()
+  const { data: overview } = useOverview()
   const [open, setOpen] = useState(false)
   const [envApp, setEnvApp] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -48,29 +51,26 @@ export default function ProjectsPage() {
 
   return (
     <div className="px-8 py-8">
-      <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {isPending ? '…' : `${apps.length} ${apps.length === 1 ? 'app' : 'apps'}`} in{' '}
-            <span className="text-foreground/70">{teamName}</span>.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search projects…"
-              className="h-8 w-52 pl-8 font-mono text-xs"
-            />
+      <header className="mb-7 flex flex-col gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <FleetHeadline overview={overview} teamName={teamName} />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search projects…"
+                className="h-8 w-52 pl-8 font-mono text-xs"
+              />
+            </div>
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus />
+              New project
+            </Button>
           </div>
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus />
-            New project
-          </Button>
         </div>
+        <AttentionList overview={overview} />
       </header>
 
       <OnboardingChecklist appsCount={apps.length} onDeploy={() => setOpen(true)} />
