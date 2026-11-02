@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 // One placeholder project card — matches AppCard's shape.
 function AppCardSkeleton() {
   return (
-    <div className="flex flex-col gap-3.5 rounded-xl border border-white/8 bg-white/1.5 p-4">
+    <div className="flex flex-col gap-3.5 rounded-xl border border-foreground/8 bg-foreground/1.5 p-4">
       <div className="flex items-center gap-2.5">
         <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
         <div className="flex-1 space-y-2">
@@ -16,7 +16,7 @@ function AppCardSkeleton() {
         <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
       </div>
       <Skeleton className="h-6 w-40 rounded-md" />
-      <div className="space-y-2 border-t border-white/5 pt-3.5">
+      <div className="space-y-2 border-t border-foreground/5 pt-3.5">
         <Skeleton className="h-3.5 w-full" />
         <Skeleton className="h-3.5 w-2/3" />
       </div>
@@ -43,7 +43,7 @@ export function CardListSkeleton({ count = 3 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/1.5 p-4"
+          className="flex items-center gap-3 rounded-xl border border-foreground/8 bg-foreground/1.5 p-4"
         >
           <Skeleton className="h-9 w-9 shrink-0 rounded-md" />
           <div className="flex-1 space-y-2">
@@ -82,7 +82,7 @@ export function ChartGridSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-white/8 bg-white/1.5 p-4">
+        <div key={i} className="rounded-xl border border-foreground/8 bg-foreground/1.5 p-4">
           <Skeleton className="mb-4 h-3.5 w-32" />
           <Skeleton className="h-40 w-full" />
         </div>
@@ -94,13 +94,13 @@ export function ChartGridSkeleton({ count = 4 }: { count?: number }) {
 // A bordered list of shimmer rows — for activity / deployment / database feeds.
 export function FeedSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-white/8">
+    <div className="overflow-hidden rounded-xl border border-foreground/8">
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
           className={
             'flex items-center gap-3.5 px-4 py-3.5 ' +
-            (i === rows - 1 ? '' : 'border-b border-white/6')
+            (i === rows - 1 ? '' : 'border-b border-foreground/6')
           }
         >
           <Skeleton className="h-7 w-7 shrink-0 rounded-full" />

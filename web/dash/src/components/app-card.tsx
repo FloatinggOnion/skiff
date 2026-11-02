@@ -25,22 +25,22 @@ function statusStyle(state: string): StatusStyle {
   switch (state) {
     case 'running':
       return {
-        dot: 'bg-emerald-400',
-        ring: 'bg-emerald-400/15',
-        edge: 'bg-emerald-400/50',
+        dot: 'bg-success',
+        ring: 'bg-success/15',
+        edge: 'bg-success/50',
         pulse: false,
       }
     case 'exited':
     case 'missing':
-      return { dot: 'bg-rose-400', ring: 'bg-rose-400/15', edge: 'bg-rose-400/50', pulse: false }
+      return { dot: 'bg-danger', ring: 'bg-danger/15', edge: 'bg-danger/50', pulse: false }
     case 'sleeping':
-      return { dot: 'bg-sky-300/70', ring: 'bg-sky-300/10', edge: 'bg-sky-300/30', pulse: false }
+      return { dot: 'bg-info/70', ring: 'bg-info/10', edge: 'bg-info/30', pulse: false }
     case 'building':
     case 'starting':
     case 'created':
-      return { dot: 'bg-amber-400', ring: 'bg-amber-400/15', edge: 'bg-amber-400/50', pulse: true }
+      return { dot: 'bg-warning', ring: 'bg-warning/15', edge: 'bg-warning/50', pulse: true }
     default:
-      return { dot: 'bg-white/40', ring: 'bg-white/5', edge: 'bg-white/15', pulse: false }
+      return { dot: 'bg-foreground/40', ring: 'bg-foreground/5', edge: 'bg-foreground/15', pulse: false }
   }
 }
 
@@ -71,13 +71,13 @@ export function AppCard({
   return (
     <article
       style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }}
-      className="animate-rise group relative flex flex-col gap-3.5 overflow-hidden rounded-xl border border-white/8 bg-linear-to-b from-white/2.5 to-transparent p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-[0_10px_40px_-15px_rgba(0,0,0,0.9)]"
+      className="animate-rise group relative flex flex-col gap-3.5 overflow-hidden rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2.5 to-transparent p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_10px_40px_-15px_rgba(0,0,0,0.9)]"
     >
       <span className={'absolute top-0 left-0 h-full w-[2px] ' + s.edge} />
 
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="text-foreground grid h-8 w-8 shrink-0 place-items-center rounded-md bg-linear-to-br from-white/20 to-white/5 text-sm font-semibold">
+          <span className="text-foreground grid h-8 w-8 shrink-0 place-items-center rounded-md bg-linear-to-br from-foreground/20 to-foreground/5 text-sm font-semibold">
             {app.name.charAt(0).toUpperCase()}
           </span>
           <div className="min-w-0">
@@ -134,7 +134,7 @@ export function AppCard({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => onStop(app.name)}
-                className="gap-2 text-rose-400 focus:text-rose-400"
+                className="gap-2 text-danger focus:text-danger"
               >
                 <Square className="h-3.5 w-3.5" />
                 Stop
@@ -145,25 +145,25 @@ export function AppCard({
       </div>
 
       {app.origin === 'cli' && (
-        <span className="text-muted-foreground inline-flex w-fit items-center gap-1.5 rounded-md border border-white/8 bg-white/2 px-2 py-1 font-mono text-[11px]">
+        <span className="text-muted-foreground inline-flex w-fit items-center gap-1.5 rounded-md border border-foreground/8 bg-foreground/2 px-2 py-1 font-mono text-[11px]">
           <Terminal className="h-3 w-3 shrink-0" />
           skiff deploy
         </span>
       )}
 
       {app.repo && (
-        <span className="text-muted-foreground inline-flex w-fit items-center gap-1.5 rounded-md border border-white/8 bg-white/2 px-2 py-1 font-mono text-[11px]">
+        <span className="text-muted-foreground inline-flex w-fit items-center gap-1.5 rounded-md border border-foreground/8 bg-foreground/2 px-2 py-1 font-mono text-[11px]">
           <GitBranch className="h-3 w-3 shrink-0" />
           <span className="truncate">{app.repo}</span>
           {app.auto && (
-            <span className="rounded-[3px] border border-emerald-400/30 px-1 text-[9px] tracking-wider text-emerald-300/90 uppercase">
+            <span className="rounded-[3px] border border-success/30 px-1 text-[9px] tracking-wider text-success/90 uppercase">
               auto
             </span>
           )}
         </span>
       )}
 
-      <div className="min-h-[2.25rem] border-t border-white/5 pt-3">
+      <div className="min-h-[2.25rem] border-t border-foreground/5 pt-3">
         {app.message ? (
           <p className="text-foreground/90 line-clamp-2 text-sm">{app.message}</p>
         ) : (
@@ -175,7 +175,7 @@ export function AppCard({
         {date && <span>{date}</span>}
         {app.branch && (
           <>
-            {date && <span className="text-white/20">·</span>}
+            {date && <span className="text-foreground/20">·</span>}
             <GitBranch className="h-3 w-3" />
             <span>{app.branch}</span>
           </>

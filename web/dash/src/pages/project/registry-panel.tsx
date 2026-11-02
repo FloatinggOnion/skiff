@@ -85,7 +85,7 @@ export function RegistryPanel({ app }: { app: string }) {
       {editing ? (
         <form
           onSubmit={save}
-          className="flex flex-col gap-3 rounded-xl border border-white/10 bg-linear-to-b from-white/2 to-transparent p-4"
+          className="flex flex-col gap-3 rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/2 to-transparent p-4"
         >
           <FieldGroup className="grid gap-3 sm:grid-cols-2">
             <Field data-invalid={!!errors.username}>
@@ -110,7 +110,7 @@ export function RegistryPanel({ app }: { app: string }) {
               <FieldError errors={[errors.password]} />
             </Field>
           </FieldGroup>
-          {serverError && <p className="text-xs text-rose-300">{serverError}</p>}
+          {serverError && <p className="text-xs text-danger">{serverError}</p>}
           <div className="flex items-center justify-end gap-3">
             <button
               type="button"
@@ -128,18 +128,18 @@ export function RegistryPanel({ app }: { app: string }) {
           </div>
         </form>
       ) : data?.set ? (
-        <div className="flex items-center gap-3 rounded-xl border border-white/8 p-4">
+        <div className="flex items-center gap-3 rounded-xl border border-foreground/8 p-4">
           <KeyRound className="text-muted-foreground h-4 w-4 shrink-0" />
           <p className="min-w-0 flex-1 truncate font-mono text-sm">{data.username}</p>
           <button
             onClick={remove}
-            className="text-muted-foreground text-xs transition hover:text-rose-300"
+            className="text-muted-foreground text-xs transition hover:text-danger"
           >
             Remove
           </button>
         </div>
       ) : null}
-      {serverError && !editing && <p className="text-xs text-rose-300">{serverError}</p>}
+      {serverError && !editing && <p className="text-xs text-danger">{serverError}</p>}
     </div>
   )
 }

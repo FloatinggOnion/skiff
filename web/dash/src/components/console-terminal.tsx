@@ -19,12 +19,12 @@ export function ConsoleTerminal({ app, path }: { app?: string; path?: string }) 
       lineHeight: 1.4,
       cursorBlink: true,
       theme: {
-        background: '#09090b',
-        foreground: '#e4e4e7',
-        cursor: '#e4e4e7',
-        selectionBackground: '#3f3f46',
-        black: '#18181b',
-        brightBlack: '#52525b',
+        background: '#081513',
+        foreground: '#c5d6d1',
+        cursor: '#e39155',
+        selectionBackground: '#27443f',
+        black: '#0e2220',
+        brightBlack: '#7d9c94',
       },
     })
     const fit = new FitAddon()

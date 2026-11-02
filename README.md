@@ -1,4 +1,4 @@
-# Skiff
+<h1><img src="web/brand/logo.svg" alt="Skiff" height="40"></h1>
 
 [![Release](https://img.shields.io/github/v/release/nuelScript/skiff?color=black)](https://github.com/nuelScript/skiff/releases)
 [![CI](https://github.com/nuelScript/skiff/actions/workflows/test.yml/badge.svg)](https://github.com/nuelScript/skiff/actions/workflows/test.yml)

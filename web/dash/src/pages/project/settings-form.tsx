@@ -105,8 +105,8 @@ export function SettingsForm({
   const toggleClass = (on: boolean) =>
     'h-9 rounded-md border px-3 font-mono text-xs uppercase transition-colors ' +
     (on
-      ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
-      : 'border-white/15 text-muted-foreground')
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-foreground/15 text-muted-foreground')
 
   const save = handleSubmit(async (data) => {
     setSaveError('')
@@ -136,7 +136,7 @@ export function SettingsForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-xl border border-white/8 p-5">
+      <section className="rounded-xl border border-foreground/8 p-5">
         <h2 className="mb-4 text-sm font-semibold">Build &amp; deploy</h2>
         <FieldGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {fromImage && (
@@ -245,13 +245,13 @@ export function SettingsForm({
           )}
         </p>
 
-        <div className="mt-4 rounded-lg border border-white/8 p-4">
+        <div className="mt-4 rounded-lg border border-foreground/8 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-medium">Autoscaling</h3>
                 {values.autoscale && (
-                  <span className="text-muted-foreground rounded bg-white/5 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
+                  <span className="text-muted-foreground rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
                     {running} running
                   </span>
                 )}
@@ -304,7 +304,7 @@ export function SettingsForm({
             </FieldGroup>
           )}
         </div>
-        <div className="mt-4 flex items-start justify-between gap-4 rounded-lg border border-white/8 p-4">
+        <div className="mt-4 flex items-start justify-between gap-4 rounded-lg border border-foreground/8 p-4">
           <div>
             <h3 className="text-sm font-medium">Sleep when idle</h3>
             <p className="text-muted-foreground mt-0.5 text-xs">
@@ -313,7 +313,7 @@ export function SettingsForm({
                 : 'Stop the app after a stretch with no visitors, freeing its memory. The next visit wakes it — that first request waits a few seconds while it starts.'}
             </p>
           </div>
-          <div className="flex shrink-0 rounded-md border border-white/12 p-0.5">
+          <div className="flex shrink-0 rounded-md border border-foreground/12 p-0.5">
             {sleepOptions(values.sleepAfter).map((o) => (
               <button
                 key={o.v}
@@ -323,7 +323,7 @@ export function SettingsForm({
                 className={
                   'rounded px-2.5 py-1 font-mono text-[11px] transition-colors disabled:opacity-40 ' +
                   (values.sleepAfter === o.v
-                    ? 'bg-white/10 text-white'
+                    ? 'bg-foreground/10 text-foreground'
                     : 'text-muted-foreground hover:text-foreground')
                 }
               >
@@ -384,7 +384,7 @@ export function SettingsForm({
           </div>
         )}
         <div className="mt-5 flex items-center justify-end gap-3">
-          {saveError && <span className="text-xs text-rose-300">{saveError}</span>}
+          {saveError && <span className="text-xs text-danger">{saveError}</span>}
           {saved && <span className="text-muted-foreground text-xs">Saved.</span>}
           {!cli && (
             <Button size="sm" variant="outline" onClick={onRedeploy}>
@@ -398,8 +398,8 @@ export function SettingsForm({
         </div>
       </section>
 
-      <section className="rounded-xl border border-rose-500/20 bg-rose-500/[0.03] p-5">
-        <h2 className="mb-1 text-sm font-semibold text-rose-300">Danger zone</h2>
+      <section className="rounded-xl border border-danger/20 bg-danger/[0.03] p-5">
+        <h2 className="mb-1 text-sm font-semibold text-danger">Danger zone</h2>
         <p className="text-muted-foreground mb-4 text-sm">
           Stop this app and remove its configuration. This cannot be undone.
         </p>
@@ -407,7 +407,7 @@ export function SettingsForm({
           size="sm"
           variant="outline"
           onClick={del}
-          className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+          className="border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
         >
           Delete project
         </Button>

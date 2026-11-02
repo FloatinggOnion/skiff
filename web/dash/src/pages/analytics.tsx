@@ -67,7 +67,7 @@ export default function AnalyticsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Select value={app || 'all'} onValueChange={(v) => setApp(v === 'all' ? '' : v)}>
-            <SelectTrigger size="sm" className="w-40 bg-white/2">
+            <SelectTrigger size="sm" className="w-40 bg-foreground/2">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -80,7 +80,7 @@ export default function AnalyticsPage() {
             </SelectContent>
           </Select>
           <Select value={String(range)} onValueChange={(v) => setRange(Number(v))}>
-            <SelectTrigger size="sm" className="w-40 bg-white/2">
+            <SelectTrigger size="sm" className="w-40 bg-foreground/2">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -147,7 +147,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function EmptyState({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-white/8 py-20 text-sm">
+    <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-20 text-sm">
       {icon}
       <span>{label}</span>
     </div>
@@ -228,19 +228,19 @@ function DataTransfer({ a }: { a: Analytics }) {
   return (
     <Panel title="Data Transfer">
       <div className="mb-3 flex gap-6">
-        <Metric dot="#fbbf24" label="Incoming" value={fmtBytes(a.bytesIn)} />
-        <Metric dot="#38bdf8" label="Outgoing" value={fmtBytes(a.bytesOut)} />
+        <Metric dot="var(--warning)" label="Incoming" value={fmtBytes(a.bytesIn)} />
+        <Metric dot="var(--info)" label="Outgoing" value={fmtBytes(a.bytesOut)} />
       </div>
       <ResponsiveContainer width="100%" height={150}>
         <AreaChart data={a.series} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="bo" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.25} />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+              <stop offset="0%" stopColor="var(--info)" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="var(--info)" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="bi" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#fbbf24" stopOpacity={0.2} />
-              <stop offset="100%" stopColor="#fbbf24" stopOpacity={0} />
+              <stop offset="0%" stopColor="var(--warning)" stopOpacity={0.2} />
+              <stop offset="100%" stopColor="var(--warning)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} stroke={gridStroke} />
@@ -267,8 +267,8 @@ function DataTransfer({ a }: { a: Analytics }) {
                 build={(row) => ({
                   title: timeRange(row.t, a.bucketSecs),
                   rows: [
-                    { label: 'Outgoing', color: '#38bdf8', value: fmtBytes(row.bo) },
-                    { label: 'Incoming', color: '#fbbf24', value: fmtBytes(row.bi) },
+                    { label: 'Outgoing', color: 'var(--info)', value: fmtBytes(row.bo) },
+                    { label: 'Incoming', color: 'var(--warning)', value: fmtBytes(row.bi) },
                   ],
                 })}
               />
@@ -276,14 +276,14 @@ function DataTransfer({ a }: { a: Analytics }) {
           />
           <Area
             dataKey="bo"
-            stroke="#38bdf8"
+            stroke="var(--info)"
             strokeWidth={1.5}
             fill="url(#bo)"
             isAnimationActive={false}
           />
           <Area
             dataKey="bi"
-            stroke="#fbbf24"
+            stroke="var(--warning)"
             strokeWidth={1.5}
             fill="url(#bi)"
             isAnimationActive={false}
@@ -305,8 +305,8 @@ function Latency({ a }: { a: Analytics }) {
         <AreaChart data={a.series} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="lat" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.25} />
-              <stop offset="100%" stopColor="#a78bfa" stopOpacity={0} />
+              <stop offset="0%" stopColor="var(--chart-violet)" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="var(--chart-violet)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} stroke={gridStroke} />
@@ -326,14 +326,14 @@ function Latency({ a }: { a: Analytics }) {
               <ChartTip
                 build={(row) => ({
                   title: timeRange(row.t, a.bucketSecs),
-                  rows: [{ label: 'Avg latency', color: '#a78bfa', value: row.lat + 'ms' }],
+                  rows: [{ label: 'Avg latency', color: 'var(--chart-violet)', value: row.lat + 'ms' }],
                 })}
               />
             }
           />
           <Area
             dataKey="lat"
-            stroke="#a78bfa"
+            stroke="var(--chart-violet)"
             strokeWidth={1.5}
             fill="url(#lat)"
             isAnimationActive={false}
@@ -373,9 +373,9 @@ function TopApps({ a }: { a: Analytics }) {
                     {app.avgLatMs}ms
                   </span>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                <div className="h-1.5 overflow-hidden rounded-full bg-foreground/5">
                   <div
-                    className="h-full rounded-full bg-emerald-400/60"
+                    className="h-full rounded-full bg-success/60"
                     style={{ width: (app.req / max) * 100 + '%' }}
                   />
                 </div>
@@ -406,10 +406,10 @@ function ComputeApps({ r }: { r: Resources }) {
                     {fmtPct(app.cpu)} CPU
                   </span>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                <div className="h-1.5 overflow-hidden rounded-full bg-foreground/5">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: (app.mem / max) * 100 + '%', background: MEM_COLOR + '99' }}
+                    style={{ width: (app.mem / max) * 100 + '%', background: `color-mix(in oklch, ${MEM_COLOR} 60%, transparent)` }}
                   />
                 </div>
               </div>
@@ -428,8 +428,8 @@ function ComputeSummary({ r }: { r: Resources }) {
       <div className="grid grid-cols-2 gap-4 pt-1">
         <Metric dot={CPU_COLOR} label="CPU now" value={fmtPct(r.curCpu)} />
         <Metric dot={MEM_COLOR} label="Memory now" value={fmtBytes(r.curMem)} />
-        <Metric dot="#fb7185" label="Restarts" value={r.restarts.toLocaleString()} />
-        <Metric dot="#a78bfa" label="Peak memory" value={fmtBytes(r.peakMem)} />
+        <Metric dot="var(--danger)" label="Restarts" value={r.restarts.toLocaleString()} />
+        <Metric dot="var(--chart-violet)" label="Peak memory" value={fmtBytes(r.peakMem)} />
       </div>
       <p className="text-muted-foreground mt-4 text-xs">
         {r.restarts === 0

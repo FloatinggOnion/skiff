@@ -20,12 +20,12 @@ function rel(unix: number): string {
 
 const dot = (status: string): string =>
   status === 'live'
-    ? 'bg-emerald-400'
+    ? 'bg-success'
     : status === 'failed'
-      ? 'bg-rose-400'
+      ? 'bg-danger'
       : status === 'canceled'
-        ? 'bg-white/25'
-        : 'bg-amber-400 pulse-dot'
+        ? 'bg-foreground/25'
+        : 'bg-warning pulse-dot'
 
 type Filter = 'all' | 'live' | 'failed'
 const FILTERS: { key: Filter; label: string }[] = [
@@ -59,18 +59,18 @@ export default function NotificationBell() {
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Activity"
-          className="text-muted-foreground hover:text-foreground relative grid h-8 w-8 place-items-center rounded-md transition-colors hover:bg-white/5"
+          className="text-muted-foreground hover:text-foreground relative grid h-8 w-8 place-items-center rounded-md transition-colors hover:bg-foreground/5"
         >
           <Bell className="h-4 w-4" />
           {unread > 0 && (
-            <span className="ring-background absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-400 ring-2" />
+            <span className="ring-background absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-success ring-2" />
           )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between gap-2 border-b border-white/8 px-3 py-2">
+        <div className="flex items-center justify-between gap-2 border-b border-foreground/8 px-3 py-2">
           <span className="text-xs font-medium">Activity</span>
-          <div className="flex items-center gap-0.5 rounded-[6px] border border-white/10 p-0.5">
+          <div className="flex items-center gap-0.5 rounded-[6px] border border-foreground/10 p-0.5">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -81,7 +81,7 @@ export default function NotificationBell() {
                 className={
                   'rounded-[4px] px-1.5 py-0.5 text-[10px] font-medium transition-colors ' +
                   (filter === f.key
-                    ? 'text-foreground bg-white/10'
+                    ? 'text-foreground bg-foreground/10'
                     : 'text-muted-foreground hover:text-foreground')
                 }
               >
@@ -100,7 +100,7 @@ export default function NotificationBell() {
               <button
                 key={d.app + d.id}
                 onClick={() => navigate('/projects/' + d.app)}
-                className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/5"
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-foreground/5"
               >
                 <span className={'h-1.5 w-1.5 shrink-0 rounded-full ' + dot(d.status)} />
                 <div className="min-w-0 flex-1">

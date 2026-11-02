@@ -45,8 +45,8 @@ function Breakdown({ c }: { c: CostReport }) {
   ]
   const max = Math.max(0.01, ...rows.map((r) => r.value))
   return (
-    <div className="overflow-hidden rounded-xl border border-white/8">
-      <div className="text-muted-foreground flex items-center justify-between border-b border-white/8 px-4 py-2.5 font-mono text-[10px] tracking-wider uppercase">
+    <div className="overflow-hidden rounded-xl border border-foreground/8">
+      <div className="text-muted-foreground flex items-center justify-between border-b border-foreground/8 px-4 py-2.5 font-mono text-[10px] tracking-wider uppercase">
         <span>Per month, from the last 24h of usage</span>
         <span>{c.price > 0 ? fmtMoney(c.price, c.currency) + ' total' : 'set a price'}</span>
       </div>
@@ -60,12 +60,12 @@ function Breakdown({ c }: { c: CostReport }) {
           return (
             <div
               key={r.key}
-              className="relative flex items-center gap-3 border-b border-white/5 px-4 py-2.5 last:border-0"
+              className="relative flex items-center gap-3 border-b border-foreground/5 px-4 py-2.5 last:border-0"
             >
               <div
                 className={
                   'absolute inset-y-1 left-1 rounded-[5px] ' +
-                  (r.item ? 'bg-white/5' : 'bg-white/[0.025]')
+                  (r.item ? 'bg-foreground/5' : 'bg-foreground/[0.025]')
                 }
                 style={{ width: `calc(${(r.value / max) * 100}% - 0.5rem)` }}
               />
@@ -115,7 +115,7 @@ function PriceForm({ c }: { c: CostReport }) {
   return (
     <form
       onSubmit={submit}
-      className="rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent p-4"
+      className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent p-4"
     >
       <h3 className="text-sm font-medium">Server price</h3>
       <p className="text-muted-foreground mt-1 text-xs">
@@ -131,20 +131,20 @@ function PriceForm({ c }: { c: CostReport }) {
           }}
           inputMode="decimal"
           placeholder="e.g. 4.99"
-          className="h-9 min-w-0 flex-1 rounded-[6px] border border-white/12 bg-black/30 px-3 font-mono text-sm outline-none placeholder:text-white/25 focus-visible:border-white/30"
+          className="h-9 min-w-0 flex-1 rounded-[6px] border border-foreground/12 bg-inset px-3 font-mono text-sm outline-none placeholder:text-foreground/25 focus-visible:border-foreground/30"
         />
         <input
           value={currency}
           onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))}
           aria-label="Currency"
-          className="h-9 w-16 rounded-[6px] border border-white/12 bg-black/30 px-2 text-center font-mono text-sm outline-none focus-visible:border-white/30"
+          className="h-9 w-16 rounded-[6px] border border-foreground/12 bg-inset px-2 text-center font-mono text-sm outline-none focus-visible:border-foreground/30"
         />
         <Button type="submit" size="sm" loading={save.isPending} disabled={!price.trim()}>
           {save.isSuccess ? 'Saved' : 'Save'}
         </Button>
       </div>
       {save.isError && (
-        <p className="mt-2 text-xs text-rose-300">{errText(save.error, "Couldn't save.")}</p>
+        <p className="mt-2 text-xs text-danger">{errText(save.error, "Couldn't save.")}</p>
       )}
     </form>
   )
@@ -153,7 +153,7 @@ function PriceForm({ c }: { c: CostReport }) {
 function Capacity({ c }: { c: CostReport }) {
   const diskFree = c.diskTotal - c.diskUsed
   return (
-    <div className="space-y-3 rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent p-4 text-sm">
+    <div className="space-y-3 rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent p-4 text-sm">
       <h3 className="font-medium">Capacity</h3>
       <p className="text-muted-foreground text-xs leading-relaxed">
         {c.medianMem > 0 ? (
@@ -172,7 +172,7 @@ function Capacity({ c }: { c: CostReport }) {
             Disk grows about {fmtBytes(c.diskPerDay)} a day — at that rate the {fmtBytes(diskFree)}{' '}
             left lasts{' '}
             <span
-              className={'font-medium ' + (c.daysToFull < 14 ? 'text-rose-300' : 'text-foreground')}
+              className={'font-medium ' + (c.daysToFull < 14 ? 'text-danger' : 'text-foreground')}
             >
               ~{c.daysToFull} days
             </span>

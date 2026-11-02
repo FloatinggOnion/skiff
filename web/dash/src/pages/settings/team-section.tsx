@@ -76,7 +76,7 @@ export function TeamSection({
         </div>
       </form>
 
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-4">
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-foreground/5 pt-4">
         <p className="text-muted-foreground text-[11px]">
           {isOwner
             ? 'Deleting removes the team for everyone. Remove its projects and databases first.'
@@ -86,19 +86,19 @@ export function TeamSection({
           type="button"
           onClick={leaveOrDelete}
           disabled={danger.isPending}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border border-rose-500/30 px-2.5 py-1 text-xs text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border border-danger/30 px-2.5 py-1 text-xs text-danger transition hover:bg-danger/10 disabled:opacity-50"
         >
           {danger.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
           {isOwner ? 'Delete team' : 'Leave team'}
         </button>
       </div>
       {rename.isError && (
-        <p className="mt-2 text-xs text-rose-300">
+        <p className="mt-2 text-xs text-danger">
           {errText(rename.error, 'Could not rename the team.')}
         </p>
       )}
       {danger.isError && (
-        <p className="mt-2 text-xs text-rose-300">
+        <p className="mt-2 text-xs text-danger">
           {errText(danger.error, `Could not ${verb.toLowerCase()} the team.`)}
         </p>
       )}

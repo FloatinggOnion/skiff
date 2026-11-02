@@ -8,13 +8,13 @@ export function UnmanagedDatabases({ dot }: { dot: (engine: string) => string })
   if (found.length === 0) return null
 
   return (
-    <section className="animate-rise mb-6 rounded-xl border border-amber-400/20 bg-amber-400/[0.03] p-4">
+    <section className="animate-rise mb-6 rounded-xl border border-warning/20 bg-warning/[0.03] p-4">
       <h2 className="text-sm font-medium">Running on this server, not managed yet</h2>
       <p className="text-muted-foreground mt-1 text-xs">
         These were started outside Skiff, so nothing backs them up. Managing one adds daily backups,
         a shell and this dashboard view — the container keeps running untouched.
       </p>
-      <div className="mt-3 divide-y divide-white/5">
+      <div className="mt-3 divide-y divide-foreground/5">
         {found.map((d) => {
           const busy = adopt.isPending && adopt.variables?.container === d.container
           return (
@@ -43,7 +43,7 @@ export function UnmanagedDatabases({ dot }: { dot: (engine: string) => string })
         })}
       </div>
       {adopt.isError && (
-        <p className="mt-2 text-xs text-rose-300">{errText(adopt.error, "Couldn't adopt it.")}</p>
+        <p className="mt-2 text-xs text-danger">{errText(adopt.error, "Couldn't adopt it.")}</p>
       )}
     </section>
   )

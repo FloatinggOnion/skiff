@@ -34,7 +34,7 @@ export function ProfileSection({ user, onSaved }: { user: User; onSaved: () => P
           <input className={inputCls} value={user.email} disabled readOnly />
         </Field>
         {save.isError && (
-          <p className="text-xs text-rose-300">
+          <p className="text-xs text-danger">
             {errText(save.error, 'Could not save your profile.')}
           </p>
         )}

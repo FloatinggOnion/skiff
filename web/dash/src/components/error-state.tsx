@@ -12,11 +12,11 @@ export function ErrorState({
   return (
     <div
       className={
-        'text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-rose-500/15 bg-rose-500/[0.03] py-16 text-sm ' +
+        'text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-danger/15 bg-danger/[0.03] py-16 text-sm ' +
         className
       }
     >
-      <AlertTriangle className="h-6 w-6 text-rose-400/60" />
+      <AlertTriangle className="h-6 w-6 text-danger/60" />
       <span>{message}</span>
     </div>
   )

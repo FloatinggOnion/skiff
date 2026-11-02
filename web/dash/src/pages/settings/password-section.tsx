@@ -44,7 +44,7 @@ export function PasswordSection() {
           }}
         />
         {save.isError && (
-          <p className="text-xs text-rose-300">
+          <p className="text-xs text-danger">
             {errText(save.error, 'Could not change your password.')}
           </p>
         )}

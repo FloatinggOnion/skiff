@@ -127,7 +127,7 @@ export function OffsiteSection({ isOwner }: { isOwner: boolean }) {
           />
         </Field>
         {error ? (
-          <p className="text-xs text-rose-300">{errText(error, 'Something went wrong.')}</p>
+          <p className="text-xs text-danger">{errText(error, 'Something went wrong.')}</p>
         ) : (
           <p className="text-muted-foreground text-xs">
             {enabled

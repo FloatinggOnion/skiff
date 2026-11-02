@@ -92,11 +92,11 @@ export default function AppSidebar({
         />
         <button
           onClick={onSearch}
-          className="hover:bg-sidebar-accent text-muted-foreground flex w-full items-center gap-2 rounded-lg border border-white/8 px-2.5 py-2 text-sm transition-colors"
+          className="hover:bg-sidebar-accent text-muted-foreground flex w-full items-center gap-2 rounded-lg border border-foreground/8 px-2.5 py-2 text-sm transition-colors"
         >
           <Search className="h-3.5 w-3.5 shrink-0" />
           <span className="flex-1 text-left">Search…</span>
-          <kbd className="rounded border border-white/12 bg-white/5 px-1.5 py-0.5 font-mono text-[10px]">
+          <kbd className="rounded border border-foreground/12 bg-foreground/5 px-1.5 py-0.5 font-mono text-[10px]">
             ⌘K
           </kbd>
         </button>

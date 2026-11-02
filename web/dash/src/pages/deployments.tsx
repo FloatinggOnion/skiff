@@ -15,12 +15,12 @@ import { deploysService, type Deploy } from '@/services/api.service'
 
 const deployDot = (status: string): string =>
   status === 'live'
-    ? 'bg-emerald-400'
+    ? 'bg-success'
     : status === 'failed'
-      ? 'bg-rose-400'
+      ? 'bg-danger'
       : status === 'canceled'
-        ? 'bg-white/25'
-        : 'bg-amber-400 pulse-dot'
+        ? 'bg-foreground/25'
+        : 'bg-warning pulse-dot'
 
 const statusLabel = (status: string): string =>
   status === 'live' ? 'Ready' : status.charAt(0).toUpperCase() + status.slice(1)
@@ -93,10 +93,10 @@ export default function DeploymentsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search project, commit, message…"
-            className="h-9 w-full rounded-[6px] border border-white/12 bg-white/2 pr-3 pl-8.5 text-sm outline-none placeholder:text-white/30 focus-visible:border-white/25"
+            className="h-9 w-full rounded-[6px] border border-foreground/12 bg-foreground/2 pr-3 pl-8.5 text-sm outline-none placeholder:text-foreground/30 focus-visible:border-foreground/25"
           />
         </div>
-        <div className="flex shrink-0 items-center gap-1 rounded-[6px] border border-white/10 bg-white/2 p-0.5">
+        <div className="flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 bg-foreground/2 p-0.5">
           {FILTERS.map((f) => (
             <button
               key={f.key}
@@ -104,7 +104,7 @@ export default function DeploymentsPage() {
               className={
                 'rounded-[4px] px-2.5 py-1 text-xs font-medium transition-colors ' +
                 (filter === f.key
-                  ? 'text-foreground bg-white/10'
+                  ? 'text-foreground bg-foreground/10'
                   : 'text-muted-foreground hover:text-foreground')
               }
             >
@@ -121,7 +121,7 @@ export default function DeploymentsPage() {
         <ErrorState message="Couldn't load deployments — retrying…" />
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-white/8">
+          <div className="overflow-hidden rounded-xl border border-foreground/8">
             {rows.length === 0 ? (
               <p className="text-muted-foreground p-10 text-center text-sm">
                 {deploys.length === 0
@@ -132,7 +132,7 @@ export default function DeploymentsPage() {
               rows.map((d) => (
                 <div
                   key={d.app + d.id}
-                  className="group flex items-center border-b border-white/5 pr-3 transition-colors last:border-0 hover:bg-white/3"
+                  className="group flex items-center border-b border-foreground/5 pr-3 transition-colors last:border-0 hover:bg-foreground/3"
                 >
                   <button
                     onClick={() => term.showBuildLog(d.app, d.id)}
@@ -141,7 +141,7 @@ export default function DeploymentsPage() {
                     <span className={'h-2 w-2 shrink-0 rounded-full ' + deployDot(d.status)} />
 
                     {/* project avatar */}
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-white/10 bg-linear-to-br from-white/12 to-white/2 font-mono text-xs font-semibold text-white/80">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-foreground/10 bg-linear-to-br from-foreground/12 to-foreground/2 font-mono text-xs font-semibold text-foreground/80">
                       {d.app.charAt(0).toUpperCase()}
                     </span>
 
@@ -181,7 +181,7 @@ export default function DeploymentsPage() {
                     <button
                       onClick={() => cancel(d.app, d.id)}
                       title="Stop this build"
-                      className="ml-1 flex shrink-0 items-center gap-1 rounded-[6px] border border-white/10 px-2 py-1 text-[11px] text-rose-300 transition hover:border-rose-500/30 hover:bg-rose-500/10"
+                      className="ml-1 flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 px-2 py-1 text-[11px] text-danger transition hover:border-danger/30 hover:bg-danger/10"
                     >
                       <Square className="h-3 w-3 fill-current" />
                       Stop

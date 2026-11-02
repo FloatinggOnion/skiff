@@ -7,12 +7,12 @@ const fmtPct = (v: number) =>
 
 const barColor = (d: UptimeDay) =>
   d.pct < 0
-    ? 'bg-white/8'
+    ? 'bg-foreground/8'
     : d.pct >= 99.9
-      ? 'bg-emerald-400/80'
+      ? 'bg-success/80'
       : d.pct >= 99
-        ? 'bg-amber-400/80'
-        : 'bg-rose-400/80'
+        ? 'bg-warning/80'
+        : 'bg-danger/80'
 
 const fmtDay = (t: number) =>
   new Date(t * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })
@@ -28,13 +28,13 @@ export function UptimeStrip({ app }: { app: string }) {
   const checking = u.checked > 0
 
   return (
-    <section className="rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent p-5">
+    <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span
             className={
               'h-2 w-2 rounded-full ' +
-              (!checking ? 'bg-white/30' : u.up ? 'bg-emerald-400' : 'animate-pulse bg-rose-400')
+              (!checking ? 'bg-foreground/30' : u.up ? 'bg-success' : 'animate-pulse bg-danger')
             }
           />
           <h2 className="text-sm font-semibold">Uptime</h2>
@@ -72,13 +72,13 @@ export function UptimeStrip({ app }: { app: string }) {
         <span>today</span>
       </div>
       {u.incidents.length > 0 && (
-        <div className="mt-4 divide-y divide-white/5 border-t border-white/5">
+        <div className="mt-4 divide-y divide-foreground/5 border-t border-foreground/5">
           {u.incidents.map((i) => (
             <div key={i.id} className="flex items-center gap-3 py-2 text-xs">
               <span
                 className={
                   'h-1.5 w-1.5 shrink-0 rounded-full ' +
-                  (i.ended ? 'bg-white/30' : 'animate-pulse bg-rose-400')
+                  (i.ended ? 'bg-foreground/30' : 'animate-pulse bg-danger')
                 }
               />
               <span className="min-w-0 flex-1 truncate">{i.cause}</span>

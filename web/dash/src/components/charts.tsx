@@ -12,13 +12,13 @@ import { fmtBytes } from '@/lib/format'
 import type { Resources } from '@/services/api.service'
 
 export const STATUS = [
-  { key: 's2' as const, label: '2XX', color: '#34d399' },
-  { key: 's3' as const, label: '3XX', color: '#38bdf8' },
-  { key: 's4' as const, label: '4XX', color: '#fbbf24' },
-  { key: 's5' as const, label: '5XX', color: '#fb7185' },
+  { key: 's2' as const, label: '2XX', color: 'var(--success)' },
+  { key: 's3' as const, label: '3XX', color: 'var(--info)' },
+  { key: 's4' as const, label: '4XX', color: 'var(--warning)' },
+  { key: 's5' as const, label: '5XX', color: 'var(--danger)' },
 ]
 
-export const axisTick = { fill: '#71717a', fontSize: 10, fontFamily: 'ui-monospace, monospace' }
+export const axisTick = { fill: 'var(--muted-foreground)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }
 export const gridStroke = 'rgba(255,255,255,0.05)'
 
 export const fmtClock = (t: number) =>
@@ -35,12 +35,12 @@ export const fmtPct = (v: number) => {
   return v.toFixed(1) + '%'
 }
 
-export const CPU_COLOR = '#fb923c' // orange-400
-export const MEM_COLOR = '#2dd4bf' // teal-400
+export const CPU_COLOR = 'var(--seam)' // orange-400
+export const MEM_COLOR = 'var(--chart-teal)' // teal-400
 
 export function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent p-5">
+    <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent p-5">
       <h2 className="mb-3 text-sm font-semibold">{title}</h2>
       {children}
     </section>
@@ -55,7 +55,7 @@ export function TipCard({
   rows: { label: string; color: string; value: string }[]
 }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-black/90 px-3 py-2 shadow-xl backdrop-blur-sm">
+    <div className="rounded-lg border border-foreground/10 bg-inset px-3 py-2 shadow-xl backdrop-blur-sm">
       <p className="text-muted-foreground mb-1.5 font-mono text-[10px]">{title}</p>
       <div className="space-y-1">
         {rows.map((r) => (

@@ -28,27 +28,27 @@ const ACTIVITY_PAGE = 30
 type Kind = { icon: ComponentType<{ className?: string }>; verb: string; tone: string }
 
 const KINDS: Record<string, Kind> = {
-  deploy: { icon: Rocket, verb: 'deployed', tone: 'text-emerald-400' },
-  rollback: { icon: RotateCcw, verb: 'rolled back', tone: 'text-amber-400' },
+  deploy: { icon: Rocket, verb: 'deployed', tone: 'text-success' },
+  rollback: { icon: RotateCcw, verb: 'rolled back', tone: 'text-warning' },
   'settings.update': {
     icon: Settings,
     verb: 'updated settings for',
     tone: 'text-muted-foreground',
   },
-  'env.update': { icon: KeyRound, verb: 'changed environment for', tone: 'text-violet-400' },
-  'project.delete': { icon: Trash2, verb: 'deleted project', tone: 'text-rose-400' },
-  'database.create': { icon: Database, verb: 'created database', tone: 'text-emerald-400' },
-  'database.delete': { icon: Database, verb: 'deleted database', tone: 'text-rose-400' },
-  'backup.restore': { icon: Undo2, verb: 'restored a backup of', tone: 'text-amber-400' },
-  'domain.add': { icon: Globe, verb: 'added domain', tone: 'text-emerald-400' },
-  'domain.remove': { icon: Globe, verb: 'removed domain', tone: 'text-rose-400' },
-  'mail.add': { icon: Mail, verb: 'set up forwarding for', tone: 'text-emerald-400' },
-  'mail.remove': { icon: Mail, verb: 'stopped forwarding', tone: 'text-rose-400' },
-  'member.invite': { icon: UserPlus, verb: 'invited', tone: 'text-emerald-400' },
-  'member.remove': { icon: UserMinus, verb: 'removed', tone: 'text-rose-400' },
+  'env.update': { icon: KeyRound, verb: 'changed environment for', tone: 'text-chart-violet' },
+  'project.delete': { icon: Trash2, verb: 'deleted project', tone: 'text-danger' },
+  'database.create': { icon: Database, verb: 'created database', tone: 'text-success' },
+  'database.delete': { icon: Database, verb: 'deleted database', tone: 'text-danger' },
+  'backup.restore': { icon: Undo2, verb: 'restored a backup of', tone: 'text-warning' },
+  'domain.add': { icon: Globe, verb: 'added domain', tone: 'text-success' },
+  'domain.remove': { icon: Globe, verb: 'removed domain', tone: 'text-danger' },
+  'mail.add': { icon: Mail, verb: 'set up forwarding for', tone: 'text-success' },
+  'mail.remove': { icon: Mail, verb: 'stopped forwarding', tone: 'text-danger' },
+  'member.invite': { icon: UserPlus, verb: 'invited', tone: 'text-success' },
+  'member.remove': { icon: UserMinus, verb: 'removed', tone: 'text-danger' },
   'alerts.update': { icon: Bell, verb: 'updated alert channels', tone: 'text-muted-foreground' },
-  'token.create': { icon: KeyRound, verb: 'created API token', tone: 'text-emerald-400' },
-  'token.revoke': { icon: KeyRound, verb: 'revoked an API token', tone: 'text-rose-400' },
+  'token.create': { icon: KeyRound, verb: 'created API token', tone: 'text-success' },
+  'token.revoke': { icon: KeyRound, verb: 'revoked an API token', tone: 'text-danger' },
 }
 
 export default function ActivityPage() {
@@ -88,13 +88,13 @@ export default function ActivityPage() {
       ) : isError && entries.length === 0 ? (
         <ErrorState message="Couldn't load activity — retrying…" />
       ) : entries.length === 0 ? (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-white/8 py-20 text-sm">
+        <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-20 text-sm">
           <History className="h-6 w-6 opacity-40" />
           <span>No activity yet — actions across the team will show up here.</span>
         </div>
       ) : (
         <>
-          <ol className="overflow-hidden rounded-xl border border-white/8">
+          <ol className="overflow-hidden rounded-xl border border-foreground/8">
             {entries.map((e, i) => (
               <Row key={e.id} e={e} last={i === entries.length - 1} />
             ))}
@@ -125,10 +125,10 @@ function Row({ e, last }: { e: AuditEntry; last: boolean }) {
   }
   const Icon = k.icon
   return (
-    <li className={'flex items-start gap-3 px-4 py-3 ' + (last ? '' : 'border-b border-white/6')}>
+    <li className={'flex items-start gap-3 px-4 py-3 ' + (last ? '' : 'border-b border-foreground/6')}>
       <span
         className={
-          'mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/5 ' + k.tone
+          'mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-foreground/5 ' + k.tone
         }
       >
         <Icon className="h-3.5 w-3.5" />
@@ -151,7 +151,7 @@ function Actor({ actor }: { actor: string }) {
   // System actors ("push", "token:<name>") render as a chip; users as a name.
   if (actor === 'push' || actor.startsWith('token:')) {
     return (
-      <span className="text-muted-foreground rounded bg-white/8 px-1.5 py-0.5 font-mono text-[11px]">
+      <span className="text-muted-foreground rounded bg-foreground/8 px-1.5 py-0.5 font-mono text-[11px]">
         {actor.startsWith('token:') ? actor.slice('token:'.length) + ' (token)' : actor}
       </span>
     )

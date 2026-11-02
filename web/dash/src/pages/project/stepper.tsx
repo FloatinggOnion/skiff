@@ -12,7 +12,7 @@ export function Stepper({
   max?: number
 }) {
   return (
-    <div className="flex h-9 w-28 items-center justify-between rounded-md border border-white/15 px-1">
+    <div className="flex h-9 w-28 items-center justify-between rounded-md border border-foreground/15 px-1">
       <button
         type="button"
         onClick={onDec}

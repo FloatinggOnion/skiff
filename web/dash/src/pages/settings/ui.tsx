@@ -3,7 +3,7 @@ import { Check, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export const inputCls =
-  'h-9 w-full rounded-[6px] border border-white/12 bg-black/30 px-3 text-sm outline-none placeholder:text-white/25 focus-visible:border-white/30 disabled:opacity-50'
+  'h-9 w-full rounded-[6px] border border-foreground/12 bg-inset px-3 text-sm outline-none placeholder:text-foreground/25 focus-visible:border-foreground/30 disabled:opacity-50'
 
 export function RevealInput(props: ComponentProps<'input'>) {
   const [show, setShow] = useState(false)
@@ -33,7 +33,7 @@ export function Section({
   children: ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent p-5">
+    <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent p-5">
       <div className="mb-4">
         <h2 className="text-sm font-semibold">{title}</h2>
         {description && <p className="text-muted-foreground mt-1 text-xs">{description}</p>}

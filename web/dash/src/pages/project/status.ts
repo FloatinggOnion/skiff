@@ -2,16 +2,16 @@
 
 export const runningPill = (state: string): string =>
   state === 'running'
-    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+    ? 'border-success/25 bg-success/10 text-success'
     : state === 'exited' || state === 'missing'
-      ? 'border-rose-400/25 bg-rose-400/10 text-rose-300'
-      : 'border-white/15 bg-white/5 text-muted-foreground'
+      ? 'border-danger/25 bg-danger/10 text-danger'
+      : 'border-foreground/15 bg-foreground/5 text-muted-foreground'
 
 export const deployDot = (status: string): string =>
   status === 'live'
-    ? 'bg-emerald-400'
+    ? 'bg-success'
     : status === 'failed'
-      ? 'bg-rose-400'
+      ? 'bg-danger'
       : status === 'canceled'
-        ? 'bg-white/25'
-        : 'bg-amber-400 pulse-dot'
+        ? 'bg-foreground/25'
+        : 'bg-warning pulse-dot'

@@ -56,12 +56,12 @@ export function TokensSection() {
       description="Deploy and manage apps from CI over the token-authenticated /api/v1 API."
     >
       {created?.token && (
-        <div className="mb-4 rounded-lg border border-emerald-400/25 bg-emerald-400/5 p-3">
-          <p className="mb-2 text-xs text-emerald-200/90">
+        <div className="mb-4 rounded-lg border border-success/25 bg-success/5 p-3">
+          <p className="mb-2 text-xs text-success/90">
             Copy your token now — it won't be shown again.
           </p>
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded bg-black/40 px-2.5 py-1.5 font-mono text-xs">
+            <code className="min-w-0 flex-1 truncate rounded bg-inset px-2.5 py-1.5 font-mono text-xs">
               {created.token}
             </code>
             <Button
@@ -93,13 +93,13 @@ export function TokensSection() {
         </Button>
       </form>
       {create.isError && (
-        <p className="mt-2 text-xs text-rose-300">
+        <p className="mt-2 text-xs text-danger">
           {errText(create.error, 'Could not create token.')}
         </p>
       )}
 
       {tokens.length > 0 && (
-        <ul className="mt-4 divide-y divide-white/6 overflow-hidden rounded-lg border border-white/8">
+        <ul className="mt-4 divide-y divide-foreground/6 overflow-hidden rounded-lg border border-foreground/8">
           {tokens.map((t) => (
             <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
               <div className="min-w-0">
@@ -113,7 +113,7 @@ export function TokensSection() {
                 type="button"
                 onClick={() => revoke(t)}
                 aria-label={`Revoke ${t.name}`}
-                className="text-muted-foreground p-1 transition-colors hover:text-rose-300"
+                className="text-muted-foreground p-1 transition-colors hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

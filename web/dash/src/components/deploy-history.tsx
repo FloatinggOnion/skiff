@@ -3,7 +3,7 @@ import type { Deploy } from '@/services/api.service'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const statusDot = (s: string): string =>
-  s === 'live' ? 'bg-emerald-500' : s === 'failed' ? 'bg-red-500' : 'bg-amber-500'
+  s === 'live' ? 'bg-success' : s === 'failed' ? 'bg-danger' : 'bg-warning'
 
 export function DeployHistory({
   app,

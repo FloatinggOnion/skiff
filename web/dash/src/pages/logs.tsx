@@ -8,10 +8,10 @@ import { useAutoScroll } from '@/hooks/use-auto-scroll'
 
 const runningDot = (state: string): string =>
   state === 'running'
-    ? 'bg-emerald-400'
+    ? 'bg-success'
     : state === 'exited' || state === 'missing'
-      ? 'bg-rose-400'
-      : 'bg-amber-400'
+      ? 'bg-danger'
+      : 'bg-warning'
 
 export default function LogsPage() {
   const { apps } = useApps()
@@ -59,8 +59,8 @@ export default function LogsPage() {
                   className={
                     'flex items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-left text-sm transition-colors ' +
                     (selected === a.name
-                      ? 'text-foreground bg-white/8'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-white/3')
+                      ? 'text-foreground bg-foreground/8'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-foreground/3')
                   }
                 >
                   <span className={'h-1.5 w-1.5 shrink-0 rounded-full ' + runningDot(a.state)} />
@@ -72,24 +72,24 @@ export default function LogsPage() {
         </aside>
 
         {/* terminal */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-black/60">
-          <div className="flex h-10 shrink-0 items-center gap-3 border-b border-white/6 px-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl dark bg-well text-foreground">
+          <div className="flex h-10 shrink-0 items-center gap-3 border-b border-foreground/6 px-4">
             <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full border border-white/15" />
-              <span className="h-2.5 w-2.5 rounded-full border border-white/15" />
-              <span className="h-2.5 w-2.5 rounded-full border border-white/15" />
+              <span className="h-2.5 w-2.5 rounded-full border border-foreground/15" />
+              <span className="h-2.5 w-2.5 rounded-full border border-foreground/15" />
+              <span className="h-2.5 w-2.5 rounded-full border border-foreground/15" />
             </div>
             <span className="text-muted-foreground font-mono text-xs">
               {selected ? selected : 'no app selected'}
             </span>
-            <div className="flex rounded-[5px] border border-white/10 p-0.5">
+            <div className="flex rounded-[5px] border border-foreground/10 p-0.5">
               {(['live', 'history'] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
                   className={
                     'rounded-[3px] px-2 py-0.5 font-mono text-[11px] ' +
-                    (mode === m ? 'bg-white/10 text-white' : 'text-muted-foreground')
+                    (mode === m ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground')
                   }
                 >
                   {m === 'live' ? 'Live' : 'History'}
@@ -101,10 +101,10 @@ export default function LogsPage() {
                 <span
                   className={
                     'h-1.5 w-1.5 rounded-full ' +
-                    (live ? 'pulse-dot bg-emerald-400' : 'bg-white/25')
+                    (live ? 'pulse-dot bg-success' : 'bg-foreground/25')
                   }
                 />
-                <span className={live ? 'text-emerald-300/80' : 'text-muted-foreground'}>
+                <span className={live ? 'text-success/80' : 'text-muted-foreground'}>
                   {live ? 'live' : 'ended'}
                 </span>
               </span>
@@ -139,7 +139,7 @@ export default function LogsPage() {
               <p className="text-muted-foreground">Waiting for output…</p>
             ) : (
               lines.map((line, i) => (
-                <div key={i} className="wrap-break-word whitespace-pre-wrap text-white/70">
+                <div key={i} className="wrap-break-word whitespace-pre-wrap text-foreground/70">
                   {line || ' '}
                 </div>
               ))

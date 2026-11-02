@@ -180,7 +180,7 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
               <span
                 className={
                   'font-mono text-[11px] uppercase ' +
-                  (auto ? 'text-emerald-400' : 'text-muted-foreground')
+                  (auto ? 'text-success' : 'text-muted-foreground')
                 }
               >
                 {auto ? 'on' : 'off'}
@@ -199,8 +199,8 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
                 className="pl-9"
               />
             </div>
-            <div className="overflow-hidden rounded-md border border-white/8">
-              <div className="max-h-64 divide-y divide-white/5 overflow-auto">
+            <div className="overflow-hidden rounded-md border border-foreground/8">
+              <div className="max-h-64 divide-y divide-foreground/5 overflow-auto">
                 {gh.loadingRepos ? (
                   <p className="text-muted-foreground p-4 text-center text-sm">
                     Loading repositories…
@@ -212,7 +212,7 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
                     <button
                       key={r.full_name}
                       onClick={() => pick(r)}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04]"
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-foreground/[0.04]"
                     >
                       <span className="min-w-0 truncate font-mono text-sm">{r.full_name}</span>
                       {r.private && (
@@ -426,7 +426,7 @@ function ImageForm({ onDeployed }: { onDeployed: (app: string, id: string) => vo
           </button>
         )}
       </FieldGroup>
-      {serverError && <p className="text-xs text-rose-300">{serverError}</p>}
+      {serverError && <p className="text-xs text-danger">{serverError}</p>}
       <Button type="submit" loading={form.formState.isSubmitting}>
         Deploy
       </Button>

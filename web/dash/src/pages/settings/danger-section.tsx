@@ -16,8 +16,8 @@ export function DangerSection() {
   })
 
   return (
-    <section className="rounded-xl border border-rose-500/20 bg-rose-500/3 p-5">
-      <h2 className="text-sm font-semibold text-rose-200">Delete account</h2>
+    <section className="rounded-xl border border-danger/20 bg-danger/3 p-5">
+      <h2 className="text-sm font-semibold text-danger">Delete account</h2>
       <p className="text-muted-foreground mt-1 text-xs">
         Permanently remove your account. Personal teams with no projects, databases, or other
         members are removed too. This can't be undone.
@@ -25,7 +25,7 @@ export function DangerSection() {
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="mt-3 rounded-[6px] border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 transition hover:bg-rose-500/10"
+          className="mt-3 rounded-[6px] border border-danger/40 px-2.5 py-1 text-xs text-danger transition hover:bg-danger/10"
         >
           Delete account
         </button>
@@ -44,7 +44,7 @@ export function DangerSection() {
             <button
               onClick={() => del.mutate()}
               disabled={del.isPending || !password}
-              className="inline-flex items-center gap-1.5 rounded-[6px] bg-rose-500/90 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-rose-500 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-[6px] bg-danger/90 px-2.5 py-1 text-xs font-medium text-foreground transition hover:bg-danger disabled:opacity-50"
             >
               {del.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
               {del.isPending ? 'Deleting…' : 'Permanently delete'}
@@ -63,7 +63,7 @@ export function DangerSection() {
         </div>
       )}
       {del.isError && (
-        <p className="mt-2 text-xs text-rose-300">
+        <p className="mt-2 text-xs text-danger">
           {errText(del.error, 'Could not delete your account.')}
         </p>
       )}

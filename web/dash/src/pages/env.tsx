@@ -42,7 +42,7 @@ export default function EnvPage() {
 
         <div className="flex items-center justify-end gap-3">
           {saved && (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-300">
+            <span className="flex items-center gap-1.5 text-xs text-success">
               <Check className="h-3.5 w-3.5" /> Saved — redeploy apps to apply.
             </span>
           )}

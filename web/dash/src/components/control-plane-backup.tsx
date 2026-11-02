@@ -19,7 +19,7 @@ export function ControlPlaneBackup() {
       <h2 className="text-muted-foreground mb-3 font-mono text-[11px] tracking-wider uppercase">
         Control-plane backup
       </h2>
-      <div className="rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent p-5">
+      <div className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent p-5">
         <p className="text-muted-foreground text-sm leading-relaxed">
           Skiff&apos;s own state — projects, settings, domains, tokens and history — sealed with
           your recovery key. To move to a new server, run{' '}
@@ -36,7 +36,7 @@ export function ControlPlaneBackup() {
               {last ? ` · last ${relTime(last.created)} (${fmtBytes(last.size)})` : ' · none yet'}
             </span>
           ) : (
-            <span className="text-amber-300/90">
+            <span className="text-warning/90">
               No offsite bucket yet — add one in{' '}
               <Link to="/settings" className="underline">
                 Settings
@@ -71,13 +71,13 @@ export function ControlPlaneBackup() {
           )}
         </div>
         {(backup.isError || reveal.isError) && (
-          <p className="mt-2 text-xs text-rose-300">
+          <p className="mt-2 text-xs text-danger">
             {errText(backup.error ?? reveal.error, 'Something went wrong.')}
           </p>
         )}
 
         {key && (
-          <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/[0.04] p-3">
+          <div className="mt-4 rounded-lg border border-warning/20 bg-warning/[0.04] p-3">
             <div className="flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate font-mono text-xs">{key}</code>
               <button

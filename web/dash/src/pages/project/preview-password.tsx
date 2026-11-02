@@ -62,12 +62,12 @@ export function PreviewPassword({
   const showForm = !enabled || editing
 
   return (
-    <section className="rounded-xl border border-white/8 p-4">
+    <section className="rounded-xl border border-foreground/8 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="flex items-center gap-2 text-sm font-medium">
             {enabled ? (
-              <Lock className="h-3.5 w-3.5 text-emerald-300" />
+              <Lock className="h-3.5 w-3.5 text-success" />
             ) : (
               <LockOpen className="text-muted-foreground h-3.5 w-3.5" />
             )}
@@ -127,7 +127,7 @@ export function PreviewPassword({
           </div>
         </form>
       )}
-      {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </section>
   )
 }

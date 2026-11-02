@@ -105,10 +105,10 @@ export default function ProjectDetailPage() {
               className={
                 'h-1.5 w-1.5 rounded-full ' +
                 (project.state === 'running'
-                  ? 'bg-emerald-400'
+                  ? 'bg-success'
                   : project.state === 'sleeping'
-                    ? 'bg-sky-300/70'
-                    : 'bg-rose-400')
+                    ? 'bg-info/70'
+                    : 'bg-danger')
               }
             />
             {project.state}
@@ -141,7 +141,7 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue="overview">
         <TabsList
           variant="line"
-          className="mb-6 w-full justify-start gap-6 border-b border-white/8"
+          className="mb-6 w-full justify-start gap-6 border-b border-foreground/8"
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="observability">Observability</TabsTrigger>
@@ -150,7 +150,7 @@ export default function ProjectDetailPage() {
             <TabsTrigger value="previews">
               Previews
               {project.previews.length > 0 && (
-                <span className="text-muted-foreground ml-1.5 rounded-full bg-white/8 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
+                <span className="text-muted-foreground ml-1.5 rounded-full bg-foreground/8 px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
                   {project.previews.length}
                 </span>
               )}
@@ -166,7 +166,7 @@ export default function ProjectDetailPage() {
         {/* Overview */}
         <TabsContent value="overview" className="pb-[46vh]">
           <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-            <section className="rounded-xl border border-white/8 bg-linear-to-b from-white/2.5 to-transparent p-5">
+            <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2.5 to-transparent p-5">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-muted-foreground font-mono text-[11px] tracking-wider uppercase">
                   Production Deployment
@@ -176,10 +176,10 @@ export default function ProjectDetailPage() {
                     className={
                       'font-mono text-[10px] tracking-wider uppercase ' +
                       (latest.status === 'live'
-                        ? 'text-emerald-300'
+                        ? 'text-success'
                         : latest.status === 'failed'
-                          ? 'text-rose-300'
-                          : 'text-amber-300')
+                          ? 'text-danger'
+                          : 'text-warning')
                     }
                   >
                     {latest.status === 'live' ? 'Ready' : latest.status}
@@ -198,7 +198,7 @@ export default function ProjectDetailPage() {
                     {host}
                     <ExternalLink className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
                   </a>
-                  <div className="flex flex-col gap-1.5 border-t border-white/5 pt-4">
+                  <div className="flex flex-col gap-1.5 border-t border-foreground/5 pt-4">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       {fromImage ? null : project.repo ? (
                         <a
@@ -241,12 +241,12 @@ export default function ProjectDetailPage() {
               )}
             </section>
 
-            <section className="rounded-xl border border-white/8 bg-linear-to-b from-white/2.5 to-transparent p-5">
+            <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2.5 to-transparent p-5">
               <h2 className="text-muted-foreground mb-2 font-mono text-[11px] tracking-wider uppercase">
                 Source
               </h2>
               {cli ? (
-                <dl className="divide-y divide-white/5">
+                <dl className="divide-y divide-foreground/5">
                   <Row label="Deployed with">
                     <span className="font-mono text-xs">skiff deploy</span>
                   </Row>
@@ -260,7 +260,7 @@ export default function ProjectDetailPage() {
                   </p>
                 </dl>
               ) : fromImage ? (
-                <dl className="divide-y divide-white/5">
+                <dl className="divide-y divide-foreground/5">
                   <Row label="Image">
                     <span className="truncate font-mono text-xs">{project.image}</span>
                   </Row>
@@ -273,7 +273,7 @@ export default function ProjectDetailPage() {
                   </p>
                 </dl>
               ) : (
-                <dl className="divide-y divide-white/5">
+                <dl className="divide-y divide-foreground/5">
                   <Row label="Repository">
                     {project.repo ? (
                       <a
@@ -301,7 +301,7 @@ export default function ProjectDetailPage() {
                     <span
                       className={
                         'font-mono text-xs ' +
-                        (project.auto ? 'text-emerald-300' : 'text-muted-foreground')
+                        (project.auto ? 'text-success' : 'text-muted-foreground')
                       }
                     >
                       {project.auto ? 'On' : 'Off'}
@@ -319,14 +319,14 @@ export default function ProjectDetailPage() {
 
         {/* Deployments */}
         <TabsContent value="deployments" className="pb-[46vh]">
-          <div className="overflow-hidden rounded-xl border border-white/8">
+          <div className="overflow-hidden rounded-xl border border-foreground/8">
             {appDeploys.length === 0 ? (
               <p className="text-muted-foreground p-8 text-center text-sm">No deployments yet.</p>
             ) : (
               appDeploys.map((d) => (
                 <div
                   key={d.id}
-                  className="group flex items-center gap-2 border-b border-white/5 pr-3 transition-colors last:border-0 hover:bg-white/[0.03]"
+                  className="group flex items-center gap-2 border-b border-foreground/5 pr-3 transition-colors last:border-0 hover:bg-foreground/[0.03]"
                 >
                   <button
                     onClick={() => term.showBuildLog(project.name, d.id)}
@@ -352,7 +352,7 @@ export default function ProjectDetailPage() {
                     <Link
                       to={`/logs?app=${encodeURIComponent(project.name)}&since=${d.started}&until=${d.started + 1800}`}
                       title="Runtime logs from the 30 minutes after this deploy"
-                      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 rounded-[6px] border border-white/10 px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 hover:border-white/20"
+                      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 hover:border-foreground/20"
                     >
                       <ScrollText className="h-3 w-3" />
                       Logs
@@ -371,7 +371,7 @@ export default function ProjectDetailPage() {
                           term.rollback(project.name, d.id)
                       }}
                       title="Instant rollback to this build"
-                      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 rounded-[6px] border border-white/10 px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 hover:border-white/20"
+                      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 hover:border-foreground/20"
                     >
                       <RotateCcw className="h-3 w-3" />
                       Rollback
@@ -419,11 +419,11 @@ export default function ProjectDetailPage() {
             </p>
           </div>
           {project.state === 'running' ? (
-            <div className="h-[60vh] overflow-hidden rounded-xl border border-white/10 bg-[#09090b] p-3">
+            <div className="h-[60vh] overflow-hidden rounded-xl dark bg-well p-3">
               <ConsoleTerminal app={project.name} />
             </div>
           ) : (
-            <p className="text-muted-foreground rounded-xl border border-white/8 py-16 text-center text-sm">
+            <p className="text-muted-foreground rounded-xl border border-foreground/8 py-16 text-center text-sm">
               The app isn't running — deploy it to open a console.
             </p>
           )}
@@ -440,7 +440,7 @@ export default function ProjectDetailPage() {
           )}
           <EnvEditor app={project.name} />
           {!cli && !fromImage && (
-            <section className="mt-10 border-t border-white/8 pt-6">
+            <section className="mt-10 border-t border-foreground/8 pt-6">
               <h2 className="mb-3 text-sm font-semibold">Preview overrides</h2>
               <EnvEditor app={project.name} scope="preview" />
             </section>

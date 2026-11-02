@@ -1,27 +1,26 @@
-export function LogoMark({ className = '' }: { className?: string }) {
+// Drawn in web/brand; the small cut drops a seat so it stays clean at favicon size.
+const HULL =
+  'M16 1.5C20.5 5 25.5 12 25.5 20C25.5 24 24.7 27.6 23.6 30.5H8.4C7.3 27.6 6.5 24 6.5 20C6.5 12 11.5 5 16 1.5ZM11.1 13.2H20.9Q21.5 13.2 21.5 13.8V15.2Q21.5 15.8 20.9 15.8H11.1Q10.5 15.8 10.5 15.2V13.8Q10.5 13.2 11.1 13.2ZM11.1 18.4H20.9Q21.5 18.4 21.5 19V20.4Q21.5 21 20.9 21H11.1Q10.5 21 10.5 20.4V19Q10.5 18.4 11.1 18.4ZM11.1 23.6H20.9Q21.5 23.6 21.5 24.2V25.6Q21.5 26.2 20.9 26.2H11.1Q10.5 26.2 10.5 25.6V24.2Q10.5 23.6 11.1 23.6Z'
+const HULL_SMALL =
+  'M16 1.5C20.5 5 25.5 12 25.5 20C25.5 24 24.7 27.6 23.6 30.5H8.4C7.3 27.6 6.5 24 6.5 20C6.5 12 11.5 5 16 1.5ZM10.8 14.5H21.2Q21.8 14.5 21.8 15.1V16.9Q21.8 17.5 21.2 17.5H10.8Q10.2 17.5 10.2 16.9V15.1Q10.2 14.5 10.8 14.5ZM10.8 21.5H21.2Q21.8 21.5 21.8 22.1V23.9Q21.8 24.5 21.2 24.5H10.8Q10.2 24.5 10.2 23.9V22.1Q10.2 21.5 10.8 21.5Z'
+const WORD =
+  'M273 14Q220 14 176 4Q133 -7 102 -27Q70 -47 52 -76Q33 -106 30 -145L144 -180Q147 -155 164 -134Q181 -114 210 -103Q239 -92 281 -92Q324 -92 349 -105Q374 -118 374 -144Q374 -163 361 -174Q348 -184 322 -192Q296 -200 257 -208Q217 -217 178 -228Q139 -239 108 -257Q76 -275 57 -304Q38 -332 38 -376Q38 -425 64 -462Q91 -498 141 -518Q191 -539 261 -539Q325 -539 375 -521Q425 -503 456 -468Q487 -433 493 -381L374 -349Q372 -376 358 -395Q343 -414 318 -424Q293 -433 260 -433Q218 -433 195 -419Q172 -405 172 -381Q172 -363 187 -351Q202 -339 230 -332Q257 -324 295 -316Q334 -308 372 -298Q409 -287 440 -270Q471 -252 490 -224Q508 -196 508 -151Q508 -100 480 -63Q452 -26 400 -6Q348 14 273 14ZM574 0V-710H715V-319Q748 -339 776 -364Q804 -388 827 -415Q850 -442 867 -470Q884 -498 895 -525H1060Q1047 -487 1024 -449Q1000 -411 967 -378Q934 -346 891 -322Q848 -298 796 -287V-273Q861 -284 904 -272Q948 -259 975 -231Q1002 -203 1018 -166Q1034 -129 1046 -90L1069 0H913L900 -59Q888 -104 873 -139Q858 -174 832 -194Q805 -214 757 -214H715V0ZM1128 0V-525H1272V0ZM1200 -595Q1158 -595 1136 -612Q1113 -630 1113 -664Q1113 -699 1136 -716Q1158 -734 1200 -734Q1243 -734 1265 -716Q1287 -698 1287 -664Q1287 -631 1265 -613Q1243 -595 1200 -595ZM1412 0V-335H1331V-440L1475 -433V-449Q1434 -456 1410 -475Q1386 -494 1376 -520Q1365 -545 1365 -572Q1365 -616 1387 -648Q1409 -679 1450 -696Q1490 -714 1544 -714Q1589 -714 1626 -702Q1663 -691 1687 -672L1677 -542Q1652 -560 1624 -570Q1595 -581 1568 -581Q1538 -581 1518 -565Q1498 -549 1498 -515Q1498 -492 1508 -478Q1519 -463 1536 -456Q1552 -449 1571 -447H1684V-335H1553V0ZM1781 0V-335H1700V-440L1844 -433V-449Q1803 -456 1779 -475Q1755 -494 1744 -520Q1734 -545 1734 -572Q1734 -616 1756 -648Q1778 -679 1818 -696Q1859 -714 1913 -714Q1958 -714 1995 -702Q2032 -691 2056 -672L2046 -542Q2021 -560 1992 -570Q1964 -581 1937 -581Q1907 -581 1887 -565Q1867 -549 1867 -515Q1867 -492 1878 -478Q1888 -463 1904 -456Q1921 -449 1940 -447H2053V-335H1922V0Z'
+
+export function LogoMark({ className = '', small = false }: { className?: string; small?: boolean }) {
   return (
-    <svg viewBox="0 0 32 32" fill="none" aria-hidden className={'text-foreground ' + className}>
-      {/* mainsail — also reads as a forward "ship it" chevron */}
-      <path d="M17.5 3 Q25.5 16 27 24 H17.5 Z" fill="currentColor" />
-      {/* jib */}
-      <path d="M14.3 8 Q9 17.5 6 24 H14.3 Z" fill="currentColor" fillOpacity="0.55" />
-      {/* waterline */}
-      <path
-        d="M4 26.6 H28"
-        stroke="currentColor"
-        strokeOpacity="0.45"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+    <svg viewBox="0 0 32 32" aria-hidden className={'text-foreground ' + className}>
+      <path fill="currentColor" fillRule="evenodd" d={small ? HULL_SMALL : HULL} />
     </svg>
   )
 }
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
-    <span className={'inline-flex items-center gap-2 ' + className}>
-      <LogoMark className="h-[22px] w-[22px]" />
-      <span className="text-[17px] font-semibold tracking-tight">Skiff</span>
+    <span className={'text-foreground inline-flex items-center gap-1.5 ' + className}>
+      <LogoMark className="h-6 w-6" />
+      <svg viewBox="30 -734 2026 748" role="img" aria-label="Skiff" className="h-[15px] w-auto">
+        <path fill="currentColor" d={WORD} />
+      </svg>
     </span>
   )
 }

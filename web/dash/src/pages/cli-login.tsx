@@ -14,9 +14,9 @@ export default function CliLoginPage() {
 
   return (
     <div className="flex min-h-[70svh] items-center justify-center px-8 py-8">
-      <div className="w-full max-w-md rounded-xl border border-white/10 bg-linear-to-b from-white/3 to-transparent p-6">
-        <span className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-white/5">
-          <Terminal className="h-5 w-5 text-white/80" />
+      <div className="w-full max-w-md rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/3 to-transparent p-6">
+        <span className="grid h-10 w-10 place-items-center rounded-lg border border-foreground/10 bg-foreground/5">
+          <Terminal className="h-5 w-5 text-foreground/80" />
         </span>
         {approve.isSuccess ? (
           <>
@@ -51,12 +51,12 @@ export default function CliLoginPage() {
               )}
               <span className="text-foreground/80">{teamName}</span>.
             </p>
-            <div className="mt-4 rounded-lg border border-white/8 bg-black/30 px-3 py-2.5 text-center">
+            <div className="mt-4 rounded-lg border border-foreground/8 bg-inset px-3 py-2.5 text-center">
               <p className="text-muted-foreground text-[11px]">Check it matches your terminal</p>
               <p className="mt-1 font-mono text-xl tracking-[0.3em]">{code}</p>
             </div>
             {(approve.isError || deny.isError) && (
-              <p className="mt-3 text-xs text-rose-300">
+              <p className="mt-3 text-xs text-danger">
                 {errText(approve.error ?? deny.error, 'Something went wrong.')}
               </p>
             )}

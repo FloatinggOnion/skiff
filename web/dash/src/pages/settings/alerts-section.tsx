@@ -103,7 +103,7 @@ export function AlertsSection() {
           </p>
         )}
         {save.isError && (
-          <p className="text-xs text-rose-300">{errText(save.error, 'Could not save alerts.')}</p>
+          <p className="text-xs text-danger">{errText(save.error, 'Could not save alerts.')}</p>
         )}
         <div className="flex items-center justify-end gap-3">
           {testMsg && <span className="text-muted-foreground font-mono text-xs">{testMsg}</span>}

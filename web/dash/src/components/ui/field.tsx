@@ -115,7 +115,7 @@ function FieldError({ className, children, errors, ...props }: FieldErrorProps) 
     <p
       role="alert"
       data-slot="field-error"
-      className={cn('text-xs text-rose-300', className)}
+      className={cn('text-xs text-danger', className)}
       {...props}
     >
       {content}

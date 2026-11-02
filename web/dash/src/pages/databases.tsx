@@ -40,10 +40,10 @@ import { ErrorState } from '@/components/error-state'
 import type { Database as Db, DbEngine } from '@/services/api.service'
 
 const ENGINES: { value: DbEngine; label: string; dot: string; accent: string }[] = [
-  { value: 'postgres', label: 'PostgreSQL', dot: 'bg-sky-400', accent: 'text-sky-300' },
-  { value: 'mysql', label: 'MySQL', dot: 'bg-amber-400', accent: 'text-amber-300' },
-  { value: 'mongodb', label: 'MongoDB', dot: 'bg-emerald-400', accent: 'text-emerald-300' },
-  { value: 'redis', label: 'Redis', dot: 'bg-rose-400', accent: 'text-rose-300' },
+  { value: 'postgres', label: 'PostgreSQL', dot: 'bg-info', accent: 'text-info' },
+  { value: 'mysql', label: 'MySQL', dot: 'bg-warning', accent: 'text-warning' },
+  { value: 'mongodb', label: 'MongoDB', dot: 'bg-success', accent: 'text-success' },
+  { value: 'redis', label: 'Redis', dot: 'bg-danger', accent: 'text-danger' },
 ]
 
 const engineMeta = (e: string) => ENGINES.find((x) => x.value === e) ?? ENGINES[0]
@@ -97,7 +97,7 @@ export default function DatabasesPage() {
       {!isPending && (adding || (databases.length === 0 && !isError)) && (
         <form
           onSubmit={submit}
-          className="animate-rise rounded-xl border border-white/10 bg-linear-to-b from-white/3 to-transparent p-4"
+          className="animate-rise rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/3 to-transparent p-4"
         >
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-medium">New database</h2>
@@ -117,7 +117,7 @@ export default function DatabasesPage() {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Select value={engine} onValueChange={(v) => setEngine(v as DbEngine)}>
-              <SelectTrigger className="shrink-0 cursor-pointer bg-black/30 sm:w-44">
+              <SelectTrigger className="shrink-0 cursor-pointer bg-inset sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -139,7 +139,7 @@ export default function DatabasesPage() {
               }}
               autoFocus
               placeholder="name (e.g. main)"
-              className="h-9 min-w-0 flex-1 rounded-[6px] border border-white/12 bg-black/30 px-3 font-mono text-sm outline-none placeholder:text-white/25 focus-visible:border-white/30"
+              className="h-9 min-w-0 flex-1 rounded-[6px] border border-foreground/12 bg-inset px-3 font-mono text-sm outline-none placeholder:text-foreground/25 focus-visible:border-foreground/30"
             />
             <Button
               type="submit"
@@ -152,7 +152,7 @@ export default function DatabasesPage() {
             </Button>
           </div>
           {createMut.isError ? (
-            <p className="mt-2 text-xs text-rose-300">
+            <p className="mt-2 text-xs text-danger">
               {errText(createMut.error, 'Could not create that database.')}
             </p>
           ) : (
@@ -232,12 +232,12 @@ function DatabaseCard({
 
   return (
     <div
-      className="animate-rise rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent p-4"
+      className="animate-rise rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent p-4"
       style={{ animationDelay: delay + 'ms' }}
     >
       <div className="flex items-center gap-3.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-white/10 bg-linear-to-br from-white/[0.07] to-transparent">
-          <Database className="h-4 w-4 text-white/55" />
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-foreground/10 bg-linear-to-br from-foreground/[0.07] to-transparent">
+          <Database className="h-4 w-4 text-foreground/55" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -255,13 +255,13 @@ function DatabaseCard({
           className={
             'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ' +
             (running
-              ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-              : 'border-amber-400/20 bg-amber-400/10 text-amber-300')
+              ? 'border-success/20 bg-success/10 text-success'
+              : 'border-warning/20 bg-warning/10 text-warning')
           }
         >
           <span
             className={
-              'h-1.5 w-1.5 rounded-full ' + (running ? 'bg-emerald-400' : 'pulse-dot bg-amber-400')
+              'h-1.5 w-1.5 rounded-full ' + (running ? 'bg-success' : 'pulse-dot bg-warning')
             }
           />
           {running ? 'Running' : db.state === 'missing' ? 'Stopped' : db.state}
@@ -269,7 +269,7 @@ function DatabaseCard({
         {db.engine !== 'redis' && (
           <button
             onClick={() => setBackups(true)}
-            className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-white/12 px-2.5 py-1 text-xs transition hover:border-white/25"
+            className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-foreground/12 px-2.5 py-1 text-xs transition hover:border-foreground/25"
           >
             <Archive className="h-3.5 w-3.5" />
             Backups
@@ -278,20 +278,20 @@ function DatabaseCard({
         <button
           onClick={() => setShell(true)}
           disabled={!running}
-          className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-white/12 px-2.5 py-1 text-xs transition hover:border-white/25 disabled:opacity-40"
+          className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-foreground/12 px-2.5 py-1 text-xs transition hover:border-foreground/25 disabled:opacity-40"
         >
           <TerminalSquare className="h-3.5 w-3.5" />
           Shell
         </button>
         <button
           onClick={onRemove}
-          className="text-muted-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-white/12 px-2 py-1 text-xs transition hover:border-rose-500/30 hover:text-rose-300"
+          className="text-muted-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-foreground/12 px-2 py-1 text-xs transition hover:border-danger/30 hover:text-danger"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <div className="mt-4 space-y-3 border-t border-white/5 pt-3.5 pl-12.5">
+      <div className="mt-4 space-y-3 border-t border-foreground/5 pt-3.5 pl-12.5">
         <div>
           <p className="text-muted-foreground mb-1 font-mono text-[10px] tracking-wider uppercase">
             Connection URL
@@ -322,13 +322,13 @@ function DatabaseCard({
                 </p>
               )}
               {db.engine === 'redis' ? (
-                <p className="flex items-start gap-1.5 text-[11px] text-amber-300/80">
+                <p className="flex items-start gap-1.5 text-[11px] text-warning/80">
                   <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
                   Anyone who can reach this address can connect with the password above, and Redis
                   traffic isn't encrypted yet. Use it for trusted networks or temporary access.
                 </p>
               ) : (
-                <p className="flex items-start gap-1.5 text-[11px] text-emerald-300/80">
+                <p className="flex items-start gap-1.5 text-[11px] text-success/80">
                   <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0" />
                   Connections are encrypted with TLS. Anyone who reaches this address can still
                   connect with the password above — keep it safe.
@@ -346,12 +346,12 @@ function DatabaseCard({
             {db.attached.map((app) => (
               <span
                 key={app}
-                className="flex items-center gap-1.5 rounded-full border border-white/12 bg-white/2 py-1 pr-1 pl-2.5 font-mono text-xs"
+                className="flex items-center gap-1.5 rounded-full border border-foreground/12 bg-foreground/2 py-1 pr-1 pl-2.5 font-mono text-xs"
               >
                 {app}
                 <button
                   onClick={() => onDetach(app)}
-                  className="text-muted-foreground hover:text-rose-300"
+                  className="text-muted-foreground hover:text-danger"
                   title={`Detach ${app}`}
                 >
                   <X className="h-3 w-3" />
@@ -397,7 +397,7 @@ function DatabaseCard({
               {db.name} · {meta.label} shell
             </DialogTitle>
           </DialogHeader>
-          <div className="h-[55vh] overflow-hidden rounded-lg border border-white/10 bg-[#09090b] p-2">
+          <div className="h-[55vh] overflow-hidden rounded-lg dark bg-well p-2">
             {shell && <ConsoleTerminal path={`/api/db/exec?db=${encodeURIComponent(db.id)}`} />}
           </div>
         </DialogContent>
@@ -470,7 +470,7 @@ function BackupsDialog({
           </Button>
         </div>
 
-        <div className="max-h-[50vh] divide-y divide-white/5 overflow-y-auto rounded-lg border border-white/8">
+        <div className="max-h-[50vh] divide-y divide-foreground/5 overflow-y-auto rounded-lg border border-foreground/8">
           {isLoading ? (
             <p className="text-muted-foreground p-5 text-center text-sm">Loading…</p>
           ) : backups.length === 0 ? (
@@ -485,10 +485,10 @@ function BackupsDialog({
                   <p className="text-muted-foreground mt-0.5 text-[11px]">
                     {fmtBytes(b.size)}
                     {b.trigger === 'scheduled' && ' · auto'}
-                    {b.offsite === 'ok' && <span className="text-emerald-300/80"> · offsite</span>}
+                    {b.offsite === 'ok' && <span className="text-success/80"> · offsite</span>}
                     {b.offsite === 'pending' && ' · copying offsite…'}
                     {b.offsite === 'failed' && (
-                      <span className="text-rose-300"> · offsite copy failed</span>
+                      <span className="text-danger"> · offsite copy failed</span>
                     )}
                   </p>
                 </div>
@@ -520,7 +520,7 @@ function BackupsDialog({
                 <button
                   onClick={() => run('del-' + b.id, () => databasesService.deleteBackup(b.id))}
                   disabled={busy === 'del-' + b.id}
-                  className="text-muted-foreground p-1.5 transition hover:text-rose-300 disabled:opacity-40"
+                  className="text-muted-foreground p-1.5 transition hover:text-danger disabled:opacity-40"
                   title="Delete"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -529,7 +529,7 @@ function BackupsDialog({
             ))
           )}
         </div>
-        {error && <p className="text-xs text-rose-300">{error}</p>}
+        {error && <p className="text-xs text-danger">{error}</p>}
       </DialogContent>
     </Dialog>
   )
@@ -545,12 +545,12 @@ function Toggle({ on, busy, onClick }: { on: boolean; busy: boolean; onClick: ()
       onClick={onClick}
       className={
         'relative h-5 w-9 shrink-0 rounded-full border transition-colors disabled:opacity-50 ' +
-        (on ? 'border-emerald-400/30 bg-emerald-400/25' : 'border-white/15 bg-white/8')
+        (on ? 'border-success/30 bg-success/25' : 'border-foreground/15 bg-foreground/8')
       }
     >
       <span
         className={
-          'absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white transition-all ' +
+          'absolute top-0.5 h-3.5 w-3.5 rounded-full bg-foreground transition-all ' +
           (on ? 'left-4' : 'left-0.5')
         }
       />
@@ -564,12 +564,12 @@ function Copyable({ text }: { text: string }) {
     <button
       type="button"
       onClick={() => copy(text)}
-      className="group/copy flex w-full items-center gap-2 rounded-[6px] border border-white/8 bg-black/30 px-3 py-2 text-left transition hover:border-white/20"
+      className="group/copy flex w-full items-center gap-2 rounded-[6px] border border-foreground/8 bg-inset px-3 py-2 text-left transition hover:border-foreground/20"
       title="Copy"
     >
       <span className="text-foreground/80 min-w-0 flex-1 truncate font-mono text-xs">{text}</span>
       {copied ? (
-        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+        <Check className="h-3.5 w-3.5 shrink-0 text-success" />
       ) : (
         <Copy className="text-muted-foreground h-3.5 w-3.5 shrink-0 opacity-50 transition group-hover/copy:opacity-90" />
       )}

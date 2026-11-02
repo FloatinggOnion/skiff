@@ -74,7 +74,7 @@ export function LogDrainSection() {
             aria-invalid={!!errors.url}
             {...form.register('url', { onChange: dirty })}
           />
-          {errors.url && <p className="mt-1 text-xs text-rose-300">{errors.url.message}</p>}
+          {errors.url && <p className="mt-1 text-xs text-danger">{errors.url.message}</p>}
         </Field>
         <Field label="Header name">
           <input
@@ -85,7 +85,7 @@ export function LogDrainSection() {
             {...form.register('headerName', { onChange: dirty })}
           />
           {errors.headerName && (
-            <p className="mt-1 text-xs text-rose-300">{errors.headerName.message}</p>
+            <p className="mt-1 text-xs text-danger">{errors.headerName.message}</p>
           )}
         </Field>
         <Field label="Header value">
@@ -96,9 +96,9 @@ export function LogDrainSection() {
           />
         </Field>
         {error ? (
-          <p className="text-xs text-rose-300">{errText(error, 'Something went wrong.')}</p>
+          <p className="text-xs text-danger">{errText(error, 'Something went wrong.')}</p>
         ) : data?.lastError ? (
-          <p className="text-xs text-rose-300">
+          <p className="text-xs text-danger">
             Couldn&apos;t send logs: {data.lastError}. Retrying, and nothing is lost in the
             meantime.
           </p>

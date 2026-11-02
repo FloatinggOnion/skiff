@@ -85,7 +85,7 @@ export function JobsPanel({ app }: { app: string }) {
       {adding && (
         <form
           onSubmit={create}
-          className="flex flex-col gap-3 rounded-xl border border-white/10 bg-linear-to-b from-white/2 to-transparent p-4"
+          className="flex flex-col gap-3 rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/2 to-transparent p-4"
         >
           <FieldGroup className="gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -117,7 +117,7 @@ export function JobsPanel({ app }: { app: string }) {
               <FieldError errors={[form.formState.errors.command]} />
             </Field>
           </FieldGroup>
-          {serverError && <p className="text-xs text-rose-300">{serverError}</p>}
+          {serverError && <p className="text-xs text-danger">{serverError}</p>}
           <div className="flex items-center justify-end gap-3">
             <button
               type="button"
@@ -138,12 +138,12 @@ export function JobsPanel({ app }: { app: string }) {
       )}
 
       {jobs.length === 0 && !adding ? (
-        <div className="text-muted-foreground rounded-xl border border-white/8 py-14 text-center text-sm">
+        <div className="text-muted-foreground rounded-xl border border-foreground/8 py-14 text-center text-sm">
           No scheduled jobs yet.
         </div>
       ) : (
         jobs.length > 0 && (
-          <div className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/8">
+          <div className="divide-y divide-foreground/5 overflow-hidden rounded-xl border border-foreground/8">
             {jobs.map((j) => (
               <div key={j.id} className="p-4">
                 <div className="flex items-center gap-3">
@@ -167,7 +167,7 @@ export function JobsPanel({ app }: { app: string }) {
                   <button
                     onClick={() => del(j.id)}
                     title="Delete"
-                    className="text-muted-foreground p-1.5 transition hover:text-rose-300"
+                    className="text-muted-foreground p-1.5 transition hover:text-danger"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -179,7 +179,7 @@ export function JobsPanel({ app }: { app: string }) {
                     {j.lastRun ? (
                       <>
                         {relTime(j.lastRun)} ·{' '}
-                        <span className={j.lastOk ? 'text-emerald-300' : 'text-rose-300'}>
+                        <span className={j.lastOk ? 'text-success' : 'text-danger'}>
                           {j.lastOk ? 'ok' : 'failed'}
                         </span>
                       </>
@@ -193,8 +193,8 @@ export function JobsPanel({ app }: { app: string }) {
                     className={
                       'mt-2 max-h-40 overflow-auto rounded-md border p-2.5 font-mono text-[11px] whitespace-pre-wrap ' +
                       (output.ok
-                        ? 'border-white/8 bg-black/30'
-                        : 'border-rose-500/25 bg-rose-500/5 text-rose-200')
+                        ? 'border-foreground/8 bg-inset'
+                        : 'border-danger/25 bg-danger/5 text-danger')
                     }
                   >
                     {output.text}
@@ -205,7 +205,7 @@ export function JobsPanel({ app }: { app: string }) {
           </div>
         )
       )}
-      {serverError && !adding && <p className="text-xs text-rose-300">{serverError}</p>}
+      {serverError && !adding && <p className="text-xs text-danger">{serverError}</p>}
     </div>
   )
 }

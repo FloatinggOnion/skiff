@@ -75,7 +75,7 @@ export function WorkersPanel({ app }: { app: string }) {
       {adding && (
         <form
           onSubmit={create}
-          className="flex flex-col gap-3 rounded-xl border border-white/10 bg-linear-to-b from-white/2 to-transparent p-4"
+          className="flex flex-col gap-3 rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/2 to-transparent p-4"
         >
           <FieldGroup className="gap-3">
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
@@ -111,7 +111,7 @@ export function WorkersPanel({ app }: { app: string }) {
               <FieldError errors={[form.formState.errors.command]} />
             </Field>
           </FieldGroup>
-          {serverError && <p className="text-xs text-rose-300">{serverError}</p>}
+          {serverError && <p className="text-xs text-danger">{serverError}</p>}
           <div className="flex items-center justify-end gap-3">
             <button
               type="button"
@@ -132,12 +132,12 @@ export function WorkersPanel({ app }: { app: string }) {
       )}
 
       {workers.length === 0 && !adding ? (
-        <div className="text-muted-foreground rounded-xl border border-white/8 py-14 text-center text-sm">
+        <div className="text-muted-foreground rounded-xl border border-foreground/8 py-14 text-center text-sm">
           No workers yet.
         </div>
       ) : (
         workers.length > 0 && (
-          <div className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/8">
+          <div className="divide-y divide-foreground/5 overflow-hidden rounded-xl border border-foreground/8">
             {workers.map((wk) => (
               <div key={wk.id} className="flex items-center gap-3 p-4">
                 <Cog className="text-muted-foreground h-4 w-4 shrink-0" />
@@ -150,7 +150,7 @@ export function WorkersPanel({ app }: { app: string }) {
                 <span
                   className={
                     'shrink-0 font-mono text-[11px] tabular-nums ' +
-                    (wk.running >= wk.replicas ? 'text-emerald-300' : 'text-amber-300')
+                    (wk.running >= wk.replicas ? 'text-success' : 'text-warning')
                   }
                 >
                   {wk.running}/{wk.replicas} running
@@ -158,7 +158,7 @@ export function WorkersPanel({ app }: { app: string }) {
                 <button
                   onClick={() => del(wk.id)}
                   title="Delete"
-                  className="text-muted-foreground p-1.5 transition hover:text-rose-300"
+                  className="text-muted-foreground p-1.5 transition hover:text-danger"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -167,7 +167,7 @@ export function WorkersPanel({ app }: { app: string }) {
           </div>
         )
       )}
-      {serverError && !adding && <p className="text-xs text-rose-300">{serverError}</p>}
+      {serverError && !adding && <p className="text-xs text-danger">{serverError}</p>}
     </div>
   )
 }

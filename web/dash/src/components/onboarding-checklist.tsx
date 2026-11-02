@@ -64,8 +64,8 @@ export function OnboardingChecklist({
   }
 
   return (
-    <section className="animate-rise mb-8 overflow-hidden rounded-xl border border-white/10 bg-linear-to-b from-white/3 to-transparent">
-      <div className="flex items-center justify-between border-b border-white/8 px-5 py-3.5">
+    <section className="animate-rise mb-8 overflow-hidden rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/3 to-transparent">
+      <div className="flex items-center justify-between border-b border-foreground/8 px-5 py-3.5">
         <div>
           <h2 className="text-sm font-semibold">Get started with Skiff</h2>
           <p className="text-muted-foreground text-xs">
@@ -73,9 +73,9 @@ export function OnboardingChecklist({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-white/8 sm:block">
+          <div className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-foreground/8 sm:block">
             <div
-              className="h-full rounded-full bg-emerald-400 transition-all duration-500"
+              className="h-full rounded-full bg-success transition-all duration-500"
               style={{ width: (doneCount / steps.length) * 100 + '%' }}
             />
           </div>
@@ -89,7 +89,7 @@ export function OnboardingChecklist({
         </div>
       </div>
 
-      <div className="divide-y divide-white/5">
+      <div className="divide-y divide-foreground/5">
         {steps.map((s) => (
           <button
             key={s.label}
@@ -97,15 +97,15 @@ export function OnboardingChecklist({
             disabled={s.done}
             className={
               'group flex w-full items-center gap-3.5 px-5 py-3 text-left transition-colors ' +
-              (s.done ? 'cursor-default' : 'hover:bg-white/2')
+              (s.done ? 'cursor-default' : 'hover:bg-foreground/2')
             }
           >
             <span
               className={
                 'grid h-6 w-6 shrink-0 place-items-center rounded-full border ' +
                 (s.done
-                  ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-300'
-                  : 'text-muted-foreground border-white/15')
+                  ? 'border-success/30 bg-success/15 text-success'
+                  : 'text-muted-foreground border-foreground/15')
               }
             >
               {s.done ? <Check className="h-3.5 w-3.5" /> : <s.icon className="h-3.5 w-3.5" />}

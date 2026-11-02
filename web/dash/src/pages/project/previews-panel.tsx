@@ -36,7 +36,7 @@ export function PreviewsPanel({
     <div className="space-y-4">
       <form
         onSubmit={create}
-        className="rounded-xl border border-white/10 bg-linear-to-b from-white/3 to-transparent p-4"
+        className="rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/3 to-transparent p-4"
       >
         <h2 className="text-sm font-medium">New preview environment</h2>
         <p className="text-muted-foreground mt-1 mb-3 text-xs">
@@ -50,7 +50,7 @@ export function PreviewsPanel({
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               placeholder="branch name — e.g. feat/login"
-              className="h-9 w-full rounded-[6px] border border-white/12 bg-black/30 pr-3 pl-9 font-mono text-sm outline-none placeholder:text-white/25 focus-visible:border-white/30"
+              className="h-9 w-full rounded-[6px] border border-foreground/12 bg-inset pr-3 pl-9 font-mono text-sm outline-none placeholder:text-foreground/25 focus-visible:border-foreground/30"
             />
           </div>
           <Button type="submit" size="sm" disabled={!branch.trim()} className="shrink-0">
@@ -63,12 +63,12 @@ export function PreviewsPanel({
       <PreviewPassword project={project} enabled={passwordProtected} onChanged={onPasswordChange} />
 
       {previews.length === 0 ? (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-white/8 py-12 text-sm">
+        <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-12 text-sm">
           <GitBranch className="h-5 w-5 opacity-40" />
           <span>No preview environments yet.</span>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-white/8">
+        <div className="overflow-hidden rounded-xl border border-foreground/8">
           {previews.map((pv) => (
             <PreviewRow
               key={pv.name}
@@ -118,8 +118,8 @@ function PreviewRow({
   }
 
   return (
-    <div className="border-b border-white/5 last:border-0">
-      <div className="group flex items-center gap-3.5 px-4 py-3 hover:bg-white/2">
+    <div className="border-b border-foreground/5 last:border-0">
+      <div className="group flex items-center gap-3.5 px-4 py-3 hover:bg-foreground/2">
         <span className={'h-2 w-2 shrink-0 rounded-full ' + deployDot(pv.status)} />
         <div className="min-w-0 flex-1">
           <a
@@ -159,7 +159,7 @@ function PreviewRow({
               onTeardown()
           }}
           title="Tear down preview"
-          className="text-muted-foreground shrink-0 p-1 opacity-0 transition group-hover:opacity-100 hover:text-rose-300"
+          className="text-muted-foreground shrink-0 p-1 opacity-0 transition group-hover:opacity-100 hover:text-danger"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -168,7 +168,7 @@ function PreviewRow({
       {adding && (
         <form
           onSubmit={submit}
-          className="animate-rise border-t border-white/5 bg-black/20 px-4 py-3 pl-9.5"
+          className="animate-rise border-t border-foreground/5 bg-inset px-4 py-3 pl-9.5"
         >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
@@ -179,7 +179,7 @@ function PreviewRow({
               }}
               autoFocus
               placeholder="staging.yourdomain.com"
-              className="h-9 min-w-0 flex-1 rounded-[6px] border border-white/12 bg-black/30 px-3 font-mono text-sm outline-none placeholder:text-white/25 focus-visible:border-white/30"
+              className="h-9 min-w-0 flex-1 rounded-[6px] border border-foreground/12 bg-inset px-3 font-mono text-sm outline-none placeholder:text-foreground/25 focus-visible:border-foreground/30"
             />
             <Button type="submit" size="sm" disabled={busy || !domain.trim()} className="shrink-0">
               Add domain
@@ -196,7 +196,7 @@ function PreviewRow({
             </button>
           </div>
           {error ? (
-            <p className="mt-2 text-xs text-rose-300">{error}</p>
+            <p className="mt-2 text-xs text-danger">{error}</p>
           ) : (
             <p className="text-muted-foreground mt-2 text-xs">
               Binds the hostname to the{' '}

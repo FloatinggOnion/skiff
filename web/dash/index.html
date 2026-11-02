@@ -1,9 +1,21 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Skiff</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f8f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#142c29" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Set before first paint, so a dark-theme reload never flashes light.
+      try {
+        var t = localStorage.getItem('skiff-theme')
+        if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
+          document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

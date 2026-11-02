@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Ship it to a server you own.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0a0a0a",
-    theme_color: "#0a0a0a",
+    background_color: "#142c29",
+    theme_color: "#142c29",
     icons: [{ src: "/icon.svg", type: "image/svg+xml", sizes: "any" }],
   };
 }

@@ -28,10 +28,10 @@ const RANGES: { v: InsightRange; label: string; mins: number }[] = [
   { v: '7d', label: '7d', mins: 1440 },
 ]
 
-const OK = '#34d399'
-const WARN = '#fbbf24'
-const BAD = '#fb7185'
-const LAT = '#a78bfa'
+const OK = 'var(--success)'
+const WARN = 'var(--warning)'
+const BAD = 'var(--danger)'
+const LAT = 'var(--chart-violet)'
 const MARKER = 'rgba(255,255,255,0.35)'
 
 const tickFor = (range: InsightRange) => (t: number) => {
@@ -71,7 +71,7 @@ export function ObservabilityPanel({ app }: { app: string }) {
         <p className="text-muted-foreground text-xs">
           Every request the edge served for this project, plus its containers' CPU and memory.
         </p>
-        <div className="flex shrink-0 rounded-[7px] border border-white/10 p-0.5">
+        <div className="flex shrink-0 rounded-[7px] border border-foreground/10 p-0.5">
           {RANGES.map((r) => (
             <button
               key={r.v}
@@ -79,7 +79,7 @@ export function ObservabilityPanel({ app }: { app: string }) {
               className={
                 'rounded-[5px] px-2.5 py-1 font-mono text-[11px] transition-colors ' +
                 (range === r.v
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-foreground/10 text-foreground'
                   : 'text-muted-foreground hover:text-foreground')
               }
             >
@@ -99,7 +99,7 @@ export function ObservabilityPanel({ app }: { app: string }) {
         <>
           <Stats a={a} monthly={monthly} />
           {a.requests === 0 ? (
-            <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-white/8 py-14 text-sm">
+            <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-14 text-sm">
               <Activity className="h-5 w-5" />
               No requests in this range yet — traffic shows up here within seconds.
             </div>
@@ -155,7 +155,7 @@ function Stats({ a, monthly }: { a: Insights; monthly: string | null }) {
       label: 'Server errors',
       value: errRate < 0.1 && a.errors5 > 0 ? '<0.1%' : errRate.toFixed(errRate < 10 ? 1 : 0) + '%',
       sub: `${a.errors5.toLocaleString()} 5xx · ${a.errors4.toLocaleString()} 4xx`,
-      tone: errRate >= 1 ? 'text-rose-300' : '',
+      tone: errRate >= 1 ? 'text-danger' : '',
     },
     {
       label: 'Response time',
@@ -183,7 +183,7 @@ function Stats({ a, monthly }: { a: Insights; monthly: string | null }) {
       {tiles.map((t) => (
         <div
           key={t.label}
-          className="rounded-xl border border-white/8 bg-linear-to-b from-white/2 to-transparent px-4 py-3.5"
+          className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent px-4 py-3.5"
         >
           <p className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">
             {t.label}
@@ -211,7 +211,7 @@ function DeployLegend({ a }: { a: Insights }) {
   if (a.deploys.length === 0) return null
   return (
     <span className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
-      <span className="h-3 w-px bg-white/40" />
+      <span className="h-3 w-px bg-foreground/40" />
       {a.deploys.length} deploy{a.deploys.length === 1 ? '' : 's'}
     </span>
   )
@@ -396,7 +396,7 @@ function Table({
               <div
                 className={
                   'absolute inset-y-0 left-0 rounded-[5px] ' +
-                  (tone === 'bad' ? 'bg-rose-400/10' : 'bg-white/5')
+                  (tone === 'bad' ? 'bg-danger/10' : 'bg-foreground/5')
                 }
                 style={{ width: (r.count / max) * 100 + '%' }}
               />

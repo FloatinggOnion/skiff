@@ -44,7 +44,6 @@ export default function Shell() {
         onSearch={() => setPalette(true)}
       />
       <SidebarInset className="relative bg-transparent">
-        <div className="skiff-ambient pointer-events-none absolute inset-0 -z-10" />
         <Topbar />
         <Outlet />
       </SidebarInset>

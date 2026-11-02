@@ -108,7 +108,7 @@ export default function ProjectsPage() {
             ))}
 
             {apps.length === 0 && !q.trim() && (
-              <div className="col-span-full flex flex-col items-center gap-4 rounded-xl border border-dashed border-white/10 py-16 text-center">
+              <div className="col-span-full flex flex-col items-center gap-4 rounded-xl border border-dashed border-foreground/10 py-16 text-center">
                 <LogoMark className="h-9 w-9 opacity-30" />
                 <div className="space-y-1">
                   <p className="text-sm font-medium">No projects yet</p>

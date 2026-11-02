@@ -87,7 +87,7 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
       {adding && (
         <form
           onSubmit={create}
-          className="flex flex-col gap-3 rounded-xl border border-white/10 bg-linear-to-b from-white/2 to-transparent p-4"
+          className="flex flex-col gap-3 rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/2 to-transparent p-4"
         >
           <FieldGroup className="grid gap-3 sm:grid-cols-2">
             <Field data-invalid={!!form.formState.errors.name}>
@@ -113,7 +113,7 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
               <FieldError errors={[form.formState.errors.path]} />
             </Field>
           </FieldGroup>
-          {serverError && <p className="text-xs text-rose-300">{serverError}</p>}
+          {serverError && <p className="text-xs text-danger">{serverError}</p>}
           <div className="flex items-center justify-end gap-3">
             <button
               type="button"
@@ -134,12 +134,12 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
       )}
 
       {volumes.length === 0 && !adding ? (
-        <div className="text-muted-foreground rounded-xl border border-white/8 py-10 text-center text-sm">
+        <div className="text-muted-foreground rounded-xl border border-foreground/8 py-10 text-center text-sm">
           No volumes. Files the app writes are lost on each deploy.
         </div>
       ) : (
         volumes.length > 0 && (
-          <div className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/8">
+          <div className="divide-y divide-foreground/5 overflow-hidden rounded-xl border border-foreground/8">
             {volumes.map((v) => (
               <div key={v.name} className="flex items-center gap-3 p-4">
                 <HardDrive className="text-muted-foreground h-4 w-4 shrink-0" />
@@ -152,13 +152,13 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
                     {fmtBytes(v.size)}
                   </span>
                 ) : (
-                  <span className="shrink-0 text-[11px] text-amber-300">Not mounted yet</span>
+                  <span className="shrink-0 text-[11px] text-warning">Not mounted yet</span>
                 )}
                 {editable && (
                   <button
                     onClick={() => del(v.name)}
                     title="Delete"
-                    className="text-muted-foreground p-1.5 transition hover:text-rose-300"
+                    className="text-muted-foreground p-1.5 transition hover:text-danger"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -169,14 +169,14 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
         )
       )}
       {pending && editable && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
-          <p className="text-xs text-amber-200">Redeploy to mount new volumes.</p>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-warning/20 bg-warning/5 px-4 py-3">
+          <p className="text-xs text-warning">Redeploy to mount new volumes.</p>
           <Button size="sm" variant="outline" onClick={onRedeploy}>
             Redeploy
           </Button>
         </div>
       )}
-      {serverError && !adding && <p className="text-xs text-rose-300">{serverError}</p>}
+      {serverError && !adding && <p className="text-xs text-danger">{serverError}</p>}
     </div>
   )
 }

@@ -20,7 +20,7 @@ function fmtUptime(sec: number): string {
 }
 
 const barColor = (pct: number): string =>
-  pct >= 90 ? 'bg-rose-400' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
+  pct >= 90 ? 'bg-danger' : pct >= 70 ? 'bg-warning' : 'bg-success'
 
 function Meter({
   label,
@@ -36,7 +36,7 @@ function Meter({
   children?: ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-white/8 bg-linear-to-b from-white/2.5 to-transparent p-5">
+    <section className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2.5 to-transparent p-5">
       <h2 className="text-muted-foreground font-mono text-[11px] tracking-wider uppercase">
         {label}
       </h2>
@@ -44,7 +44,7 @@ function Meter({
         <span className="text-2xl font-semibold tracking-tight tabular-nums">{big}</span>
         <span className="text-muted-foreground font-mono text-xs">{Math.round(pct)}%</span>
       </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/8">
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-foreground/8">
         <div
           className={'h-full rounded-full transition-all duration-500 ' + barColor(pct)}
           style={{ width: Math.min(100, Math.max(2, pct)) + '%' }}
@@ -56,13 +56,13 @@ function Meter({
   )
 }
 
-const Dot = () => <span className="text-white/20">·</span>
+const Dot = () => <span className="text-foreground/20">·</span>
 
 function ReclaimSpace() {
   const reclaim = useReclaimSpace()
   const r = reclaim.data
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-white/6 pt-3">
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-foreground/6 pt-3">
       <Button
         size="sm"
         variant="outline"
@@ -97,7 +97,7 @@ export default function ServerPage() {
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-white/8 bg-white/1.5 p-4">
+            <div key={i} className="rounded-xl border border-foreground/8 bg-foreground/1.5 p-4">
               <Skeleton className="mb-3 h-3 w-16" />
               <Skeleton className="mb-3 h-6 w-28" />
               <Skeleton className="h-2 w-full" />
@@ -174,8 +174,8 @@ export default function ServerPage() {
         <h2 className="text-muted-foreground mb-3 font-mono text-[11px] tracking-wider uppercase">
           Containers · {containers.length}
         </h2>
-        <div className="overflow-hidden rounded-xl border border-white/8">
-          <div className="text-muted-foreground grid grid-cols-[1.5fr_2fr_0.8fr_1.2fr] gap-3 border-b border-white/8 px-4 py-2.5 font-mono text-[10px] tracking-wider uppercase">
+        <div className="overflow-hidden rounded-xl border border-foreground/8">
+          <div className="text-muted-foreground grid grid-cols-[1.5fr_2fr_0.8fr_1.2fr] gap-3 border-b border-foreground/8 px-4 py-2.5 font-mono text-[10px] tracking-wider uppercase">
             <span>Name</span>
             <span>Image</span>
             <span className="text-right">CPU</span>
@@ -187,13 +187,13 @@ export default function ServerPage() {
             containers.map((c) => (
               <div
                 key={c.name}
-                className="grid grid-cols-[1.5fr_2fr_0.8fr_1.2fr] items-center gap-3 border-b border-white/5 px-4 py-3 text-sm last:border-0"
+                className="grid grid-cols-[1.5fr_2fr_0.8fr_1.2fr] items-center gap-3 border-b border-foreground/5 px-4 py-3 text-sm last:border-0"
               >
                 <span className="truncate font-mono">{c.name}</span>
                 <span className="text-muted-foreground truncate font-mono text-xs">{c.image}</span>
                 <span className="text-right font-mono tabular-nums">{c.cpuPct.toFixed(1)}%</span>
                 <span className="text-muted-foreground text-right font-mono text-xs tabular-nums">
-                  {fmtBytes(c.memUsed)} <span className="text-white/25">·</span>{' '}
+                  {fmtBytes(c.memUsed)} <span className="text-foreground/25">·</span>{' '}
                   {c.memPct.toFixed(1)}%
                 </span>
               </div>

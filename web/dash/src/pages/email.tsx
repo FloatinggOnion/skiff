@@ -146,12 +146,12 @@ function DomainCard({
 
   return (
     <div
-      className="animate-rise overflow-hidden rounded-xl border border-white/8"
+      className="animate-rise overflow-hidden rounded-xl border border-foreground/8"
       style={{ animationDelay: delay + 'ms' }}
     >
       <div className="flex items-center gap-3.5 px-4 py-3.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-white/10 bg-linear-to-br from-white/[0.07] to-transparent">
-          <Mail className="h-4 w-4 text-white/55" />
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-foreground/10 bg-linear-to-br from-foreground/[0.07] to-transparent">
+          <Mail className="h-4 w-4 text-foreground/55" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate font-mono text-sm font-medium">{status.domain}</p>
@@ -160,13 +160,13 @@ function DomainCard({
           </p>
         </div>
         {status.mx ? (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success">
             <MailCheck className="h-3.5 w-3.5" />
             Receiving
           </span>
         ) : (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-300">
-            <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-amber-400" />
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-warning/20 bg-warning/10 px-2.5 py-1 text-[11px] font-medium text-warning">
+            <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-warning" />
             Pending DNS
           </span>
         )}
@@ -182,9 +182,9 @@ function DomainCard({
       </div>
 
       {showDns && (
-        <div className="animate-rise border-t border-white/5 bg-black/20 px-4 py-4">
-          <div className="overflow-hidden rounded-lg border border-white/8">
-            <div className="text-muted-foreground grid grid-cols-[3.5rem_2.5rem_minmax(0,1fr)_5.5rem] gap-3 border-b border-white/8 bg-white/2 px-3 py-1.5 font-mono text-[10px] tracking-wider uppercase">
+        <div className="animate-rise border-t border-foreground/5 bg-inset px-4 py-4">
+          <div className="overflow-hidden rounded-lg border border-foreground/8">
+            <div className="text-muted-foreground grid grid-cols-[3.5rem_2.5rem_minmax(0,1fr)_5.5rem] gap-3 border-b border-foreground/8 bg-foreground/2 px-3 py-1.5 font-mono text-[10px] tracking-wider uppercase">
               <span>Type</span>
               <span>Name</span>
               <span>Value</span>
@@ -195,7 +195,7 @@ function DomainCard({
           </div>
           <div className="text-muted-foreground mt-2 space-y-1 text-[11px]">
             {!status.mx && elsewhere.length > 0 && (
-              <p className="text-amber-300/90">
+              <p className="text-warning/90">
                 Mail for this domain currently goes to{' '}
                 <span className="font-mono">{elsewhere.join(', ')}</span> — replace those MX records
                 to receive it here.
@@ -212,7 +212,7 @@ function DomainCard({
         </div>
       )}
 
-      <div className="divide-y divide-white/5 border-t border-white/5">
+      <div className="divide-y divide-foreground/5 border-t border-foreground/5">
         {forwards.map((f) => (
           <div key={f.id} className="flex items-center gap-3 px-4 py-3">
             <p className="w-48 shrink-0 truncate font-mono text-sm sm:w-64">
@@ -232,7 +232,7 @@ function DomainCard({
               {f.destinations.map((d) => (
                 <span
                   key={d}
-                  className="text-foreground/80 max-w-full truncate rounded-md border border-white/8 bg-white/3 px-2 py-0.5 font-mono text-xs"
+                  className="text-foreground/80 max-w-full truncate rounded-md border border-foreground/8 bg-foreground/3 px-2 py-0.5 font-mono text-xs"
                 >
                   {d}
                 </span>
@@ -246,7 +246,7 @@ function DomainCard({
             <button
               onClick={() => onRemove(f)}
               title="Stop forwarding"
-              className="text-muted-foreground p-1.5 transition hover:text-rose-300"
+              className="text-muted-foreground p-1.5 transition hover:text-danger"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -271,14 +271,14 @@ function DnsRow({
   pending: string
 }) {
   return (
-    <div className="grid grid-cols-[3.5rem_2.5rem_minmax(0,1fr)_5.5rem] items-center gap-3 border-b border-white/5 px-3 py-2.5 font-mono text-xs last:border-0">
+    <div className="grid grid-cols-[3.5rem_2.5rem_minmax(0,1fr)_5.5rem] items-center gap-3 border-b border-foreground/5 px-3 py-2.5 font-mono text-xs last:border-0">
       <span className="text-foreground/90">{type}</span>
       <span className="text-foreground/70">@</span>
       <span className="flex min-w-0 items-center gap-2">
         <Copyable text={value} />
         {hint && <span className="text-muted-foreground shrink-0 text-[10px]">{hint}</span>}
       </span>
-      <span className={'text-right text-[11px] ' + (ok ? 'text-emerald-300' : 'text-amber-300')}>
+      <span className={'text-right text-[11px] ' + (ok ? 'text-success' : 'text-warning')}>
         {ok ? 'Verified' : pending}
       </span>
     </div>
@@ -314,7 +314,7 @@ function AddComposer({
   return (
     <form
       onSubmit={submit}
-      className="animate-rise rounded-xl border border-white/10 bg-linear-to-b from-white/3 to-transparent p-4"
+      className="animate-rise rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/3 to-transparent p-4"
     >
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium">Forward an address</h2>
@@ -379,7 +379,7 @@ function AddComposer({
       </FieldGroup>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         {serverError ? (
-          <p className="text-xs text-rose-300">{serverError}</p>
+          <p className="text-xs text-danger">{serverError}</p>
         ) : (
           <p className="text-muted-foreground text-xs">
             Use <span className="font-mono">*</span> to catch every address on the domain. Separate

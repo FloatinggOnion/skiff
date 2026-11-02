@@ -80,7 +80,7 @@ export function TwoFactorSection() {
   }
 
   const enabled = status?.enabled ?? false
-  const errorLine = error && <p className="text-xs text-rose-300">{error}</p>
+  const errorLine = error && <p className="text-xs text-danger">{error}</p>
   const cancel = (
     <button
       type="button"
@@ -101,7 +101,7 @@ export function TwoFactorSection() {
           <div className="flex items-center gap-2 text-sm">
             {enabled ? (
               <>
-                <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                <ShieldCheck className="h-4 w-4 text-success" />
                 <span>On</span>
                 <span className="text-muted-foreground text-xs">
                   · {status?.recoveryLeft ?? 0} recovery codes left
@@ -177,14 +177,14 @@ export function TwoFactorSection() {
       {step.kind === 'scan' && (
         <form onSubmit={submitCode} className="space-y-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="w-fit shrink-0 rounded-lg bg-white p-3">
+            <div className="w-fit shrink-0 rounded-lg bg-foreground p-3">
               <QRCode value={step.uri} size={148} />
             </div>
             <div className="min-w-0 space-y-2 text-xs">
               <p className="text-muted-foreground">
                 Scan this with your authenticator app, or enter the key by hand:
               </p>
-              <div className="rounded-md border border-white/10 bg-black/30 px-2.5 py-1.5 font-mono">
+              <div className="rounded-md border border-foreground/10 bg-inset px-2.5 py-1.5 font-mono">
                 <Copyable text={step.secret} />
               </div>
               <p className="text-muted-foreground">Then type the 6-digit code it shows.</p>
@@ -227,11 +227,11 @@ function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void 
   }
   return (
     <div className="space-y-3">
-      <p className="text-xs text-amber-200">
+      <p className="text-xs text-warning">
         Save these recovery codes somewhere safe. Each one signs you in once if you lose your
         phone, and they won&apos;t be shown again.
       </p>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md border border-white/10 bg-black/30 p-3 font-mono text-sm">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md border border-foreground/10 bg-inset p-3 font-mono text-sm">
         {codes.map((c) => (
           <span key={c}>{c}</span>
         ))}
