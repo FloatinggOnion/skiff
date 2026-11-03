@@ -71,7 +71,7 @@ export default function Backends() {
       <ul>
         <li>
           <strong>Databases:</strong> managed Postgres, MySQL, MongoDB and Redis, with the connection
-          URL added for you. Redis isn&apos;t included in daily backups.
+          URL added for you, all with <a href="/docs/backups">daily backups</a>.
         </li>
         <li>
           <strong>Migrations:</strong> a release command runs before each new version goes live, and

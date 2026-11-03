@@ -17,6 +17,7 @@ export const DOCS_NAV: DocSection[] = [
       { href: "/docs/one-click-apps", label: "One-click apps" },
       { href: "/docs/images", label: "Prebuilt images" },
       { href: "/docs/volumes", label: "Persistent volumes" },
+      { href: "/docs/backups", label: "Backups and encryption" },
       { href: "/docs/log-drains", label: "Log drains" },
       { href: "/docs/status-pages", label: "Status pages" },
       { href: "/docs/email-forwarding", label: "Email forwarding" },

@@ -99,6 +99,9 @@ platform in the browser:
   wired into your apps, with automatic daily backups (optionally copied to any
   S3-compatible bucket). Databases you started by hand can be brought under
   management too.
+- **Backups and encryption** — volumes are backed up daily too, every restore can be
+  undone, and stored secrets are encrypted. See the
+  [guide](https://useskiff.xyz/docs/backups).
 - **Object storage** — S3-compatible buckets, with a file browser in the dashboard.
 - **Email forwarding** — point a domain's MX at your server and send
   `hello@yourdomain.com` to any inbox, catch-all included.
@@ -218,7 +221,8 @@ skiff server restore skiff-<date>.skiffbak --key <recovery key>
 ```
 
 Projects, settings, domains and tokens come back as they were, and each managed
-database is recreated and loaded from its newest offsite backup.
+database is recreated and loaded from its newest offsite backup. Volumes come back
+by hand: redeploy the app, then restore the volume from its backups in the dashboard.
 
 ## Contributing
 

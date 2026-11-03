@@ -74,9 +74,8 @@ path = "/app/public/uploads"`}</CodeBlock>
         keeps them, so redeploying the same app picks its files back up.
       </p>
       <Callout>
-        Volumes live on your server&apos;s disk and aren&apos;t part of database backups. For data
-        you can&apos;t lose, use a managed database, which is backed up daily and can be copied to
-        an offsite bucket.
+        Volumes are backed up daily and can be copied to an offsite bucket, so you can restore them
+        from the project&apos;s Settings. See <a href="/docs/backups">backups and encryption</a>.
       </Callout>
     </article>
   );
