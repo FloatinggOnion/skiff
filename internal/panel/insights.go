@@ -228,6 +228,24 @@ func isPage(p string) bool {
 	return !assetExts[strings.ToLower(path.Ext(p))]
 }
 
+// spoofedReferrerVisitors finds automated visitors posing as referrals. A browser names the page itself as the referrer when it loads that page's scripts and styles, so an outside referrer on one means the header is made up.
+func spoofedReferrerVisitors(app string, from int64) map[string]bool {
+	out := map[string]bool{}
+	rows, err := sqlDB.Query(`SELECT DISTINCT visitor FROM requests WHERE app=? AND t>=? AND ref<>'' AND visitor<>''
+		AND (path LIKE '%.js' OR path LIKE '%.css')`, app, from)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var v string
+		if rows.Scan(&v) == nil {
+			out[v] = true
+		}
+	}
+	return out
+}
+
 func buildInsights(app, rng string, now time.Time) (insightsResponse, error) {
 	cfg, ok := insightRanges[rng]
 	if !ok {
@@ -242,6 +260,7 @@ func buildInsights(app, rng string, now time.Time) (insightsResponse, error) {
 		ErrorPaths: []insightRow{}, Referrers: []insightRow{}, Deploys: []insightMarker{},
 	}
 
+	spoofed := spoofedReferrerVisitors(app, from)
 	rows, err := sqlDB.Query(`SELECT t, path, status, dur, bytes, ref, visitor, bot, method FROM requests WHERE app=? AND t>=? ORDER BY t`, app, from)
 	if err != nil {
 		return out, err
@@ -264,6 +283,9 @@ func buildInsights(app, rng string, now time.Time) (insightsResponse, error) {
 		)
 		if rows.Scan(&t, &p, &status, &dur, &size, &ref, &visitor, &bot, &method) != nil {
 			continue
+		}
+		if spoofed[visitor] {
+			bot = 1
 		}
 		bk := t / bucket * bucket
 		pt := points[bk]

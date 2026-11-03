@@ -73,3 +73,38 @@ func TestIngestAndInsights(t *testing.T) {
 		t.Fatalf("%d requests survived pruning", again.Requests)
 	}
 }
+
+func TestSpoofedReferrersArentCountedAsPeople(t *testing.T) {
+	openTestDB(t)
+	now := time.Now()
+	add := func(path, ref, visitor string) {
+		t.Helper()
+		if _, err := sqlDB.Exec(`INSERT INTO requests(t,app,method,path,status,ref,visitor,bot) VALUES(?,?,?,?,200,?,?,0)`,
+			now.UnixMilli(), "web", "GET", path, ref, visitor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("/", "baidu.xyz", "scanner")
+	add("/_next/static/chunks/a.js", "baidu.xyz", "scanner")
+	add("/", "news.ycombinator.com", "reader")
+	add("/_next/static/chunks/a.js", "", "reader")
+	add("/logo.png", "someblog.example", "hotlinker")
+
+	got, err := buildInsights("web", "24h", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Pageviews != 1 {
+		t.Errorf("pageviews = %d, want 1", got.Pageviews)
+	}
+	if got.Bots != 2 {
+		t.Errorf("bots = %d, want 2", got.Bots)
+	}
+	refs := map[string]bool{}
+	for _, r := range got.Referrers {
+		refs[r.Key] = true
+	}
+	if refs["baidu.xyz"] || !refs["news.ycombinator.com"] || !refs["someblog.example"] {
+		t.Errorf("referrers = %+v", got.Referrers)
+	}
+}
