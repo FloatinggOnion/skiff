@@ -159,6 +159,9 @@ func (p *Panel) runBackup(d dbRow, trigger string) (backupRow, error) {
 // loadBackup replaces the database's contents with a dump.
 func (p *Panel) loadBackup(ctx context.Context, d dbRow, dump io.Reader) error {
 	e := dbEngines[d.Engine]
+	if e.offlineRestore {
+		return p.restoreRedis(ctx, d, dump)
+	}
 	return p.eng.Exec(ctx, d.Container, e.restoreCmd(d.Username, d.Password, d.DBName),
 		io.MultiReader(strings.NewReader(e.restoreReset), dump), io.Discard)
 }
@@ -228,7 +231,7 @@ func (p *Panel) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e := dbEngines[d.Engine]
-	if e.restoreCmd == nil {
+	if !e.canRestore() {
 		http.Error(w, "restore isn't supported for this database", http.StatusBadRequest)
 		return
 	}

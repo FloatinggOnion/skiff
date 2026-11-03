@@ -63,8 +63,7 @@ func (p *Panel) recreateDatabase(d dbRow) error {
 
 // restoreLatestOffsite downloads the database's newest offsite copy and loads it, retrying while the fresh database finishes starting.
 func (p *Panel) restoreLatestOffsite(d dbRow) (string, error) {
-	e := dbEngines[d.Engine]
-	if e.restoreCmd == nil {
+	if !dbEngines[d.Engine].canRestore() {
 		return "", nil
 	}
 	var key string

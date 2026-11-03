@@ -266,15 +266,13 @@ function DatabaseCard({
           />
           {running ? 'Running' : db.state === 'missing' ? 'Stopped' : db.state}
         </span>
-        {db.engine !== 'redis' && (
-          <button
-            onClick={() => setBackups(true)}
-            className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-foreground/12 px-2.5 py-1 text-xs transition hover:border-foreground/25"
-          >
-            <Archive className="h-3.5 w-3.5" />
-            Backups
-          </button>
-        )}
+        <button
+          onClick={() => setBackups(true)}
+          className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 rounded-[6px] border border-foreground/12 px-2.5 py-1 text-xs transition hover:border-foreground/25"
+        >
+          <Archive className="h-3.5 w-3.5" />
+          Backups
+        </button>
         <button
           onClick={() => setShell(true)}
           disabled={!running}
@@ -505,7 +503,7 @@ function BackupsDialog({
                     if (
                       await confirm({
                         title: `Restore ${db.name}?`,
-                        description: `This replaces its current contents with the ${fmtDate(b.created)} backup. Skiff backs up the current data first, so you can undo it.`,
+                        description: `This replaces its current contents with the ${fmtDate(b.created)} backup. Skiff backs up the current data first, so you can undo it.${db.engine === 'redis' ? ' Redis stops briefly while this happens.' : ''}`,
                         confirmText: 'Restore',
                         destructive: true,
                       })

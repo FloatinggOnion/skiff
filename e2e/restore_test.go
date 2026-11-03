@@ -67,6 +67,17 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 			state:  `print(db.t.find().sort({_id:1}).toArray().map(d=>d._id+d.v).join(",")+"|"+db.getCollectionNames().sort().join(","))`,
 			want:   "1original,2original|t",
 		},
+		{
+			engine: "redis", name: "rdrestore",
+			exec: func(ctr, stmt string) []string {
+				pass, _ := exec.Command("docker", "inspect", "-f", "{{index .Config.Cmd 2}}", ctr).Output()
+				return []string{"exec", ctr, "sh", "-c", "export REDISCLI_AUTH=" + strings.TrimSpace(string(pass)) + "; " + stmt}
+			},
+			seed:   "redis-cli SET a original | grep -q OK && redis-cli SET b original | grep -q OK",
+			change: "redis-cli SET a changed && redis-cli DEL b && redis-cli SET later x",
+			state:  `echo "$(redis-cli GET a)/$(redis-cli GET b)/$(redis-cli DBSIZE)"`,
+			want:   "original/original/2",
+		},
 	}
 
 	for _, e := range engines {
@@ -122,7 +133,19 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 				t.Fatalf("undoing the restore: got %q, want %q", got, changed)
 			}
 
-			if e.engine != "postgres" {
+			if e.engine == "redis" {
+				// The restored data has to survive a restart: Redis reads its log, not the dump, on the way back up.
+				post(t, c, "http://"+panel+"/api/backups/restore?id="+b.ID, "")
+				run(t, "", nil, "docker", "restart", ctr)
+				eventually(t, time.Minute, func() bool {
+					got, _ := sql(e.state)
+					return got == e.want
+				})
+				if out, err := sql(e.change); err != nil {
+					t.Fatalf("changing data again: %v: %s", err, out)
+				}
+			}
+			if e.engine != "postgres" && e.engine != "redis" {
 				return
 			}
 			// A damaged dump must fail loudly and leave the data alone.
@@ -134,7 +157,7 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(files[0], append(dump[:len(dump)/2:len(dump)/2], []byte("\nTHIS IS NOT SQL;\n")...), 0o600); err != nil {
+			if err := os.WriteFile(files[0], append(dump[:len(dump)/2:len(dump)/2], []byte("\nTHIS IS NOT VALID;\n")...), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			resp, err := c.Post("http://"+panel+"/api/backups/restore?id="+b.ID, "application/json", http.NoBody)

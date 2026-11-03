@@ -28,7 +28,9 @@ type dbEngine struct {
 	restoreCmd func(user, pass, dbname string) []string
 	// restoreReset runs ahead of the dump, so a restore returns the database to the backup rather than merging with what's there.
 	restoreReset string
-	tls          *dbTLS
+	// offlineRestore engines can't load a dump while running, see restoreRedis.
+	offlineRestore bool
+	tls            *dbTLS
 }
 
 type dbTLS struct {
@@ -181,6 +183,11 @@ var dbEngines = map[string]dbEngine{
 			}
 			return []string{"sh", "-c", fmt.Sprintf("exec redis-cli -a %s", pass)}
 		},
+		backupExt: ".rdb",
+		dumpCmd: func(_, pass, _ string) []string {
+			return []string{"sh", "-c", redisAuth(pass) + "exec redis-cli --no-auth-warning --rdb -"}
+		},
+		offlineRestore: true,
 	},
 }
 
