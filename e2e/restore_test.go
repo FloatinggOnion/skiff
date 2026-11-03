@@ -184,3 +184,78 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 		})
 	}
 }
+
+// TestVolumeBackupFromBucket copies a volume backup offsite, loses the local file, and restores from the bucket.
+func TestVolumeBackupFromBucket(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+
+	s3Port := freeAddr(t)[len("127.0.0.1:"):]
+	run(t, "", nil, "docker", "run", "-d", "--name", "skiff-e2e-s3", "-p", "127.0.0.1:"+s3Port+":8333",
+		"-e", "AWS_ACCESS_KEY_ID=e2euser", "-e", "AWS_SECRET_ACCESS_KEY=e2epass12345",
+		"chrislusf/seaweedfs:4.50", "server", "-dir=/data", "-s3", "-s3.port=8333")
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", "skiff-e2e-s3").Run() })
+	eventually(t, 2*time.Minute, func() bool {
+		out, _ := exec.Command("docker", "exec", "skiff-e2e-s3", "sh", "-c", "echo s3.bucket.create -name offsite | weed shell").CombinedOutput()
+		return strings.Contains(string(out), "created bucket")
+	})
+
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_ALLOW_PRIVATE_ENDPOINTS=1"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	const name = "e2e-vol"
+	volume := "skiff-" + name + "_data"
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", "docker rm -f $(docker ps -aq --filter label=skiff.app="+name+") ; docker rmi $(docker images -q skiff-"+name+")").Run()
+		_ = exec.Command("docker", "volume", "rm", "-f", volume).Run()
+	})
+	var created struct{ App, ID string }
+	postJSON(t, c, "http://"+panel+"/api/projects/image", `{"name":"`+name+`","image":"traefik/whoami:v1.10.2"}`, &created)
+	stream(t, c, "http://"+panel+"/api/deploys/log?app="+name+"&id="+created.ID)
+	post(t, c, "http://"+panel+"/api/volumes?app="+name, `{"name":"data","path":"/data"}`)
+	stream(t, c, "http://"+panel+"/api/redeploy?app="+name)
+
+	files := func(script string) string {
+		t.Helper()
+		out, err := exec.Command("docker", "run", "--rm", "-v", volume+":/data", "alpine:3.20", "sh", "-c", script).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v: %s", script, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	files("echo original > /data/note")
+	put(t, c, "http://"+panel+"/api/backups/offsite", fmt.Sprintf(
+		`{"endpoint":"http://127.0.0.1:%s","bucket":"offsite","prefix":"skiff","accessKey":"e2euser","secretKey":"e2epass12345"}`, s3Port))
+
+	base := "http://" + panel + "/api/volumes/backups"
+	var b struct{ ID string }
+	postJSON(t, c, base+"?app="+name+"&volume=data", "", &b)
+	eventually(t, 30*time.Second, func() bool {
+		var list []struct{ ID, Offsite string }
+		getJSON(t, c, base+"?app="+name+"&volume=data", &list)
+		return len(list) > 0 && list[0].Offsite == "ok"
+	})
+
+	local := filepath.Join(home, ".skiff", "backups", "vol-"+name+"-data", b.ID+".tar.gz")
+	if err := os.Remove(local); err != nil {
+		t.Fatalf("removing the local copy: %v", err)
+	}
+	files("echo changed > /data/note; echo later > /data/later")
+
+	post(t, c, base+"/restore?id="+b.ID, "")
+	if got := files("cat /data/note; ls -A /data | tr '\\n' ' '"); got != "original\nnote" {
+		t.Fatalf("after restoring from the bucket: %q", got)
+	}
+	if _, err := os.Stat(local); err != nil {
+		t.Fatalf("the fetched copy should be kept: %v", err)
+	}
+}

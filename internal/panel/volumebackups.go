@@ -326,12 +326,17 @@ rm -rf /data/.restore-new /data/.restore-old
 mkdir /data/.restore-new
 tar xzf - -C /data/.restore-new || { rm -rf /data/.restore-new; echo "couldn't unpack the backup" >&2; exit 1; }`
 
+// find exits 0 even when the mv it runs fails, so each step checks what's left behind instead.
 const volumeSwapScript = `cd /data || exit 1
-undo() { echo "$1" >&2; find .restore-old -mindepth 1 -maxdepth 1 -exec mv -f {} . \; ; rmdir .restore-old; rm -rf .restore-new; exit 1; }
+put_back() { find .restore-old -mindepth 1 -maxdepth 1 -exec mv {} . \; ; rmdir .restore-old; rm -rf .restore-new; echo "$1" >&2; exit 1; }
 mkdir .restore-old || exit 1
-find . -mindepth 1 -maxdepth 1 ! -name .restore-new ! -name .restore-old -exec mv {} .restore-old/ \; || undo "couldn't move the current files aside"
-find .restore-new -mindepth 1 -maxdepth 1 -exec mv {} . \; || undo "couldn't move the restored files in"
-rmdir .restore-new
+find . -mindepth 1 -maxdepth 1 ! -name .restore-new ! -name .restore-old -exec mv {} .restore-old/ \;
+[ -z "$(find . -mindepth 1 -maxdepth 1 ! -name .restore-new ! -name .restore-old)" ] || put_back "couldn't move the current files aside"
+find .restore-new -mindepth 1 -maxdepth 1 -exec mv {} . \;
+if ! rmdir .restore-new 2>/dev/null; then
+  find . -mindepth 1 -maxdepth 1 ! -name .restore-new ! -name .restore-old -exec rm -rf {} +
+  put_back "couldn't move the restored files in"
+fi
 rm -rf .restore-old`
 
 func (p *Panel) restoreVolume(ctx context.Context, b volumeBackupRow, archive *os.File) error {
