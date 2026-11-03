@@ -188,3 +188,23 @@ func TestDropCopiedPreviewEnv(t *testing.T) {
 		}
 	}
 }
+
+func TestSameSecondDeploysStayInOrder(t *testing.T) {
+	openTestDB(t)
+	at := time.Unix(1793746269, 0)
+	var want []string
+	for ms := range 40 {
+		id := deployIDAt(at.Add(time.Duration(ms*20) * time.Millisecond))
+		addDeploy(Deploy{ID: id, App: "api", Status: "live", Started: at.Unix()})
+		want = append([]string{id}, want...)
+	}
+	got := appDeploysPage("api", 0, "", 100)
+	if len(got) != len(want) {
+		t.Fatalf("got %d deploys, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].ID != want[i] {
+			t.Fatalf("position %d: got %s, want %s", i, got[i].ID, want[i])
+		}
+	}
+}

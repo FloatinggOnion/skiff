@@ -493,8 +493,11 @@ func readLogLines(path string) []string {
 	return strings.Split(s, "\n")
 }
 
-func newDeployID() string {
-	return fmt.Sprintf("%d-%s", time.Now().Unix(), randHex(3))
+func newDeployID() string { return deployIDAt(time.Now()) }
+
+// deployIDAt includes the millisecond, because deploys in the same second are ordered by their id.
+func deployIDAt(t time.Time) string {
+	return fmt.Sprintf("%d-%03x%s", t.Unix(), t.Nanosecond()/int(time.Millisecond), randHex(3))
 }
 
 func shortCommit(c string) string {
