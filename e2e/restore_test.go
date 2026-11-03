@@ -14,6 +14,29 @@ import (
 	"time"
 )
 
+type checkedBackup struct {
+	ID, CheckStatus, CheckDetail string
+	CheckItems                   int
+}
+
+// checkBackup runs a restore check and waits for its outcome.
+func checkBackup(t *testing.T, c *http.Client, panel, dbID, id string) checkedBackup {
+	t.Helper()
+	post(t, c, "http://"+panel+"/api/backups/check?id="+id, "")
+	var got checkedBackup
+	eventually(t, 5*time.Minute, func() bool {
+		var list []checkedBackup
+		getJSON(t, c, "http://"+panel+"/api/backups?db="+dbID, &list)
+		for _, b := range list {
+			if b.ID == id {
+				got = b
+			}
+		}
+		return got.CheckStatus != "" && got.CheckStatus != "running"
+	})
+	return got
+}
+
 // TestRestoreReturnsToBackup changes real databases after a backup, restores, and reads the data back.
 func TestRestoreReturnsToBackup(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -111,6 +134,12 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 				t.Fatalf("after seeding: %q %v", got, err)
 			}
 
+			if e.engine == "postgres" {
+				// The dump refers to this role without creating it.
+				if out, err := sql("create role reporting; grant select on t to reporting;"); err != nil {
+					t.Fatalf("adding a role: %v: %s", err, out)
+				}
+			}
 			var b struct{ ID string }
 			postJSON(t, c, "http://"+panel+"/api/backups?db="+db.ID, "", &b)
 			if out, err := sql(e.change); err != nil {
@@ -119,6 +148,28 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 			changed, _ := sql(e.state)
 			if changed == e.want {
 				t.Fatalf("the change did nothing: %q", changed)
+			}
+
+			// The check loads the backup somewhere else, so the change above has to survive it.
+			if got := checkBackup(t, c, panel, db.ID, b.ID); got.CheckStatus != "passed" || got.CheckItems == 0 {
+				t.Fatalf("restore check: %+v", got)
+			}
+			if got, _ := sql(e.state); got != changed {
+				t.Fatalf("the restore check touched the database: got %q, want %q", got, changed)
+			}
+			if left, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.kind=restore-check").Output(); strings.TrimSpace(string(left)) != "" {
+				t.Fatalf("the restore check left containers behind: %s", left)
+			}
+			var summary []struct {
+				ID          string
+				VerifiedAt  int64
+				CheckFailed bool
+			}
+			getJSON(t, c, "http://"+panel+"/api/databases", &summary)
+			for _, s := range summary {
+				if s.ID == db.ID && (s.VerifiedAt == 0 || s.CheckFailed) {
+					t.Fatalf("the database doesn't show the check: %+v", s)
+				}
 			}
 
 			post(t, c, "http://"+panel+"/api/backups/restore?id="+b.ID, "")
@@ -168,6 +219,21 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 			}
 			if err := os.WriteFile(files[0], append(dump[:len(dump)/2:len(dump)/2], []byte("\nTHIS IS NOT VALID;\n")...), 0o600); err != nil {
 				t.Fatal(err)
+			}
+			if got := checkBackup(t, c, panel, db.ID, b.ID); got.CheckStatus != "failed" || got.CheckDetail == "" {
+				t.Fatalf("restore check of a damaged backup: %+v", got)
+			}
+			if e.engine == "postgres" {
+				// A dump that loads without error and holds nothing is the failure a restore alone wouldn't catch.
+				if err := os.WriteFile(files[0], nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if got := checkBackup(t, c, panel, db.ID, b.ID); got.CheckStatus != "failed" || !strings.Contains(got.CheckDetail, "empty") {
+					t.Fatalf("restore check of an empty backup: %+v", got)
+				}
+				if err := os.WriteFile(files[0], append(dump[:len(dump)/2:len(dump)/2], []byte("\nTHIS IS NOT VALID;\n")...), 0o600); err != nil {
+					t.Fatal(err)
+				}
 			}
 			resp, err := c.Post("http://"+panel+"/api/backups/restore?id="+b.ID, "application/json", http.NoBody)
 			if err != nil {

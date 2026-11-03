@@ -50,6 +50,26 @@ export default function Backups() {
         could fill the disk.
       </p>
 
+      <h2>Restore checks</h2>
+      <p>
+        A backup you&apos;ve never restored might not work. So each day, Skiff loads the newest backup
+        of each database into a throwaway copy with no network access, using the same steps as a real
+        restore, then deletes the copy. Your database isn&apos;t touched. The database shows when a
+        backup last restored cleanly, and you can test any backup yourself with the shield button
+        under <strong>Backups</strong>.
+      </p>
+      <p>
+        A check fails if the restore fails, or if the backup loads empty while your database has data,
+        and your alert channels hear about it. Skiff also alerts you when a
+        daily backup can&apos;t be taken. If the server is short of disk or memory, the check is skipped
+        and tried again the next day, and that doesn&apos;t count as a failure.
+      </p>
+      <Callout>
+        A passing check means the backup loads and contains tables, collections or keys. It
+        doesn&apos;t check that the contents are what your app expects. It tests the copy on your
+        server, not the one in your offsite bucket, and volumes and previews aren&apos;t checked.
+      </Callout>
+
       <h2>Add an offsite bucket</h2>
       <Steps>
         <Step n={1} title="Create a private bucket">

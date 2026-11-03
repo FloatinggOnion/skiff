@@ -8,6 +8,10 @@ export type Backup = {
   trigger: string
   created: number
   offsite?: 'pending' | 'ok' | 'failed'
+  checkStatus?: 'running' | 'passed' | 'failed' | 'skipped'
+  checkDetail?: string
+  checkItems?: number
+  checkAt?: number
 }
 
 export type OffsiteTarget = {
@@ -39,6 +43,8 @@ export type Database = {
   attached: string[]
   public: boolean
   publicUrl?: string
+  verifiedAt?: number
+  checkFailed?: boolean
 }
 
 class DatabasesService extends BaseService {
@@ -102,6 +108,10 @@ class DatabasesService extends BaseService {
 
   restoreBackup(id: string) {
     return this.post('/backups/restore', undefined, { params: { id } })
+  }
+
+  checkBackup(id: string) {
+    return this.post('/backups/check', undefined, { params: { id } })
   }
 
   deleteBackup(id: string) {

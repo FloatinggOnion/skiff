@@ -28,6 +28,9 @@ type dbEngine struct {
 	restoreCmd func(user, pass, dbname string) []string
 	// restoreReset runs ahead of the dump, so a restore returns the database to the backup rather than merging with what's there.
 	restoreReset string
+	// countCmd prints how many tables, collections or keys a database holds, named by countNoun.
+	countCmd  func(user, pass, dbname string) []string
+	countNoun string
 	// offlineRestore engines can't load a dump while running, see restoreRedis.
 	offlineRestore bool
 	tls            *dbTLS
@@ -85,6 +88,10 @@ var dbEngines = map[string]dbEngine{
 			return []string{"psql", "-U", user, "-d", dbname, "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "-"}
 		},
 		restoreReset: postgresRestoreReset,
+		countNoun:    "table",
+		countCmd: func(user, _, dbname string) []string {
+			return []string{"psql", "-U", user, "-d", dbname, "-tAc", "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema')"}
+		},
 		// Fix key perms as root, then hand off to the normal entrypoint with ssl on.
 		tls: &dbTLS{
 			hasCerts:   true,
@@ -127,6 +134,10 @@ var dbEngines = map[string]dbEngine{
 			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysql -u %s %s", pass, user, dbname)}
 		},
 		restoreReset: mysqlRestoreReset,
+		countNoun:    "table",
+		countCmd: func(user, pass, dbname string) []string {
+			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysql -N -u %s %s -e 'SELECT count(*) FROM information_schema.tables WHERE table_schema = DATABASE()'", pass, user, dbname)}
+		},
 		// MySQL 8 auto-generates certs and serves TLS with no config — the public URL just needs to ask for it.
 		tls: &dbTLS{},
 	},
@@ -157,6 +168,10 @@ var dbEngines = map[string]dbEngine{
 		restoreCmd: func(user, pass, dbname string) []string {
 			auth := fmt.Sprintf("-u %s -p %s --authenticationDatabase admin", user, pass)
 			return []string{"sh", "-c", fmt.Sprintf("mongosh --quiet %s %s --eval 'db.dropDatabase()' </dev/null >/dev/null && exec mongorestore %s --archive --gzip --drop", auth, dbname, auth)}
+		},
+		countNoun: "collection",
+		countCmd: func(user, pass, dbname string) []string {
+			return []string{"mongosh", "--quiet", "-u", user, "-p", pass, "--authenticationDatabase", "admin", dbname, "--eval", "db.getCollectionNames().length"}
 		},
 		// preferTLS lets the entrypoint's localhost init connect in the clear while offering TLS to public clients.
 		tls: &dbTLS{
@@ -194,6 +209,10 @@ var dbEngines = map[string]dbEngine{
 			return []string{"sh", "-c", redisAuth(pass) + "exec redis-cli --no-auth-warning --rdb -"}
 		},
 		offlineRestore: true,
+		countNoun:      "key",
+		countCmd: func(_, pass, _ string) []string {
+			return []string{"sh", "-c", redisAuth(pass) + "exec redis-cli --no-auth-warning info keyspace"}
+		},
 	},
 }
 
@@ -209,6 +228,9 @@ type Database struct {
 	Attached  []string `json:"attached"`
 	Public    bool     `json:"public"`
 	PublicURL string   `json:"publicUrl,omitempty"`
+	// VerifiedAt is when a backup last restored cleanly. CheckFailed means a later check didn't.
+	VerifiedAt  int64 `json:"verifiedAt,omitempty"`
+	CheckFailed bool  `json:"checkFailed,omitempty"`
 }
 
 type dbRow struct {
@@ -356,6 +378,7 @@ func (p *Panel) toDatabase(d dbRow) Database {
 		Attached: dbAttachments(d.ID),
 		Public:   d.Public,
 	}
+	out.VerifiedAt, out.CheckFailed = restoreCheckSummary(d.ID)
 	if d.Public && d.PublicPort > 0 {
 		if ip := serverPublicIP(p.domain); ip != "" {
 			out.PublicURL = e.url(ip, d.PublicPort, d.Username, d.Password, d.DBName, e.tls != nil)

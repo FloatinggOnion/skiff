@@ -95,6 +95,10 @@ var migrations = []string{
 	`ALTER TABLE sources ADD COLUMN catalog TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE sources ADD COLUMN rate_limit INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE backups ADD COLUMN check_status TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE backups ADD COLUMN check_detail TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE backups ADD COLUMN check_items INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE backups ADD COLUMN check_at INTEGER NOT NULL DEFAULT 0`,
 }
 
 const schema = `
@@ -242,7 +246,11 @@ CREATE TABLE IF NOT EXISTS backups (
   size    INTEGER NOT NULL DEFAULT 0,
   trigger TEXT NOT NULL DEFAULT 'manual',
   created INTEGER NOT NULL,
-  offsite TEXT NOT NULL DEFAULT ''
+  offsite TEXT NOT NULL DEFAULT '',
+  check_status TEXT NOT NULL DEFAULT '',
+  check_detail TEXT NOT NULL DEFAULT '',
+  check_items  INTEGER NOT NULL DEFAULT 0,
+  check_at     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_backups_db ON backups(db_id, created DESC);
 CREATE TABLE IF NOT EXISTS jobs (

@@ -23,6 +23,11 @@ type Backup struct {
 	Trigger string `json:"trigger"` // manual | scheduled | pre-restore
 	Created int64  `json:"created"`
 	Offsite string `json:"offsite,omitempty"` // "" not sent, pending, ok or failed
+
+	CheckStatus string `json:"checkStatus,omitempty"` // "" not checked, running, passed, failed or skipped
+	CheckDetail string `json:"checkDetail,omitempty"`
+	CheckItems  int    `json:"checkItems,omitempty"` // tables, collections or keys in the restored copy
+	CheckAt     int64  `json:"checkAt,omitempty"`
 }
 
 type backupRow struct {
@@ -31,13 +36,16 @@ type backupRow struct {
 	Trigger                      string
 	Created                      int64
 	Offsite                      string
+	CheckStatus, CheckDetail     string
+	CheckItems                   int
+	CheckAt                      int64
 }
 
-const backupCols = `id,db_id,team,engine,file,size,trigger,created,offsite`
+const backupCols = `id,db_id,team,engine,file,size,trigger,created,offsite,check_status,check_detail,check_items,check_at`
 
 func scanBackup(row interface{ Scan(...any) error }) (backupRow, bool) {
 	var b backupRow
-	if row.Scan(&b.ID, &b.DbID, &b.Team, &b.Engine, &b.File, &b.Size, &b.Trigger, &b.Created, &b.Offsite) != nil {
+	if row.Scan(&b.ID, &b.DbID, &b.Team, &b.Engine, &b.File, &b.Size, &b.Trigger, &b.Created, &b.Offsite, &b.CheckStatus, &b.CheckDetail, &b.CheckItems, &b.CheckAt) != nil {
 		return backupRow{}, false
 	}
 	return b, true
@@ -66,8 +74,8 @@ func listBackupRows(dbID string) []backupRow {
 }
 
 func putBackup(b backupRow) error {
-	_, err := sqlDB.Exec(`INSERT INTO backups(`+backupCols+`) VALUES(?,?,?,?,?,?,?,?,?)`,
-		b.ID, b.DbID, b.Team, b.Engine, b.File, b.Size, b.Trigger, b.Created, b.Offsite)
+	_, err := sqlDB.Exec(`INSERT INTO backups(`+backupCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		b.ID, b.DbID, b.Team, b.Engine, b.File, b.Size, b.Trigger, b.Created, b.Offsite, b.CheckStatus, b.CheckDetail, b.CheckItems, b.CheckAt)
 	return err
 }
 
@@ -176,7 +184,10 @@ func (p *Panel) loadBackup(ctx context.Context, d dbRow, dump io.Reader) error {
 }
 
 func toBackup(b backupRow) Backup {
-	return Backup{ID: b.ID, Size: b.Size, Trigger: b.Trigger, Created: b.Created, Offsite: b.Offsite}
+	return Backup{
+		ID: b.ID, Size: b.Size, Trigger: b.Trigger, Created: b.Created, Offsite: b.Offsite,
+		CheckStatus: b.CheckStatus, CheckDetail: b.CheckDetail, CheckItems: b.CheckItems, CheckAt: b.CheckAt,
+	}
 }
 
 func (p *Panel) handleBackups(w http.ResponseWriter, r *http.Request) {
@@ -312,6 +323,7 @@ func (p *Panel) backupLoop() {
 				}
 				if _, err := p.runBackup(d, "scheduled"); err != nil {
 					log.Printf("skiff: scheduled backup of %s failed: %v", d.Name, err)
+					p.alertBackupFailed(d, now)
 				}
 			}
 		})

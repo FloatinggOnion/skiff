@@ -22,6 +22,7 @@ type DBRunSpec struct {
 	Entrypoint string            // optional --entrypoint override (e.g. "sh" to fix TLS cert perms)
 	Aliases    []string          // extra names on the network, such as a Compose service name
 	Binds      []string          // extra bind mounts, "host:container[:ro]" (e.g. the TLS cert dir)
+	Memory     string            // optional memory limit
 }
 
 // RunDatabase (re)creates a managed database container, returning the published host port when Publish is set (0 otherwise); reusing the same name + volume preserves the data.
@@ -31,6 +32,9 @@ func (e *Engine) RunDatabase(s DBRunSpec) (int, error) {
 	args := []string{"run", "-d", "--name", s.Name, "--restart", "unless-stopped"}
 	if s.Entrypoint != "" {
 		args = append(args, "--entrypoint", s.Entrypoint)
+	}
+	if s.Memory != "" {
+		args = append(args, "--memory", s.Memory)
 	}
 	for _, k := range sortedKeys(s.Labels) {
 		args = append(args, "--label", k+"="+s.Labels[k])
@@ -62,6 +66,15 @@ func (e *Engine) RunDatabase(s DBRunSpec) (int, error) {
 		return e.HostPort(s.Name, s.Port)
 	}
 	return 0, nil
+}
+
+// ContainersLabelled names every container with a label, running or not.
+func (e *Engine) ContainersLabelled(label string) []string {
+	out, err := e.command("ps", "-a", "--filter", "label="+label, "--format", "{{.Names}}").Output()
+	if err != nil {
+		return nil
+	}
+	return splitLines(out)
 }
 
 func (e *Engine) RemoveVolume(name string) error {

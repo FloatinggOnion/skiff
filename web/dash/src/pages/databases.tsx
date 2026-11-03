@@ -1,5 +1,5 @@
 import { queryKeys } from '@/constants/query-keys'
-import { fmtBytes } from '@/lib/format'
+import { fmtBytes, relTime } from '@/lib/format'
 import { errText } from '@/lib/errors'
 import { useCopy } from '@/hooks/use-copy'
 import { useMemo, useState, type FormEvent } from 'react'
@@ -251,6 +251,15 @@ function DatabaseCard({
           <p className="text-muted-foreground mt-0.5 truncate font-mono text-xs">
             {db.host}:{db.port}
           </p>
+          {db.checkFailed ? (
+            <p className="mt-0.5 text-[11px] text-danger">
+              Latest backup didn't restore. Open Backups to see why.
+            </p>
+          ) : db.verifiedAt ? (
+            <p className="text-muted-foreground mt-0.5 text-[11px]">
+              Backup restored cleanly {relTime(db.verifiedAt)}
+            </p>
+          ) : null}
         </div>
         <span
           className={
@@ -433,7 +442,9 @@ function BackupsDialog({
     queryKey: queryKeys.backups(db.id),
     queryFn: () => databasesService.listBackups(db.id),
     enabled: open,
+    refetchInterval: (q) => (q.state.data?.some((b) => b.checkStatus === 'running') ? 3000 : false),
   })
+  const checking = backups.some((b) => b.checkStatus === 'running')
   const reload = () => qc.invalidateQueries({ queryKey: queryKeys.backups(db.id) })
 
   const run = async (label: string, fn: () => Promise<unknown>) => {
@@ -458,7 +469,8 @@ function BackupsDialog({
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-muted-foreground text-[11px]">
-            Automatic daily snapshot on. Keeps the latest {10}.
+            Automatic daily snapshot on. Keeps the latest {10}. Each day, the newest is test-restored
+            into a throwaway database.
           </p>
           <Button
             size="sm"
@@ -490,8 +502,34 @@ function BackupsDialog({
                     {b.offsite === 'failed' && (
                       <span className="text-danger"> · offsite copy failed</span>
                     )}
+                    {b.checkStatus === 'running' && ' · checking…'}
+                    {b.checkStatus === 'passed' && (
+                      <span className="text-success/80" title={b.checkDetail}>
+                        {' '}
+                        · restores cleanly
+                      </span>
+                    )}
                   </p>
+                  {b.checkStatus === 'passed' && b.checkAt ? (
+                    <p className="text-muted-foreground mt-0.5 text-[11px]">
+                      {b.checkDetail} Checked {relTime(b.checkAt)}.
+                    </p>
+                  ) : null}
+                  {b.checkStatus === 'failed' && (
+                    <p className="mt-0.5 text-[11px] text-danger">{b.checkDetail}</p>
+                  )}
+                  {b.checkStatus === 'skipped' && (
+                    <p className="text-muted-foreground mt-0.5 text-[11px]">{b.checkDetail}</p>
+                  )}
                 </div>
+                <button
+                  onClick={() => run('check-' + b.id, () => databasesService.checkBackup(b.id))}
+                  disabled={checking || busy === 'check-' + b.id}
+                  className="text-muted-foreground hover:text-foreground p-1.5 disabled:opacity-40"
+                  title="Test this backup in a throwaway database"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                </button>
                 <a
                   href={databasesService.backupDownloadUrl(b.id)}
                   className="text-muted-foreground hover:text-foreground p-1.5"

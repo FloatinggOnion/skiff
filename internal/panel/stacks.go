@@ -371,7 +371,7 @@ func (p *Panel) provisionStackDB(team, stack string, it compose.Item) (dbRow, er
 	return d, putDB(d)
 }
 
-// waitDatabaseReady checks over TCP, because the official images run a temporary local-only server while they initialise.
+// waitDatabaseReady checks over TCP, because the official images run a temporary server while they initialise.
 func (p *Panel) waitDatabaseReady(ctx context.Context, d dbRow) error {
 	var cmd []string
 	switch d.Engine {
@@ -380,7 +380,8 @@ func (p *Panel) waitDatabaseReady(ctx context.Context, d dbRow) error {
 	case "mysql":
 		cmd = []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD='%s' mysql -h 127.0.0.1 --protocol=tcp -u %s -e 'select 1'", d.Password, d.Username)}
 	case "mongodb":
-		cmd = []string{"mongosh", "--quiet", "--host", "127.0.0.1", "--eval", "db.runCommand({ping:1})"}
+		// The temporary server also listens on TCP, but only the final one is the container's main process.
+		cmd = []string{"sh", "-c", "grep -qa '^mongod' /proc/1/cmdline && mongosh --quiet --host 127.0.0.1 --eval 'db.runCommand({ping:1})'"}
 	case "redis":
 		return p.waitRedis(ctx, d)
 	default:
