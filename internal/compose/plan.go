@@ -305,7 +305,7 @@ func applyDatabase(it *Item, engine string, s Service, p *Plan) {
 	}
 	if it.DBPassword == "" && engine == "redis" {
 		p.Notes = append(p.Notes, it.Service+": has no password, as in your file. Only this stack's services can reach it")
-	} else if it.DBPassword == "" {
+	} else if it.DBPassword == "" && len(p.Unset) == 0 {
 		p.Notes = append(p.Notes, it.Service+": has no password, so Skiff generates one. Apps that connect with a hardcoded URL need updating")
 	}
 	if len(s.Ports) > 0 {
