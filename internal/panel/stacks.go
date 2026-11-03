@@ -438,7 +438,7 @@ func stackApps(stack string) []Source {
 }
 
 // createStack records everything first and undoes it all if any step fails, so a stack is never half-made.
-func (p *Panel) createStack(s *stackSource, team, token string, vars map[string]string) error {
+func (p *Panel) createStack(s *stackSource, team, token string, vars map[string]string, preview *stackPreviewPlan) error {
 	plan := s.plan
 	var dbs []dbRow
 	var apps []Source
@@ -456,8 +456,12 @@ func (p *Panel) createStack(s *stackSource, team, token string, vars map[string]
 	if err != nil {
 		return err
 	}
-	if _, err := sqlDB.Exec(`INSERT INTO stacks(name,team,repo,branch,path,clone_url,created,vars) VALUES(?,?,?,?,?,?,?,?)`,
-		plan.Stack, team, githubRepo(s.cloneURL), s.branch, s.path, s.cloneURL, time.Now().Unix(), sealedVars); err != nil {
+	repo, parent := githubRepo(s.cloneURL), ""
+	if preview != nil {
+		repo, parent = preview.repo, preview.parent
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO stacks(name,team,repo,branch,path,clone_url,created,vars,parent) VALUES(?,?,?,?,?,?,?,?,?)`,
+		plan.Stack, team, repo, s.branch, s.path, s.cloneURL, time.Now().Unix(), sealedVars, parent); err != nil {
 		return err
 	}
 	for _, it := range plan.Items {
@@ -476,6 +480,9 @@ func (p *Panel) createStack(s *stackSource, team, token string, vars map[string]
 			continue
 		}
 		src := stackSourceFor(s, team, it)
+		if preview != nil && src.CloneURL != "" {
+			src.Repo = preview.repo
+		}
 		if err := putSource(src); err != nil {
 			undo()
 			return err
@@ -511,7 +518,26 @@ func (p *Panel) createStack(s *stackSource, team, token string, vars map[string]
 	if token != "" && s.cloneURL != "" {
 		auth = injectToken(s.cloneURL, token)
 	}
-	go guard("deployStack", func() { p.deployStack(dbs, apps, auth, stackDeploy{trigger: "manual"}) })
+	why := stackDeploy{trigger: "manual"}
+	if preview != nil {
+		// Lock the preview before it has anything to serve.
+		_ = writeGateFile()
+		_ = writeEdgeFile()
+		why.trigger = "preview"
+		why.prepare = func(dbs []dbRow) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer cancel()
+			return p.copyParentData(ctx, *preview, dbs)
+		}
+		why.failed = func(err error) {
+			if rec, ok := getStackRecord(preview.parent); ok {
+				p.noteStackPreviewFailure(rec, s.branch, err)
+			}
+			p.removeStack(plan.Stack)
+		}
+		why.done = func() { p.commentOnStackPreview(plan.Stack, "") }
+	}
+	go guard("deployStack", func() { p.deployStack(dbs, apps, auth, why) })
 	return nil
 }
 
@@ -524,7 +550,20 @@ func (p *Panel) deployStack(dbs []dbRow, apps []Source, auth string, why stackDe
 			log.Printf("skiff: stack database: %v", err)
 		}
 	}
+	if why.prepare != nil {
+		if err := why.prepare(dbs); err != nil {
+			why.failed(err)
+			return
+		}
+	}
+	if why.done != nil {
+		why.done()
+		defer why.done()
+	}
 	for _, src := range apps {
+		if _, ok := getSource(src.App); !ok {
+			continue // deleted while this was waiting its turn
+		}
 		a := auth
 		if src.CloneURL == "" {
 			a = ""
@@ -534,7 +573,12 @@ func (p *Panel) deployStack(dbs []dbRow, apps []Source, auth string, why stackDe
 }
 
 // stackDeploy says why a stack's apps are deploying, for their history.
-type stackDeploy struct{ commit, message, trigger string }
+type stackDeploy struct {
+	commit, message, trigger string
+	prepare                  func(dbs []dbRow) error // runs once databases are up, before any app
+	failed                   func(err error)
+	done                     func()
+}
 
 type stackMember struct {
 	Service string `json:"service"`
@@ -543,6 +587,7 @@ type stackMember struct {
 	Engine  string `json:"engine,omitempty"`
 	State   string `json:"state"`
 	Public  bool   `json:"public,omitempty"`
+	URL     string `json:"url,omitempty"`
 }
 
 type stackView struct {
@@ -552,12 +597,25 @@ type stackView struct {
 	// Held explains why the latest push's Compose changes are waiting for someone to apply them.
 	Held    string        `json:"held,omitempty"`
 	Members []stackMember `json:"members"`
+	Branch  string        `json:"branch,omitempty"`
+	// PreviewData is what a pull request's preview starts with; empty means pull requests get none.
+	PreviewData     string      `json:"previewData"`
+	PreviewPassword bool        `json:"previewPassword"`
+	PreviewError    string      `json:"previewError,omitempty"`
+	PreviewLimit    int         `json:"previewLimit"`
+	Previews        []stackView `json:"previews"`
 }
 
 func (p *Panel) viewStack(name string, created int64) stackView {
-	v := stackView{Name: name, Created: created, Members: []stackMember{}}
+	v := stackView{Name: name, Created: created, Members: []stackMember{}, Previews: []stackView{}, PreviewLimit: stackPreviewLimit}
 	if r, ok := getStackRecord(name); ok {
-		v.FromGit, v.Held = r.CloneURL != "", r.Held
+		v.FromGit, v.Held, v.Branch = r.CloneURL != "", r.Held, r.Branch
+		v.PreviewData, v.PreviewPassword, v.PreviewError = r.PreviewData, r.PreviewPassword, r.PreviewError
+	}
+	for _, child := range stackPreviewNames(name) {
+		var made int64
+		_ = sqlDB.QueryRow(`SELECT created FROM stacks WHERE name=?`, child).Scan(&made)
+		v.Previews = append(v.Previews, p.viewStack(child, made))
 	}
 	for _, d := range stackDatabases(name) {
 		v.Members = append(v.Members, stackMember{Service: d.Alias, App: d.Name, Kind: "database", Engine: d.Engine, State: p.eng.State(d.Container)})
@@ -569,7 +627,11 @@ func (p *Panel) viewStack(name string, created int64) stackView {
 		} else if building(s.App) {
 			state = "building"
 		}
-		v.Members = append(v.Members, stackMember{Service: s.Service, App: s.App, Kind: "app", State: state, Public: !s.Private})
+		m := stackMember{Service: s.Service, App: s.App, Kind: "app", State: state, Public: !s.Private}
+		if m.Public {
+			m.URL = "https://" + s.App + "." + p.domain
+		}
+		v.Members = append(v.Members, m)
 		for _, w := range listWorkers(s.App) {
 			v.Members = append(v.Members, stackMember{Service: w.Name, App: s.App, Kind: "worker", State: state})
 		}
@@ -610,7 +672,7 @@ func (p *Panel) handleStacks(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := sqlDB.Query(`SELECT name, created FROM stacks WHERE team=? ORDER BY created DESC`, team)
+		rows, err := sqlDB.Query(`SELECT name, created FROM stacks WHERE team=? AND parent='' ORDER BY created DESC`, team)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -652,7 +714,7 @@ func (p *Panel) handleStacks(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(viewPlan(s.plan))
 			return
 		}
-		if err := p.createStack(s, team, req.Token, req.Vars); err != nil {
+		if err := p.createStack(s, team, req.Token, req.Vars, nil); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -667,14 +729,7 @@ func (p *Panel) handleStacks(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "no such stack", http.StatusNotFound)
 			return
 		}
-		for _, s := range stackApps(name) {
-			p.removeApp(s.App)
-		}
-		for _, d := range stackDatabases(name) {
-			p.removeStackDB(d)
-		}
-		_ = p.eng.RemoveNetwork(stackNetwork(name))
-		_, _ = sqlDB.Exec(`DELETE FROM stacks WHERE name=?`, name)
+		p.removeStack(name)
 		p.audit(r, "stack.delete", name, "")
 		w.WriteHeader(http.StatusNoContent)
 

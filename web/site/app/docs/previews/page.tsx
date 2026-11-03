@@ -62,6 +62,12 @@ export default function Previews() {
         install shows a link under <strong>Settings → Integrations</strong> to grant them.
       </Callout>
 
+      <p>
+        Closing or merging a pull request removes its branch&apos;s previews, as does deleting the
+        branch. A push to the branch brings a project&apos;s automatic preview back. For previews of a
+        whole stack, see <a href="/docs/compose">Docker Compose</a>.
+      </p>
+
       <h2>Only what the branch changed</h2>
       <p>
         If a repository holds several projects, each in its own root directory, a branch only gets

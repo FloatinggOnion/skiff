@@ -39,6 +39,21 @@ func writeGateFile() error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	stackRows, err := sqlDB.Query(`SELECT s.app, p.preview_password FROM sources s
+		JOIN stacks c ON c.name = s.stack JOIN stacks p ON p.name = c.parent WHERE p.preview_password<>''`)
+	if err != nil {
+		return err
+	}
+	defer stackRows.Close()
+	for stackRows.Next() {
+		var app, hash string
+		if stackRows.Scan(&app, &hash) == nil {
+			apps[app] = hash
+		}
+	}
+	if err := stackRows.Err(); err != nil {
+		return err
+	}
 	return gate.Save(gateFile(), apps)
 }
 

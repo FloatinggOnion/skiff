@@ -22,6 +22,7 @@ import {
   type StackRequest,
 } from '@/services/api.service'
 import { stackSchema, type StackInput } from '@/validations/stack'
+import { StackPreviews } from './stack-previews'
 import { StackUpdateDialog } from './stack-update-dialog'
 
 function describeItem(it: StackPlanItem) {
@@ -296,6 +297,7 @@ function StackCard({ stack }: { stack: Stack }) {
           )
         })}
       </ul>
+      {stack.fromGit && <StackPreviews stack={stack} />}
       {error && <p className="p-3 text-xs text-danger">{error}</p>}
       <StackUpdateDialog stack={stack} open={updating} onOpenChange={setUpdating} />
     </section>

@@ -40,6 +40,7 @@ export type StackMember = {
   engine?: string
   state: string
   public?: boolean
+  url?: string
 }
 
 export type StackChange = {
@@ -60,12 +61,20 @@ export type StackChanges = {
   deletesData: boolean
 }
 
+export type StackPreviewMode = '' | 'empty' | 'copy'
+
 export type Stack = {
   name: string
   created: number
   fromGit?: boolean
   held?: string
   members: StackMember[]
+  branch?: string
+  previewData: StackPreviewMode
+  previewPassword: boolean
+  previewError?: string
+  previewLimit: number
+  previews: Stack[]
 }
 
 class StacksService extends BaseService {
@@ -91,6 +100,14 @@ class StacksService extends BaseService {
 
   remove(name: string) {
     return this.delete('/stacks', { params: { name } })
+  }
+
+  setPreviews(name: string, mode: StackPreviewMode, password?: string) {
+    return this.put('/stacks/previews', { name, mode, password })
+  }
+
+  createPreview(name: string, branch: string) {
+    return this.post<{ name: string }>('/stacks/previews', { name, branch })
   }
 }
 

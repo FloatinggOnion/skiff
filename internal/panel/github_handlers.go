@@ -154,6 +154,7 @@ func (p *Panel) onPush(push github.Push) {
 			recordAudit(pv.Team, AuditEntry{Actor: "push", Action: "project.delete", Target: pv.App, Detail: "branch deleted"})
 			go p.removeApp(pv.App)
 		}
+		p.removeBranchStacks(push.Repo, push.Branch, "branch deleted")
 		return
 	}
 	for _, name := range stacksForPush(push.Repo, push.Branch) {
@@ -184,8 +185,15 @@ func (p *Panel) onPush(push github.Push) {
 
 // onPullRequest posts the preview comment on a pull request opened after its branch's preview was built.
 func (p *Panel) onPullRequest(pr github.PullRequest) {
+	p.onStackPullRequest(pr)
 	switch pr.Action {
 	case "opened", "reopened", "ready_for_review":
+	case "closed":
+		for _, pv := range branchPreviews(pr.Repo, pr.Branch) {
+			recordAudit(pv.Team, AuditEntry{Actor: "push", Action: "project.delete", Target: pv.App, Detail: "pull request closed"})
+			go p.removeApp(pv.App)
+		}
+		return
 	default:
 		return
 	}

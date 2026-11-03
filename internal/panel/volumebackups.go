@@ -390,7 +390,7 @@ func (p *Panel) handleVolumeBackups(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, out)
 			return
 		}
-		if src.Parent != "" {
+		if src.Parent != "" || isPreviewStack(src.Stack) {
 			http.Error(w, "previews use empty copies of a project's volumes, so they aren't backed up", http.StatusBadRequest)
 			return
 		}
@@ -504,7 +504,7 @@ func (p *Panel) volumeBackupLoop() {
 		guard("volumeBackupLoop", func() {
 			now := time.Now().Unix()
 			for _, src := range allSources() {
-				if src.Parent != "" {
+				if src.Parent != "" || isPreviewStack(src.Stack) {
 					continue
 				}
 				for _, v := range p.volumeDefs(src) {

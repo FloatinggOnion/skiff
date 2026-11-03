@@ -124,8 +124,40 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
         the last service using it. Other private services on your team stay out of reach.
       </p>
 
+      <h2>Previews for pull requests</h2>
+      <p>
+        A stack from a GitHub repository can give each pull request its own copy of every service, with
+        its own private network and databases. Choose what it starts with on the stack&apos;s card under{" "}
+        <strong>Stacks</strong>:
+      </p>
+      <ul>
+        <li>
+          <strong>Off</strong>, the default: pull requests start nothing.
+        </li>
+        <li>
+          <strong>Empty databases:</strong> new databases with no data.
+        </li>
+        <li>
+          <strong>A copy of the latest backups:</strong> each database starts with its own copy, matched
+          by service name. If a copy can&apos;t be made, the preview is removed and the stack&apos;s card
+          says why, so it never starts with the wrong data.
+        </li>
+      </ul>
+      <p>
+        Pushing to the branch updates its preview, and closing or merging the pull request removes it,
+        along with its data. A preview&apos;s data isn&apos;t backed up. Up to 3 can run at once per
+        stack, because each one runs every service on your server. To preview a branch with no pull
+        request, enter it on the same card, then delete that preview yourself if it has no pull request
+        to close.
+      </p>
       <Callout>
-        Previews aren&apos;t available for a stack&apos;s services. Pushes only reach Skiff with GitHub connected, and an access token
+        Previews use the values you entered for the stack, so a real API key is a real API key there too.
+        If you copy data, set a preview password, because anyone who can open a preview can reach what
+        its apps show. Pull requests from forks don&apos;t get previews.
+      </Callout>
+
+      <Callout>
+        Pushes only reach Skiff with GitHub connected, and an access token
         is only used when you create or update the stack, so connect GitHub for private repositories.
       </Callout>
     </article>

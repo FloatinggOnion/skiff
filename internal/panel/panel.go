@@ -164,6 +164,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/jobs/run", p.protected(p.handleJobRun))
 	mux.HandleFunc("/api/workers", p.protected(p.handleWorkers))
 	mux.HandleFunc("/api/stacks", p.protected(p.handleStacks))
+	mux.HandleFunc("/api/stacks/previews", p.protected(p.handleStackPreviews))
 	mux.HandleFunc("/api/stacks/plan", p.protected(p.handleStackPlan))
 	mux.HandleFunc("/api/stacks/changes", p.protected(p.handleStackChanges))
 	mux.HandleFunc("/api/stacks/update", p.protected(p.handleStackUpdate))

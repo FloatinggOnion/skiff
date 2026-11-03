@@ -186,7 +186,7 @@ func (p *Panel) apiCreatePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if src.Stack != "" {
-		apiErr(w, http.StatusConflict, "previews of a Compose stack's services aren't supported yet")
+		apiErr(w, http.StatusConflict, "A stack's services get previews together: turn them on under Stacks")
 		return
 	}
 	if src.Image != "" {

@@ -18,17 +18,20 @@ import (
 )
 
 type stackRecord struct {
-	Name, Team, Branch, Path, CloneURL, Held string
-	Vars                                     map[string]string
+	Name, Team, Repo, Branch, Path, CloneURL, Held string
+	Parent, PreviewData, PreviewError              string
+	PreviewPassword                                bool
+	Vars                                           map[string]string
 }
 
 func getStackRecord(name string) (stackRecord, bool) {
 	r := stackRecord{Name: name, Vars: map[string]string{}}
-	var sealed string
-	if sqlDB.QueryRow(`SELECT team,branch,path,clone_url,vars,held FROM stacks WHERE name=?`, name).
-		Scan(&r.Team, &r.Branch, &r.Path, &r.CloneURL, &sealed, &r.Held) != nil {
+	var sealed, hash string
+	if sqlDB.QueryRow(`SELECT team,repo,branch,path,clone_url,vars,held,parent,preview_data,preview_error,preview_password FROM stacks WHERE name=?`, name).
+		Scan(&r.Team, &r.Repo, &r.Branch, &r.Path, &r.CloneURL, &sealed, &r.Held, &r.Parent, &r.PreviewData, &r.PreviewError, &hash) != nil {
 		return stackRecord{}, false
 	}
+	r.PreviewPassword = hash != ""
 	if seal.OpenAll(&sealed) == nil && sealed != "" {
 		_ = json.Unmarshal([]byte(sealed), &r.Vars)
 	}
@@ -542,6 +545,7 @@ func (p *Panel) syncStackOnPush(name string, push github.Push) {
 	if !ok {
 		return
 	}
+	defer p.commentOnStackPreview(name, shortCommit(push.Commit))
 	var built []Source
 	for _, src := range stackApps(name) {
 		if src.Auto && touched(push.Paths, src.RootDir) {

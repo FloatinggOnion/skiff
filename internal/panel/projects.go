@@ -73,7 +73,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 		if !ok || src.Team != team {
 			continue
 		}
-		if src.Parent != "" {
+		if src.Parent != "" || isPreviewStack(src.Stack) {
 			continue
 		}
 		av := appView{

@@ -79,6 +79,10 @@ var migrations = []string{
 	`ALTER TABLE sources ADD COLUMN tcp_port INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE databases ADD COLUMN preview_app TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE stacks ADD COLUMN held TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE stacks ADD COLUMN parent TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE stacks ADD COLUMN preview_data TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE stacks ADD COLUMN preview_password TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE stacks ADD COLUMN preview_error TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN sleep_after INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE sources ADD COLUMN health_path TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN health_timeout INTEGER NOT NULL DEFAULT 0`,
@@ -402,7 +406,11 @@ CREATE TABLE IF NOT EXISTS stacks (
   clone_url TEXT NOT NULL DEFAULT '',
   created   INTEGER NOT NULL,
   vars      TEXT NOT NULL DEFAULT '',
-  held      TEXT NOT NULL DEFAULT ''
+  held      TEXT NOT NULL DEFAULT '',
+  parent           TEXT NOT NULL DEFAULT '',
+  preview_data     TEXT NOT NULL DEFAULT '',
+  preview_password TEXT NOT NULL DEFAULT '',
+  preview_error    TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS volume_backups (
   id          TEXT PRIMARY KEY,
