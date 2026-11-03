@@ -49,8 +49,8 @@ export function Hero() {
             Ship it to a server you own.
           </h1>
           <p className="hero-item text-muted mt-6 max-w-md text-lg leading-relaxed">
-            Push-to-deploy, automatic HTTPS, managed databases and preview environments, on one
-            server you control and pay a flat price for.
+            A self-hosted deployment platform. Build, deploy and manage your apps on your own
+            infrastructure, without piecing together separate tools.
           </p>
           <div className="hero-item mt-8 flex flex-wrap items-center gap-3">
             <a href="/docs" className="btn-brand rounded-lg px-5 py-2.5 text-sm font-semibold">

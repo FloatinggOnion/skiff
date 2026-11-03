@@ -19,7 +19,7 @@ const mono = JetBrains_Mono({
 
 const title = "Skiff — Ship it to a server you own";
 const description =
-  "Push-to-deploy with automatic HTTPS, managed databases, and preview environments — running on infrastructure you control, not rented.";
+  "A self-hosted deployment platform. Build, deploy and manage your apps on your own infrastructure, with automatic HTTPS, managed databases and backups, without piecing together separate tools.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://useskiff.xyz"),

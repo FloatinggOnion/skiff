@@ -1,15 +1,15 @@
 const reasons = [
   {
-    title: "The machine is yours",
-    body: "Any Linux server from any provider, at its flat monthly price. Skiff shows you its disk and memory, and what each app costs out of it.",
+    title: "Simpler deployment",
+    body: "Push to Git or run one command. Skiff detects your stack, builds it with Docker and switches to the new version once it's healthy. Most stacks don't need a Dockerfile.",
   },
   {
-    title: "Small enough to understand",
-    body: "One Go binary and plain Docker containers. No cluster, no YAML, no control plane to run. If you know what a server is, you know how this works.",
+    title: "Less infrastructure overhead",
+    body: "Automatic HTTPS, domain routing, managed databases, backups and a control panel all come from one Go binary. There's no cluster to run and no stack of tools to wire together.",
   },
   {
-    title: "Nothing to leave behind",
-    body: "Open source, under MIT or Apache 2.0. Your apps are ordinary containers and your data sits on your disk, so you can walk away whenever you like.",
+    title: "More control",
+    body: "Any Linux server from any provider, at its flat monthly price. It's open source, your apps are ordinary containers and your data sits on your disk, so you can walk away whenever you like.",
   },
 ];
 

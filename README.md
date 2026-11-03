@@ -9,7 +9,13 @@
   <img src="web/brand/dashboard-light.png" alt="The Skiff dashboard: a project's live status above a copper line, its latest deploy log below it">
 </picture>
 
-**Ship it to a server you own.** Push-to-deploy with a web console, automatic HTTPS, managed databases, and preview environments — running on infrastructure you control, not rented. One small Go binary detects your stack, builds it, and runs it on Docker, local or over SSH.
+**Ship it to a server you own.** A self-hosted deployment platform that builds, deploys and manages your apps on your own infrastructure, without piecing together separate tools.
+
+- **Simpler deployment:** push to Git or run one command, with Docker-based builds for most stacks.
+- **Less infrastructure overhead:** automatic HTTPS, domain routing, managed databases, backups and a control panel.
+- **More control:** your server, your data, ordinary containers, and open source.
+
+One small Go binary detects your stack, builds it, and runs it on Docker, local or over SSH.
 
 ```
 $ skiff deploy
