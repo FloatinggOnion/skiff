@@ -35,6 +35,16 @@ func (e *Engine) State(container string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// Restarts counts how many times a container has been restarted after exiting.
+func (e *Engine) Restarts(container string) int {
+	out, err := e.command("inspect", "-f", "{{.RestartCount}}", container).Output()
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
+	return n
+}
+
 func (e *Engine) Containers() ([]string, error) {
 	out, err := e.command("ps", "-a", "--filter", "label=skiff=1", "--format", "{{.Names}}").Output()
 	if err != nil {

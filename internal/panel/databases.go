@@ -585,6 +585,11 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Public, d.PublicPort = on, port
+	action := "database.private"
+	if on {
+		action = "database.public"
+	}
+	p.audit(r, action, d.Name, d.Engine)
 	writeJSON(w, p.toDatabase(d))
 }
 
@@ -596,5 +601,6 @@ func (p *Panel) handleDBShell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e := dbEngines[d.Engine]
+	p.audit(r, "database.shell", d.Name, d.Engine)
 	p.serveContainerShell(w, r, d.Container, e.shell(d.Username, d.Password, d.DBName))
 }

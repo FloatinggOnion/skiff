@@ -33,8 +33,28 @@ func (p *Panel) handleExec(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "console isn't available for remote apps yet", http.StatusBadRequest)
 		return
 	}
-	p.serveContainerShell(w, r, a.Container,
+	container, detail := a.Container, ""
+	if worker := sanitizeName(r.URL.Query().Get("worker")); worker != "" {
+		container = p.runningWorker(app, worker)
+		if container == "" {
+			http.Error(w, "that worker isn't running", http.StatusConflict)
+			return
+		}
+		detail = "worker " + worker
+	}
+	p.audit(r, "console.open", app, detail)
+	p.serveContainerShell(w, r, container,
 		[]string{"sh", "-c", "command -v bash >/dev/null 2>&1 && exec bash || exec sh"})
+}
+
+func (p *Panel) runningWorker(app, worker string) string {
+	names := workerNames(app)
+	for _, c := range p.eng.WorkerContainers(app) {
+		if workerOf(app, c, names) == worker && p.eng.State(c) == "running" {
+			return c
+		}
+	}
+	return ""
 }
 
 func (p *Panel) serveContainerShell(w http.ResponseWriter, r *http.Request, container string, shellArgs []string) {

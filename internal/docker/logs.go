@@ -3,7 +3,6 @@ package docker
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -30,17 +29,6 @@ func (e *Engine) StreamLogs(ctx context.Context, container string, out io.Writer
 	cmd.Stdout = out
 	cmd.Stderr = out
 	return cmd.Run()
-}
-
-func (e *Engine) StreamLogsSSE(ctx context.Context, container string, w io.Writer, flush func()) {
-	pr, pw := io.Pipe()
-	go func() { _ = e.StreamLogs(ctx, container, pw); pw.Close() }()
-	sc := bufio.NewScanner(pr)
-	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
-	for sc.Scan() {
-		fmt.Fprintf(w, "data: %s\n\n", sc.Text())
-		flush()
-	}
 }
 
 // FollowLogs streams a container's output from since onward, calling line for each one with docker's timestamp; it returns when the container stops or ctx ends.

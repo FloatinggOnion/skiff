@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/registry"
 )
 
 const (
@@ -282,4 +285,90 @@ func (p *Panel) handleLogHistory(w http.ResponseWriter, r *http.Request) {
 		lines = []logLine{}
 	}
 	writeJSON(w, map[string]any{"lines": lines, "truncated": more})
+}
+
+type logTarget struct{ container, label string }
+
+func (t logTarget) prefix() string {
+	if t.label == "" {
+		return ""
+	}
+	return "[" + t.label + "] "
+}
+
+func workerNames(app string) []string {
+	var names []string
+	for _, w := range listWorkers(app) {
+		names = append(names, w.Name)
+	}
+	return names
+}
+
+// workerOf finds which worker a container belongs to. The longest match wins, so a worker named job doesn't claim job-email's containers.
+func workerOf(app, container string, names []string) string {
+	best := ""
+	for _, n := range names {
+		if strings.HasPrefix(container, workerPrefix(app, n)) && len(n) > len(best) {
+			best = n
+		}
+	}
+	return best
+}
+
+// logTargets lists everything an app runs. Lines are labelled only when there's more than one source.
+func logTargets(name string, a registry.App, workers, names []string) []logTarget {
+	web := []string{a.Container}
+	if len(a.Replicas) > 0 {
+		web = web[:0]
+		for _, r := range a.Replicas {
+			web = append(web, r.Container)
+		}
+	}
+	var out []logTarget
+	for i, c := range web {
+		label := name
+		if len(web) > 1 {
+			label = fmt.Sprintf("%s %d", name, i+1)
+		}
+		out = append(out, logTarget{c, label})
+	}
+	counts := map[string]int{}
+	for _, c := range workers {
+		label := workerOf(name, c, names)
+		if label == "" {
+			label = c
+		}
+		counts[label]++
+		if counts[label] > 1 {
+			label = fmt.Sprintf("%s %d", label, counts[label])
+		}
+		out = append(out, logTarget{c, label})
+	}
+	if len(out) == 1 {
+		out[0].label = ""
+	}
+	return out
+}
+
+// followLogs merges live output until ctx ends or every container has stopped.
+func (p *Panel) followLogs(ctx context.Context, targets []logTarget, emit func(line string)) {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, t := range targets {
+		wg.Add(1)
+		go func(t logTarget) {
+			defer wg.Done()
+			pr, pw := io.Pipe()
+			go func() { _ = p.eng.StreamLogs(ctx, t.container, pw); _ = pw.Close() }()
+			sc := bufio.NewScanner(pr)
+			sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+			for sc.Scan() {
+				mu.Lock()
+				emit(t.prefix() + sc.Text())
+				mu.Unlock()
+			}
+			_ = pr.Close()
+		}(t)
+	}
+	wg.Wait()
 }

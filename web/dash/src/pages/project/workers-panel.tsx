@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { Link } from 'react-router'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cog, Plus, Trash2 } from 'lucide-react'
+import { Cog, Plus, ScrollText, Terminal, Trash2 } from 'lucide-react'
+import { ConsoleDrawer } from '@/components/console-drawer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -22,6 +24,7 @@ export function WorkersPanel({ app }: { app: string }) {
     refetchInterval: 8000,
   })
   const [adding, setAdding] = useState(false)
+  const [consoleFor, setConsoleFor] = useState<string | null>(null)
   const [serverError, setServerError] = useState('')
   const reload = () => qc.invalidateQueries({ queryKey: queryKeys.workers(app) })
 
@@ -155,6 +158,23 @@ export function WorkersPanel({ app }: { app: string }) {
                 >
                   {wk.running}/{wk.replicas} running
                 </span>
+                <Link
+                  to={`/logs?app=${encodeURIComponent(app)}`}
+                  title="Logs"
+                  aria-label={`Logs for ${wk.name}`}
+                  className="text-muted-foreground hover:text-foreground p-1.5 transition"
+                >
+                  <ScrollText className="h-3.5 w-3.5" />
+                </Link>
+                <button
+                  onClick={() => setConsoleFor(wk.name)}
+                  disabled={wk.running === 0}
+                  title={wk.running === 0 ? "This worker isn't running" : 'Open a shell inside this worker'}
+                  aria-label={`Console for ${wk.name}`}
+                  className="text-muted-foreground hover:text-foreground p-1.5 transition disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Terminal className="h-3.5 w-3.5" />
+                </button>
                 <button
                   onClick={() => del(wk.id)}
                   title="Delete"
@@ -168,6 +188,9 @@ export function WorkersPanel({ app }: { app: string }) {
         )
       )}
       {serverError && !adding && <p className="text-xs text-danger">{serverError}</p>}
+      {consoleFor && (
+        <ConsoleDrawer app={app} worker={consoleFor} onClose={() => setConsoleFor(null)} />
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type RunSpec struct {
@@ -57,6 +58,8 @@ func (e *Engine) memoryOr(own string) string {
 
 func safetyCap(total int64) int64 { return total / 100 * SafetyCapPercent }
 
+const hostPortWait = 10 * time.Second
+
 func (e *Engine) Run(s RunSpec) (int, error) {
 	defer invalidateStates()
 	_ = e.command("rm", "-f", s.Name).Run()
@@ -105,7 +108,17 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("docker run failed: %s", firstLine(out))
 	}
-	return e.HostPort(s.Name, s.ContainerPort)
+	return e.waitHostPort(s.Name, s.ContainerPort)
+}
+
+// waitHostPort allows for an app that exits straight away: a restarting container has no published port until it's running again, and one that crashes once waiting for its database can still come up.
+func (e *Engine) waitHostPort(name string, containerPort int) (int, error) {
+	port, err := e.HostPort(name, containerPort)
+	for deadline := time.Now().Add(hostPortWait); err != nil && time.Now().Before(deadline); {
+		time.Sleep(250 * time.Millisecond)
+		port, err = e.HostPort(name, containerPort)
+	}
+	return port, err
 }
 
 // WorkerSpec runs a long-lived background process with no published port or routing labels, so the edge router never targets it.

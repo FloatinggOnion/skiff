@@ -38,7 +38,7 @@ export default function LogsPage() {
       <header className="mb-6 shrink-0">
         <h1 className="text-xl font-semibold tracking-tight">Logs</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Live output straight from the container, and the last 7 days saved and searchable.
+          Live output from the app and its workers, and the last 7 days saved and searchable.
         </p>
       </header>
 

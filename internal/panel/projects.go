@@ -479,7 +479,10 @@ func (p *Panel) handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	p.eng.StreamLogsSSE(r.Context(), app.Container, w, fl.Flush)
+	p.followLogs(r.Context(), logTargets(name, app, p.eng.WorkerContainers(name), workerNames(name)), func(line string) {
+		fmt.Fprintf(w, "data: %s\n\n", line)
+		fl.Flush()
+	})
 }
 
 func (p *Panel) handleDown(w http.ResponseWriter, r *http.Request) {

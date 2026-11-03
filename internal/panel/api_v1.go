@@ -1,9 +1,11 @@
 package panel
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -307,9 +309,32 @@ func (p *Panel) apiLogs(w http.ResponseWriter, r *http.Request) {
 	if n, err := strconv.Atoi(r.URL.Query().Get("lines")); err == nil && n > 0 && n <= 2000 {
 		lines = n
 	}
-	var buf bytes.Buffer
-	_ = p.eng.Logs(a.Container, false, strconv.Itoa(lines), &buf)
-	apiJSON(w, http.StatusOK, map[string]string{"app": name, "logs": buf.String()})
+	targets := logTargets(name, a, p.eng.WorkerContainers(name), workerNames(name))
+	if r.URL.Query().Get("follow") == "1" {
+		fl, ok := w.(http.Flusher)
+		if !ok {
+			apiErr(w, http.StatusInternalServerError, "streaming unsupported")
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fl.Flush()
+		p.followLogs(r.Context(), targets, func(line string) {
+			fmt.Fprintln(w, line)
+			fl.Flush()
+		})
+		return
+	}
+	var all strings.Builder
+	for _, t := range targets {
+		var buf bytes.Buffer
+		_ = p.eng.Logs(t.container, false, strconv.Itoa(lines), &buf)
+		sc := bufio.NewScanner(&buf)
+		sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+		for sc.Scan() {
+			all.WriteString(t.prefix() + sc.Text() + "\n")
+		}
+	}
+	apiJSON(w, http.StatusOK, map[string]string{"app": name, "logs": all.String()})
 }
 
 func (p *Panel) apiRollback(w http.ResponseWriter, r *http.Request) {

@@ -13,7 +13,7 @@ const groups: { title: string; rows: [string, string, string][] }[] = [
     rows: [
       ["GET", "/apps", "List the team's apps."],
       ["GET", "/apps/{name}", "One app: state, address, replicas and latest commit."],
-      ["GET", "/apps/{name}/logs", "Recent output. Add ?lines= up to 2000. The default is 200."],
+      ["GET", "/apps/{name}/logs", "Recent output from the app and its workers. Add ?lines= up to 2000, or ?follow=1 to stream it as plain text."],
       ["GET", "/apps/{name}/insights", "Traffic and uptime. Add ?range= with 1h, 24h or 7d. The default is 24h."],
     ],
   },

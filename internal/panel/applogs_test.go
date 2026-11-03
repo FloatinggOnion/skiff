@@ -1,8 +1,11 @@
 package panel
 
 import (
+	"slices"
 	"testing"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/registry"
 )
 
 func TestAppLogWriteAndSearch(t *testing.T) {
@@ -54,5 +57,30 @@ func TestAppLogDayCap(t *testing.T) {
 	lines, _ := searchAppLogs("big", "", false, now.Add(-time.Hour), now.Add(time.Hour), 100)
 	if len(lines) != 2 || lines[1].Container != "skiff" {
 		t.Fatalf("lines = %+v", lines)
+	}
+}
+
+func TestLogTargets(t *testing.T) {
+	single := logTargets("shop", registry.App{Container: "c1"}, nil, nil)
+	if len(single) != 1 || single[0].prefix() != "" {
+		t.Fatalf("a lone container shouldn't be labelled: %+v", single)
+	}
+	many := logTargets("shop", registry.App{Container: "c1", Replicas: []registry.Replica{{Container: "c1"}, {Container: "c2"}}}, []string{"skiff-shop-mailer-a", "skiff-shop-mailer-b", "left-behind"}, []string{"mailer"})
+	want := []logTarget{{"c1", "shop 1"}, {"c2", "shop 2"}, {"skiff-shop-mailer-a", "mailer"}, {"skiff-shop-mailer-b", "mailer 2"}, {"left-behind", "left-behind"}}
+	if !slices.Equal(many, want) {
+		t.Fatalf("got %+v, want %+v", many, want)
+	}
+}
+
+func TestWorkerOf(t *testing.T) {
+	names := []string{"job", "job-email"}
+	if got := workerOf("shop", "skiff-shop-job-email-abc", names); got != "job-email" {
+		t.Fatalf("longest match should win, got %q", got)
+	}
+	if got := workerOf("shop", "skiff-shop-job-abc", names); got != "job" {
+		t.Fatalf("got %q", got)
+	}
+	if got := workerOf("shop", "skiff-other-job-abc", names); got != "" {
+		t.Fatalf("another app's container matched %q", got)
 	}
 }
