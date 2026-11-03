@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -19,7 +20,7 @@ func backupsDir() string { return filepath.Join(skiffDir(), "backups") }
 type Backup struct {
 	ID      string `json:"id"`
 	Size    int64  `json:"size"`
-	Trigger string `json:"trigger"` // manual | scheduled
+	Trigger string `json:"trigger"` // manual | scheduled | pre-restore
 	Created int64  `json:"created"`
 	Offsite string `json:"offsite,omitempty"` // "" not sent, pending, ok or failed
 }
@@ -155,6 +156,13 @@ func (p *Panel) runBackup(d dbRow, trigger string) (backupRow, error) {
 	return b, nil
 }
 
+// loadBackup replaces the database's contents with a dump.
+func (p *Panel) loadBackup(ctx context.Context, d dbRow, dump io.Reader) error {
+	e := dbEngines[d.Engine]
+	return p.eng.Exec(ctx, d.Container, e.restoreCmd(d.Username, d.Password, d.DBName),
+		io.MultiReader(strings.NewReader(e.restoreReset), dump), io.Discard)
+}
+
 func toBackup(b backupRow) Backup {
 	return Backup{ID: b.ID, Size: b.Size, Trigger: b.Trigger, Created: b.Created, Offsite: b.Offsite}
 }
@@ -234,10 +242,15 @@ func (p *Panel) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	// Keep what's there now, so restoring the wrong backup can be undone. The file above stays readable even if this prunes it.
+	if _, err := p.runBackup(d, "pre-restore"); err != nil {
+		http.Error(w, "couldn't back up the current data first, so nothing was changed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	if err := p.eng.Exec(ctx, d.Container, e.restoreCmd(d.Username, d.Password, d.DBName), f, io.Discard); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := p.loadBackup(ctx, d, f); err != nil {
+		http.Error(w, "restore failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	p.audit(r, "backup.restore", d.Name, "")

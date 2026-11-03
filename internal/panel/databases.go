@@ -26,7 +26,9 @@ type dbEngine struct {
 	backupExt  string
 	dumpCmd    func(user, pass, dbname string) []string
 	restoreCmd func(user, pass, dbname string) []string
-	tls        *dbTLS
+	// restoreReset runs ahead of the dump, so a restore returns the database to the backup rather than merging with what's there.
+	restoreReset string
+	tls          *dbTLS
 }
 
 type dbTLS struct {
@@ -34,6 +36,27 @@ type dbTLS struct {
 	cmd        []string
 	hasCerts   bool
 }
+
+const postgresRestoreReset = `SET client_min_messages = warning;
+SET lock_timeout = '30s';
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();
+DO $$ DECLARE s text; BEGIN
+  FOR s IN SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema' LOOP
+    EXECUTE format('DROP SCHEMA %I CASCADE', s);
+  END LOOP;
+END $$;
+CREATE SCHEMA public;
+`
+
+const mysqlRestoreReset = `SET FOREIGN_KEY_CHECKS = 0;
+SET SESSION group_concat_max_len = 1048576;
+SET @v = (SELECT GROUP_CONCAT(CONCAT('` + "`" + `', table_name, '` + "`" + `')) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'VIEW');
+SET @s = IFNULL(CONCAT('DROP VIEW ', @v), 'DO 0');
+PREPARE q FROM @s; EXECUTE q; DEALLOCATE PREPARE q;
+SET @t = (SELECT GROUP_CONCAT(CONCAT('` + "`" + `', table_name, '` + "`" + `')) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE');
+SET @s = IFNULL(CONCAT('DROP TABLE ', @t), 'DO 0');
+PREPARE q FROM @s; EXECUTE q; DEALLOCATE PREPARE q;
+`
 
 var dbEngines = map[string]dbEngine{
 	"postgres": {
@@ -53,9 +76,13 @@ var dbEngines = map[string]dbEngine{
 		shell: func(user, pass, dbname string) []string {
 			return []string{"sh", "-c", fmt.Sprintf("PGPASSWORD=%s exec psql -U %s -d %s", pass, user, dbname)}
 		},
-		backupExt:  ".sql",
-		dumpCmd:    func(user, _, dbname string) []string { return []string{"pg_dump", "-U", user, "-d", dbname} },
-		restoreCmd: func(user, _, dbname string) []string { return []string{"psql", "-U", user, "-d", dbname} },
+		backupExt: ".sql",
+		dumpCmd:   func(user, _, dbname string) []string { return []string{"pg_dump", "-U", user, "-d", dbname} },
+		// One transaction that stops at the first error: a restore either completes or changes nothing.
+		restoreCmd: func(user, _, dbname string) []string {
+			return []string{"psql", "-U", user, "-d", dbname, "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "-"}
+		},
+		restoreReset: postgresRestoreReset,
 		// Fix key perms as root, then hand off to the normal entrypoint with ssl on.
 		tls: &dbTLS{
 			hasCerts:   true,
@@ -89,11 +116,12 @@ var dbEngines = map[string]dbEngine{
 		},
 		backupExt: ".sql",
 		dumpCmd: func(user, pass, dbname string) []string {
-			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysqldump -u %s %s", pass, user, dbname)}
+			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysqldump --no-tablespaces -u %s %s", pass, user, dbname)}
 		},
 		restoreCmd: func(user, pass, dbname string) []string {
 			return []string{"sh", "-c", fmt.Sprintf("MYSQL_PWD=%s mysql -u %s %s", pass, user, dbname)}
 		},
+		restoreReset: mysqlRestoreReset,
 		// MySQL 8 auto-generates certs and serves TLS with no config — the public URL just needs to ask for it.
 		tls: &dbTLS{},
 	},
@@ -121,8 +149,9 @@ var dbEngines = map[string]dbEngine{
 		dumpCmd: func(user, pass, dbname string) []string {
 			return []string{"mongodump", "-u", user, "-p", pass, "--authenticationDatabase", "admin", "--db", dbname, "--archive", "--gzip"}
 		},
-		restoreCmd: func(user, pass, _ string) []string {
-			return []string{"mongorestore", "-u", user, "-p", pass, "--authenticationDatabase", "admin", "--archive", "--gzip", "--drop"}
+		restoreCmd: func(user, pass, dbname string) []string {
+			auth := fmt.Sprintf("-u %s -p %s --authenticationDatabase admin", user, pass)
+			return []string{"sh", "-c", fmt.Sprintf("mongosh --quiet %s %s --eval 'db.dropDatabase()' </dev/null >/dev/null && exec mongorestore %s --archive --gzip --drop", auth, dbname, auth)}
 		},
 		// preferTLS lets the entrypoint's localhost init connect in the clear while offering TLS to public clients.
 		tls: &dbTLS{

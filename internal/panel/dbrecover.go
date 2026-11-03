@@ -105,7 +105,7 @@ func (p *Panel) restoreLatestOffsite(d dbRow) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		last = p.eng.Exec(ctx, d.Container, e.restoreCmd(d.Username, d.Password, d.DBName), in, io.Discard)
+		last = p.loadBackup(ctx, d, in)
 		in.Close()
 		if last == nil {
 			return key, nil
