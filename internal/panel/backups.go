@@ -301,7 +301,7 @@ func (p *Panel) backupLoop() {
 		guard("backupLoop", func() {
 			now := time.Now().Unix()
 			for _, d := range allDatabases() {
-				if dbEngines[d.Engine].backupExt == "" {
+				if dbEngines[d.Engine].backupExt == "" || d.PreviewApp != "" {
 					continue
 				}
 				if now-lastBackupAt(d.ID) < 24*3600 {

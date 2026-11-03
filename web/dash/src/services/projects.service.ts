@@ -116,6 +116,13 @@ export type Volume = {
   attached: boolean
 }
 
+export type PreviewDataMode = '' | 'empty' | 'copy'
+
+export type PreviewData = {
+  mode: PreviewDataMode
+  databases: string[]
+}
+
 export type VolumeBackup = {
   id: string
   volume: string
@@ -245,6 +252,14 @@ class ProjectsService extends BaseService {
 
   deleteWorker(id: string) {
     return this.delete('/workers', { params: { id } })
+  }
+
+  previewData(app: string) {
+    return this.get<PreviewData>('/project/preview-data', { params: { app } })
+  }
+
+  setPreviewData(app: string, mode: PreviewDataMode) {
+    return this.put('/project/preview-data', { mode }, { params: { app } })
   }
 
   volumeBackups(app: string, volume: string) {

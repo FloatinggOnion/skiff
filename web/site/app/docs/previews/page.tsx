@@ -38,7 +38,7 @@ export default function Previews() {
         </Step>
       </Steps>
       <p>
-        You can also create one by hand from the project&apos;s <strong>Previews</strong> tab for
+        You can also create one by hand from the project&apos;s <strong>Deployments</strong> tab for
         any branch.
       </p>
 
@@ -76,6 +76,31 @@ export default function Previews() {
         for previews only. Point <code>DATABASE_URL</code> at a staging database there, or switch an
         API key to test mode, and a preview never touches what production uses.
       </p>
+      <h3>Give each preview its own database</h3>
+      <p>
+        Skiff can do this for you. On the project&apos;s <strong>Deployments</strong> tab, choose what a preview gets for
+        each database attached to the project:
+      </p>
+      <ul>
+        <li>
+          <strong>Share the project&apos;s settings</strong> is the default. A preview connects to whatever
+          its environment variables say, so set a preview override if that&apos;s production.
+        </li>
+        <li>
+          <strong>An empty database</strong> starts each preview with a new, empty one.
+        </li>
+        <li>
+          <strong>A copy of the latest backup</strong> starts each preview with real data, up to a day old.
+          Anyone who can open the preview can reach what its app shows, so set a preview password below
+          and don&apos;t use this for data your previews shouldn&apos;t show.
+        </li>
+      </ul>
+      <p>
+        The preview&apos;s connection variable, like <code>DATABASE_URL</code>, is set for you. Its database
+        keeps its data across pushes to the branch, isn&apos;t backed up, and is deleted with the preview.
+        If it can&apos;t be set up, the deploy fails rather than connecting to the project&apos;s database.
+        Only databases attached in Skiff are covered, not addresses you typed in yourself.
+      </p>
       <p>
         If the project has <Link href="/docs/volumes">volumes</Link>, a preview mounts them at the same
         paths, on empty volumes of its own.
@@ -83,7 +108,7 @@ export default function Previews() {
 
       <h2>Password protection</h2>
       <p>
-        On the <strong>Previews</strong> tab, set a password and every preview of the project asks
+        On the project&apos;s <strong>Deployments</strong> tab, set a password and every preview of the project asks
         for it before showing anything. Your production URL stays public. A visitor stays signed in
         to a preview for a week; changing the password signs everyone out. Repeated wrong guesses
         from one address are blocked for a few minutes.
@@ -93,7 +118,7 @@ export default function Previews() {
       <p>
         Deleting a branch removes its previews: containers, images and routes. If your repository
         deletes branches when a pull request merges, previews take care of themselves. You can also
-        remove one from the <strong>Previews</strong> tab at any time.
+        remove one from the <strong>Deployments</strong> tab at any time.
       </p>
     </article>
   );

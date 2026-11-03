@@ -75,6 +75,8 @@ var migrations = []string{
 	`ALTER TABLE databases ADD COLUMN stack TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE databases ADD COLUMN alias TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE stacks ADD COLUMN vars TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN preview_data TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE databases ADD COLUMN preview_app TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE stacks ADD COLUMN held TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN sleep_after INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE sources ADD COLUMN health_path TEXT NOT NULL DEFAULT ''`,
@@ -156,7 +158,8 @@ CREATE TABLE IF NOT EXISTS sources (
   service      TEXT NOT NULL DEFAULT '',
   command      TEXT NOT NULL DEFAULT '',
   dockerfile   TEXT NOT NULL DEFAULT '',
-  health_mode  TEXT NOT NULL DEFAULT ''
+  health_mode  TEXT NOT NULL DEFAULT '',
+  preview_data TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,
@@ -215,7 +218,8 @@ CREATE TABLE IF NOT EXISTS databases (
   volume      TEXT NOT NULL DEFAULT '',
   cmd         TEXT NOT NULL DEFAULT '',
   stack       TEXT NOT NULL DEFAULT '',
-  alias       TEXT NOT NULL DEFAULT ''
+  alias       TEXT NOT NULL DEFAULT '',
+  preview_app TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS db_attachments (
   db_id TEXT NOT NULL,

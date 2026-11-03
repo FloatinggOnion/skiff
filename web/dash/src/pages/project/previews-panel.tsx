@@ -6,6 +6,7 @@ import { useDomains } from '@/hooks/use-domains'
 import { errText } from '@/lib/errors'
 import { type Preview } from '@/services/api.service'
 import { deployDot } from './status'
+import { PreviewData } from './preview-data'
 import { PreviewPassword } from './preview-password'
 
 export function PreviewsPanel({
@@ -60,6 +61,7 @@ export function PreviewsPanel({
         </div>
       </form>
 
+      <PreviewData app={project} />
       <PreviewPassword project={project} enabled={passwordProtected} onChanged={onPasswordChange} />
 
       {previews.length === 0 ? (

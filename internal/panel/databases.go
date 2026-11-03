@@ -221,6 +221,7 @@ type dbRow struct {
 	Image, Volume                           string // set for adopted databases; else the engine's image and <container>-data
 	Cmd                                     string // adopted databases: the JSON command they were started with
 	Stack, Alias                            string // set for a Compose stack's database: its network, and its service name
+	PreviewApp                              string // set for a database made for one preview, and deleted with it
 }
 
 func (d dbRow) image() string {
@@ -237,13 +238,13 @@ func (d dbRow) volume() string {
 	return d.Container + "-data"
 }
 
-const dbCols = `id,team,name,engine,container,host,port,username,password,dbname,created,public,public_port,image,volume,cmd,stack,alias`
+const dbCols = `id,team,name,engine,container,host,port,username,password,dbname,created,public,public_port,image,volume,cmd,stack,alias,preview_app`
 
 func scanDB(row interface{ Scan(...any) error }) (dbRow, bool) {
 	var d dbRow
 	var public int
 	if row.Scan(&d.ID, &d.Team, &d.Name, &d.Engine, &d.Container, &d.Host, &d.Port,
-		&d.Username, &d.Password, &d.DBName, &d.Created, &public, &d.PublicPort, &d.Image, &d.Volume, &d.Cmd, &d.Stack, &d.Alias) != nil {
+		&d.Username, &d.Password, &d.DBName, &d.Created, &public, &d.PublicPort, &d.Image, &d.Volume, &d.Cmd, &d.Stack, &d.Alias, &d.PreviewApp) != nil {
 		return dbRow{}, false
 	}
 	_ = seal.OpenAll(&d.Password)
@@ -278,9 +279,9 @@ func putDB(d dbRow) error {
 	if err != nil {
 		return err
 	}
-	_, err = sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err = sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		d.ID, d.Team, d.Name, d.Engine, d.Container, d.Host, d.Port, d.Username, password,
-		d.DBName, d.Created, b2i(d.Public), d.PublicPort, d.Image, d.Volume, d.Cmd, d.Stack, d.Alias)
+		d.DBName, d.Created, b2i(d.Public), d.PublicPort, d.Image, d.Volume, d.Cmd, d.Stack, d.Alias, d.PreviewApp)
 	return err
 }
 

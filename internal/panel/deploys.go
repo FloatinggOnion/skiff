@@ -150,6 +150,11 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		})
 	}
 
+	if err := p.preparePreviewData(ctx, src, logln); err != nil {
+		finish("✗ this preview's own database couldn't be set up, so it wasn't deployed and can't reach your project's data: " + err.Error())
+		return
+	}
+
 	var ctxDir string
 	var childEnv []string
 	if src.Image != "" {
@@ -335,6 +340,12 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 
 	ctx, superseded, done := beginBuild(src.App, id)
 	defer done()
+
+	if err := p.preparePreviewData(ctx, src, logln); err != nil {
+		logln("✗ this preview's own database couldn't be set up, so it wasn't rolled back: " + err.Error())
+		setDeployStatus(src.App, id, "failed")
+		return
+	}
 
 	env, net := p.appRuntime(src)
 	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, envList(env), net, p.volumeDefs(src)))
