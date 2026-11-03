@@ -93,6 +93,11 @@ export default function Backups() {
         own. Volumes don&apos;t: redeploy the app, then restore the volume from its backups.
       </p>
 
+      <p>
+        Deleting a database or volume also deletes its backups from your server. Copies in your bucket
+        stay, so without a bucket a delete is final.
+      </p>
+
       <h2>What&apos;s encrypted</h2>
       <p>These are encrypted in Skiff&apos;s database with a key derived from your recovery key:</p>
       <ul>

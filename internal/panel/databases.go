@@ -468,6 +468,7 @@ func (p *Panel) handleDatabases(w http.ResponseWriter, r *http.Request) {
 		_ = p.eng.Stop(d.Container)
 		_ = p.eng.Remove(d.Container)
 		_ = p.eng.RemoveVolume(d.volume())
+		removeDatabaseBackups(id)
 		deleteDBRow(id)
 		p.audit(r, "database.delete", d.Name, d.Engine)
 		w.WriteHeader(http.StatusNoContent)

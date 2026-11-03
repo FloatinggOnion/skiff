@@ -178,7 +178,8 @@ export default function DatabasesPage() {
                 if (
                   await confirm({
                     title: `Delete ${db.name}?`,
-                    description: 'This destroys its data.',
+                    description:
+                      'This destroys its data and its backups on this server. Copies in an offsite bucket stay.',
                     confirmText: 'Delete',
                     destructive: true,
                   })

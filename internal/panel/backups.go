@@ -78,6 +78,15 @@ func deleteBackup(b backupRow) {
 	_, _ = sqlDB.Exec(`DELETE FROM backups WHERE id=?`, b.ID)
 }
 
+// removeDatabaseBackups deletes a deleted database's backups from this server, which are unencrypted copies of its data. Copies in the team's bucket stay.
+func removeDatabaseBackups(dbID string) {
+	for _, b := range listBackupRows(dbID) {
+		deleteBackup(b)
+	}
+	_ = os.Remove(filepath.Join(backupsDir(), dbID))
+	_, _ = sqlDB.Exec(`DELETE FROM offsite_objects WHERE db_id=?`, dbID)
+}
+
 func pruneBackups(dbID string, keep int) {
 	all := listBackupRows(dbID)
 	for i := keep; i < len(all); i++ {
