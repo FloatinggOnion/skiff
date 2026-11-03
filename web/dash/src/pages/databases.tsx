@@ -485,6 +485,7 @@ function BackupsDialog({
                   <p className="text-muted-foreground mt-0.5 text-[11px]">
                     {fmtBytes(b.size)}
                     {b.trigger === 'scheduled' && ' · auto'}
+                    {b.trigger === 'pre-restore' && ' · before restore'}
                     {b.offsite === 'ok' && <span className="text-success/80"> · offsite</span>}
                     {b.offsite === 'pending' && ' · copying offsite…'}
                     {b.offsite === 'failed' && (
@@ -504,7 +505,7 @@ function BackupsDialog({
                     if (
                       await confirm({
                         title: `Restore ${db.name}?`,
-                        description: `This replaces its current contents with the ${fmtDate(b.created)} backup.`,
+                        description: `This replaces its current contents with the ${fmtDate(b.created)} backup. Skiff backs up the current data first, so you can undo it.`,
                         confirmText: 'Restore',
                         destructive: true,
                       })
