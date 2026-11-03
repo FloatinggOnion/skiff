@@ -12,6 +12,8 @@ type Rule struct {
 	Private bool `json:"private,omitempty"`
 	// RateLimit is requests per minute per visitor; 0 means none.
 	RateLimit int `json:"rateLimit,omitempty"`
+	// TCPPort is a public port the router forwards to the app's containers; 0 means none.
+	TCPPort int `json:"tcpPort,omitempty"`
 }
 
 type Rules map[string]Rule

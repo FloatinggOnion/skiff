@@ -78,6 +78,9 @@ type Router struct {
 	rrMu sync.Mutex
 
 	gate gateState
+
+	tcp     *tcpProxy
+	tcpOnce sync.Once
 }
 
 func (rt *Router) startMetrics() {
@@ -452,6 +455,7 @@ func edgeServer(addr string, h http.Handler) *http.Server {
 
 func (rt *Router) ServeHTTPOnly(addr string) error {
 	rt.startMetrics()
+	rt.startTCP()
 	rt.startMail(nil)
 	// Plain-text HTTP/2 too, since this mode has no TLS to negotiate it over.
 	s := edgeServer(addr, rt)
@@ -464,6 +468,7 @@ func (rt *Router) ServeHTTPOnly(addr string) error {
 
 func (rt *Router) ServeTLS(cacheDir string) error {
 	rt.startMetrics()
+	rt.startTCP()
 	m := &autocert.Manager{
 		Prompt: autocert.AcceptTOS,
 		Cache:  autocert.DirCache(cacheDir),

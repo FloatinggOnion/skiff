@@ -25,6 +25,7 @@ import { useConfirm } from '@/providers/confirm-provider'
 import { projectsService, type Deploy } from '@/services/api.service'
 import { JobsPanel } from './project/jobs-panel'
 import { WorkersPanel } from './project/workers-panel'
+import { TCPPortSection } from './project/tcp-port-section'
 import { VolumesPanel } from './project/volumes-panel'
 import { RegistryPanel } from './project/registry-panel'
 import { DangerZone, SettingsForm } from './project/settings-form'
@@ -471,6 +472,7 @@ export default function ProjectDetailPage() {
           />
           {fromImage && <RegistryPanel app={project.name} />}
           <VolumesPanel app={project.name} onRedeploy={() => term.redeploy(project.name)} />
+          <TCPPortSection app={project.name} />
           <DangerZone name={project.name} onDeleted={() => navigate('/')} />
         </TabsContent>
       </Tabs>

@@ -164,3 +164,20 @@ func TestStackVarsAreSealed(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestTCPPortProblem(t *testing.T) {
+	sources := []Source{{App: "a", TCPPort: 6000}, {App: "b"}}
+	dbs := map[int]string{7000: "orders"}
+	for port, want := range map[int]string{
+		80: "use a port", 22: "use a port", 70000: "use a port", 7070: "dashboard",
+		6000: "already used by a", 7000: "database orders", 6001: "",
+	} {
+		got := tcpPortProblem(port, "b", sources, dbs)
+		if (want == "") != (got == "") || !strings.Contains(got, want) {
+			t.Errorf("%d: %q, want %q", port, got, want)
+		}
+	}
+	if got := tcpPortProblem(6000, "a", sources, dbs); got != "" {
+		t.Errorf("an app keeps its own port: %q", got)
+	}
+}

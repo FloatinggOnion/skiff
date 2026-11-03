@@ -67,6 +67,21 @@ export default function Backends() {
         the service.
       </p>
 
+      <h2>Services that don&apos;t speak HTTP</h2>
+      <p>
+        For a game server, message broker or anything else over raw TCP, open a{" "}
+        <strong>Public TCP port</strong> in the project&apos;s Settings, then redeploy. Skiff holds that
+        port and forwards it to your app, so the address stays the same across deploys, and it counts your
+        app as ready once its port opens. A deploy doesn&apos;t move open connections: they end when the old
+        version retires, and clients reconnect to the new one.
+      </p>
+      <ul>
+        <li>Your app sees connections coming from Skiff, not the client&apos;s address.</li>
+        <li>You may also need to allow the port in your provider&apos;s firewall.</li>
+        <li>Connections aren&apos;t encrypted by Skiff, so use your service&apos;s own TLS and passwords.</li>
+        <li>UDP isn&apos;t supported yet.</li>
+      </ul>
+
       <h2>The rest of a backend</h2>
       <ul>
         <li>

@@ -254,6 +254,14 @@ class ProjectsService extends BaseService {
     return this.delete('/workers', { params: { id } })
   }
 
+  tcpPort(app: string) {
+    return this.get<{ port: number; containerPort: string }>('/project/tcp-port', { params: { app } })
+  }
+
+  setTCPPort(app: string, port: number) {
+    return this.put('/project/tcp-port', { port }, { params: { app } })
+  }
+
   previewData(app: string) {
     return this.get<PreviewData>('/project/preview-data', { params: { app } })
   }
