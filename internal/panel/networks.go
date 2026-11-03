@@ -13,7 +13,7 @@ func teamNetwork(team string) string {
 
 // reconcileNetworks attaches every existing database to its team's private network so an app redeployed onto the team net still finds it by name.
 func (p *Panel) reconcileNetworks() {
-	rows, err := sqlDB.Query(`SELECT team, container FROM databases`)
+	rows, err := sqlDB.Query(`SELECT team, container FROM databases WHERE stack=''`)
 	if err != nil {
 		return
 	}

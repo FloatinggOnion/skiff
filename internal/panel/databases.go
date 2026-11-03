@@ -100,6 +100,9 @@ var dbEngines = map[string]dbEngine{
 		image: "mysql:8", port: 3306, mountAt: "/var/lib/mysql",
 		envVar: "DATABASE_URL", label: "MySQL", user: "skiff", hasDB: true,
 		container: func(user, pass, dbname string) (map[string]string, []string) {
+			if user == "root" {
+				return map[string]string{"MYSQL_DATABASE": dbname, "MYSQL_ROOT_PASSWORD": pass}, nil
+			}
 			return map[string]string{
 				"MYSQL_USER": user, "MYSQL_PASSWORD": pass,
 				"MYSQL_DATABASE": dbname, "MYSQL_ROOT_PASSWORD": pass,
@@ -171,6 +174,9 @@ var dbEngines = map[string]dbEngine{
 		image: "redis:7-alpine", port: 6379, mountAt: "/data",
 		envVar: "REDIS_URL", label: "Redis",
 		container: func(_, pass, _ string) (map[string]string, []string) {
+			if pass == "" {
+				return nil, []string{"redis-server", "--appendonly", "yes"}
+			}
 			return nil, []string{"redis-server", "--requirepass", pass, "--appendonly", "yes"}
 		},
 		url: func(host string, port int, _, pass, _ string, _ bool) string {
@@ -214,6 +220,7 @@ type dbRow struct {
 	PublicPort                              int
 	Image, Volume                           string // set for adopted databases; else the engine's image and <container>-data
 	Cmd                                     string // adopted databases: the JSON command they were started with
+	Stack, Alias                            string // set for a Compose stack's database: its network, and its service name
 }
 
 func (d dbRow) image() string {
@@ -230,13 +237,13 @@ func (d dbRow) volume() string {
 	return d.Container + "-data"
 }
 
-const dbCols = `id,team,name,engine,container,host,port,username,password,dbname,created,public,public_port,image,volume,cmd`
+const dbCols = `id,team,name,engine,container,host,port,username,password,dbname,created,public,public_port,image,volume,cmd,stack,alias`
 
 func scanDB(row interface{ Scan(...any) error }) (dbRow, bool) {
 	var d dbRow
 	var public int
 	if row.Scan(&d.ID, &d.Team, &d.Name, &d.Engine, &d.Container, &d.Host, &d.Port,
-		&d.Username, &d.Password, &d.DBName, &d.Created, &public, &d.PublicPort, &d.Image, &d.Volume, &d.Cmd) != nil {
+		&d.Username, &d.Password, &d.DBName, &d.Created, &public, &d.PublicPort, &d.Image, &d.Volume, &d.Cmd, &d.Stack, &d.Alias) != nil {
 		return dbRow{}, false
 	}
 	_ = seal.OpenAll(&d.Password)
@@ -271,9 +278,9 @@ func putDB(d dbRow) error {
 	if err != nil {
 		return err
 	}
-	_, err = sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err = sqlDB.Exec(`INSERT INTO databases(`+dbCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		d.ID, d.Team, d.Name, d.Engine, d.Container, d.Host, d.Port, d.Username, password,
-		d.DBName, d.Created, b2i(d.Public), d.PublicPort, d.Image, d.Volume, d.Cmd)
+		d.DBName, d.Created, b2i(d.Public), d.PublicPort, d.Image, d.Volume, d.Cmd, d.Stack, d.Alias)
 	return err
 }
 
@@ -530,7 +537,7 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	env, cmd := e.container(d.Username, d.Password, d.DBName)
-	net := teamNetwork(d.Team)
+	net := d.network()
 	_ = p.eng.EnsureNetwork(net)
 	prevNets := []string{}
 	if rt, err := p.eng.Runtime(d.Container); err == nil {
@@ -545,7 +552,7 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 	}
 	spec := docker.DBRunSpec{
 		Name: d.Container, Image: d.image(), Network: net,
-		Volume: d.volume(), MountAt: e.mountAt, Env: env, Cmd: cmd,
+		Volume: d.volume(), MountAt: e.mountAt, Env: env, Cmd: cmd, Aliases: d.aliases(),
 		Labels: map[string]string{"skiff.kind": "database", "skiff.db": d.ID, "skiff.team": d.Team},
 		Port:   e.port, Publish: on,
 	}

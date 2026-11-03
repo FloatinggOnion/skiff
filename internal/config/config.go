@@ -95,6 +95,10 @@ type Deploy struct {
 	Network       string `toml:"network"`
 	HealthPath    string `toml:"health_path"`    // must answer 2xx/3xx before traffic moves; empty = any reply at /
 	HealthTimeout int    `toml:"health_timeout"` // seconds; 0 = the default
+	// HealthMode is "tcp" to accept any open port, or "none" for a service with no port to check; empty means HTTP.
+	HealthMode string   `toml:"health_mode"`
+	Aliases    []string `toml:"aliases"` // extra names on the network
+	Command    []string `toml:"command"` // replaces the image's default command
 }
 
 // ValidateHealth checks a health-check path and timeout (seconds, 0 for the default).

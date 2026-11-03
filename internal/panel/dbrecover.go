@@ -44,19 +44,21 @@ func (p *Panel) recreateDatabase(d dbRow) error {
 		cmd = nil
 		_ = json.Unmarshal([]byte(d.Cmd), &cmd)
 	}
-	net := teamNetwork(d.Team)
+	net := d.network()
 	if err := p.eng.EnsureNetwork(net); err != nil {
 		return err
 	}
 	_, err := p.eng.RunDatabase(docker.DBRunSpec{
 		Name: d.Container, Image: d.image(), Network: net,
-		Volume: d.volume(), MountAt: e.mountAt, Env: env, Cmd: cmd,
+		Volume: d.volume(), MountAt: e.mountAt, Env: env, Cmd: cmd, Aliases: d.aliases(),
 		Labels: map[string]string{"skiff.kind": "database", "skiff.db": d.ID, "skiff.team": d.Team},
 	})
 	if err != nil {
 		return err
 	}
-	_ = p.eng.ConnectNetwork(dbNetwork, d.Container)
+	if d.Stack == "" {
+		_ = p.eng.ConnectNetwork(dbNetwork, d.Container)
+	}
 	_, _ = sqlDB.Exec(`UPDATE databases SET public=0, public_port=0 WHERE id=?`, d.ID)
 	return nil
 }

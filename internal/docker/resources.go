@@ -20,6 +20,7 @@ type DBRunSpec struct {
 	Port       int               // container port (published on the host when Publish is set)
 	Publish    bool              // expose Port on 0.0.0.0 for external access
 	Entrypoint string            // optional --entrypoint override (e.g. "sh" to fix TLS cert perms)
+	Aliases    []string          // extra names on the network, such as a Compose service name
 	Binds      []string          // extra bind mounts, "host:container[:ro]" (e.g. the TLS cert dir)
 }
 
@@ -36,6 +37,9 @@ func (e *Engine) RunDatabase(s DBRunSpec) (int, error) {
 	}
 	if s.Network != "" {
 		args = append(args, "--network", s.Network)
+		for _, a := range s.Aliases {
+			args = append(args, "--network-alias", a)
+		}
 	}
 	if s.Volume != "" && s.MountAt != "" {
 		args = append(args, "-v", s.Volume+":"+s.MountAt)

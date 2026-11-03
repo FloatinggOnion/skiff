@@ -19,6 +19,8 @@ type RunSpec struct {
 	Network       string // optional docker network to join (for reaching managed resources by name)
 	Labels        map[string]string
 	Volumes       []Mount
+	Aliases       []string // extra names on the network, such as a Compose service name
+	Command       []string // replaces the image's default command
 }
 
 type Route struct {
@@ -84,6 +86,9 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 		if s.App != "" {
 			args = append(args, "--network-alias", s.App)
 		}
+		for _, a := range s.Aliases {
+			args = append(args, "--network-alias", a)
+		}
 	}
 	args = append(args, "--memory", e.memoryOr(s.Memory))
 	if s.CPU != "" {
@@ -94,6 +99,7 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
 	}
 	args = append(args, s.Image)
+	args = append(args, s.Command...)
 
 	out, err := e.command(args...).CombinedOutput()
 	if err != nil {
@@ -161,6 +167,15 @@ func (e *Engine) EnsureNetwork(name string) error {
 }
 
 // ConnectNetwork attaches a container to an additional network; an already-connected container returns a benign error.
+// RemoveNetwork deletes a network nothing is using any more.
+func (e *Engine) RemoveNetwork(name string) error {
+	out, err := e.command("network", "rm", name).CombinedOutput()
+	if err != nil {
+		return cmdErr(out, err)
+	}
+	return nil
+}
+
 func (e *Engine) ConnectNetwork(network, container string) error {
 	out, err := e.command("network", "connect", network, container).CombinedOutput()
 	if err != nil {

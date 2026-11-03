@@ -67,6 +67,15 @@ var migrations = []string{
 	`ALTER TABLE databases ADD COLUMN volume TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE databases ADD COLUMN cmd TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE backups ADD COLUMN offsite TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN stack TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN service TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN command TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN dockerfile TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN health_mode TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE databases ADD COLUMN stack TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE databases ADD COLUMN alias TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE stacks ADD COLUMN vars TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE stacks ADD COLUMN held TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN sleep_after INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE sources ADD COLUMN health_path TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN health_timeout INTEGER NOT NULL DEFAULT 0`,
@@ -142,7 +151,12 @@ CREATE TABLE IF NOT EXISTS sources (
   cpu_limit    TEXT NOT NULL DEFAULT '',
   catalog      TEXT NOT NULL DEFAULT '',
   is_private   INTEGER NOT NULL DEFAULT 0,
-  rate_limit   INTEGER NOT NULL DEFAULT 0
+  rate_limit   INTEGER NOT NULL DEFAULT 0,
+  stack        TEXT NOT NULL DEFAULT '',
+  service      TEXT NOT NULL DEFAULT '',
+  command      TEXT NOT NULL DEFAULT '',
+  dockerfile   TEXT NOT NULL DEFAULT '',
+  health_mode  TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS deploys (
   id         TEXT PRIMARY KEY,
@@ -199,7 +213,9 @@ CREATE TABLE IF NOT EXISTS databases (
   public_port INTEGER NOT NULL DEFAULT 0,
   image       TEXT NOT NULL DEFAULT '',
   volume      TEXT NOT NULL DEFAULT '',
-  cmd         TEXT NOT NULL DEFAULT ''
+  cmd         TEXT NOT NULL DEFAULT '',
+  stack       TEXT NOT NULL DEFAULT '',
+  alias       TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS db_attachments (
   db_id TEXT NOT NULL,
@@ -370,6 +386,17 @@ CREATE TABLE IF NOT EXISTS volumes (
   path    TEXT NOT NULL,
   created INTEGER NOT NULL,
   PRIMARY KEY (app, name)
+);
+CREATE TABLE IF NOT EXISTS stacks (
+  name      TEXT PRIMARY KEY,
+  team      TEXT NOT NULL,
+  repo      TEXT NOT NULL DEFAULT '',
+  branch    TEXT NOT NULL DEFAULT '',
+  path      TEXT NOT NULL DEFAULT '',
+  clone_url TEXT NOT NULL DEFAULT '',
+  created   INTEGER NOT NULL,
+  vars      TEXT NOT NULL DEFAULT '',
+  held      TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS volume_backups (
   id          TEXT PRIMARY KEY,

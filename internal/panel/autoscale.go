@@ -172,11 +172,13 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 			Volumes:       mounts,
 			Memory:        memory,
 			CPU:           cpu,
+			Aliases:       stackAliases(src),
+			Command:       stackCommand(src),
 		})
 		if err != nil {
 			break
 		}
-		if health.Wait("127.0.0.1", hostPort, check, autoscaleHealthTTL) != nil {
+		if health.WaitMode(src.HealthMode, "127.0.0.1", hostPort, check, autoscaleHealthTTL) != nil {
 			_ = p.eng.Remove(container)
 			break
 		}

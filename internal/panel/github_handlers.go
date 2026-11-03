@@ -156,8 +156,12 @@ func (p *Panel) onPush(push github.Push) {
 		}
 		return
 	}
+	for _, name := range stacksForPush(push.Repo, push.Branch) {
+		stack := name
+		go guard("syncStackOnPush", func() { p.syncStackOnPush(stack, push) })
+	}
 	for _, src := range sourcesForRepo(push.Repo, push.Branch) {
-		if !touched(push.Paths, src.RootDir) {
+		if src.Stack != "" || !touched(push.Paths, src.RootDir) {
 			continue
 		}
 		id := newDeployID()

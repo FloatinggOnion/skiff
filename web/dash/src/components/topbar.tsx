@@ -7,6 +7,7 @@ const titles: Record<string, string> = {
   projects: 'Projects',
   deployments: 'Deployments',
   databases: 'Databases',
+  stacks: 'Stacks',
   storage: 'Storage',
   domains: 'Domains',
   email: 'Email',

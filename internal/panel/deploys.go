@@ -166,7 +166,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 			return
 		}
 	}
-	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, deployEnv(src), teamNetwork(src.Team), p.volumeDefs(src)))
+	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, deployEnv(src), appNetwork(src), p.volumeDefs(src)))
 	if err != nil {
 		finish("✗ couldn't prepare the deploy: " + err.Error())
 		return
@@ -518,8 +518,20 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if src.Image != "" {
 		fmt.Fprintf(&b, "image = %q\n", src.Image)
 	}
+	if src.Dockerfile != "" {
+		fmt.Fprintf(&b, "dockerfile = %q\n", src.Dockerfile)
+	}
 	b.WriteString("\n[deploy]\n")
 	fmt.Fprintf(&b, "network = %q\n", network)
+	if src.HealthMode != "" {
+		fmt.Fprintf(&b, "health_mode = %q\n", src.HealthMode)
+	}
+	if a := stackAliases(src); len(a) > 0 {
+		fmt.Fprintf(&b, "aliases = %s\n", tomlList(a))
+	}
+	if c := stackCommand(src); len(c) > 0 {
+		fmt.Fprintf(&b, "command = %s\n", tomlList(c))
+	}
 	if strings.TrimSpace(src.Release) != "" {
 		fmt.Fprintf(&b, "release = %q\n", src.Release)
 	}

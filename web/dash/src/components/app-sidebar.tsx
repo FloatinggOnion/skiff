@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import {
+  Layers,
   LayoutGrid,
   Rocket,
   ScrollText,
@@ -45,6 +46,7 @@ const SECTIONS: { label?: string; items: NavItem[] }[] = [
     label: 'Ship',
     items: [
       { to: '/', label: 'Projects', icon: LayoutGrid, end: true },
+      { to: '/stacks', label: 'Stacks', icon: Layers },
       { to: '/deployments', label: 'Deployments', icon: Rocket },
     ],
   },

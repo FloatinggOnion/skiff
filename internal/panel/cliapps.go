@@ -124,5 +124,5 @@ func (p *Panel) appRuntime(src Source) (map[string]string, string) {
 	for _, e := range deployEnv(src) {
 		env[e.Key] = e.Value
 	}
-	return env, teamNetwork(src.Team)
+	return env, appNetwork(src)
 }

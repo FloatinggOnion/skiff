@@ -328,13 +328,15 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			Network:       network,
 			Labels:        labels,
 			Volumes:       mounts,
+			Aliases:       cfg.Deploy.Aliases,
+			Command:       cfg.Deploy.Command,
 		})
 		if err != nil {
 			rollback()
 			ui.Fail("Couldn't start container")
 			return err
 		}
-		if err := health.Wait(healthHost, hostPort, cfg.Deploy.HealthPath, timeout); err != nil {
+		if err := health.WaitMode(cfg.Deploy.HealthMode, healthHost, hostPort, cfg.Deploy.HealthPath, timeout); err != nil {
 			_ = eng.Remove(container)
 			rollback()
 			ui.Fail("New version never became healthy — rolled back")

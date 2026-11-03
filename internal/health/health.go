@@ -2,6 +2,7 @@
 package health
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -31,6 +32,36 @@ func speaksHTTP2(host string, port int) bool {
 	}
 	const frameSettings = 0x4
 	return header[3] == frameSettings
+}
+
+// WaitMode checks readiness the way the service asks to be checked: an open port, nothing at all, or HTTP.
+func WaitMode(mode, host string, port int, path string, timeout time.Duration) error {
+	switch mode {
+	case "none":
+		return nil
+	case "tcp":
+		deadline := time.Now().Add(timeout)
+		var last error
+		for time.Now().Before(deadline) {
+			conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), 2*time.Second)
+			if err == nil {
+				// Docker's port proxy accepts before the app listens, so an immediate close means nothing is there yet.
+				_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+				_, rerr := conn.Read(make([]byte, 1))
+				conn.Close()
+				var nerr net.Error
+				if rerr == nil || (errors.As(rerr, &nerr) && nerr.Timeout()) {
+					return nil
+				}
+				last = rerr
+			} else {
+				last = err
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		return fmt.Errorf("port %d never opened: %v", port, last)
+	}
+	return Wait(host, port, path, timeout)
 }
 
 // Wait polls the app until it's ready: with no path any HTTP reply at / will do (it's listening), including over plain-text HTTP/2, which is all a gRPC server speaks; with a path it must answer 2xx or 3xx.

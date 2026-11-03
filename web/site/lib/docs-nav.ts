@@ -13,6 +13,7 @@ export const DOCS_NAV: DocSection[] = [
     title: "Guides",
     items: [
       { href: "/docs/backends", label: "APIs and backends" },
+      { href: "/docs/compose", label: "Docker Compose" },
       { href: "/docs/previews", label: "Preview environments" },
       { href: "/docs/one-click-apps", label: "One-click apps" },
       { href: "/docs/images", label: "Prebuilt images" },
