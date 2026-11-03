@@ -521,6 +521,7 @@ func (p *Panel) removeApp(name string) {
 	_, _ = registry.Delete(name)
 	p.removeAppVolumes(name)
 	appLogs.forget(name)
+	p.releaseAttachments(name)
 	deleteSource(name)
 	p.removeAppImages(name)
 }

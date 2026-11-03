@@ -400,6 +400,11 @@ func (p *Panel) waitDatabaseReady(ctx context.Context, d dbRow) error {
 }
 
 func (p *Panel) removeStackDB(d dbRow) {
+	for _, app := range dbAttachments(d.ID) {
+		if v, ok := detachDB(d.ID, app); ok {
+			deleteEnvVar(app, v)
+		}
+	}
 	_ = p.eng.Stop(d.Container)
 	_ = p.eng.Remove(d.Container)
 	_ = p.eng.RemoveVolume(d.volume())

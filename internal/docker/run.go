@@ -196,3 +196,11 @@ func (e *Engine) ConnectNetwork(network, container string) error {
 	}
 	return nil
 }
+
+func (e *Engine) DisconnectNetwork(network, container string) error {
+	out, err := e.command("network", "disconnect", network, container).CombinedOutput()
+	if err != nil {
+		return cmdErr(out, err)
+	}
+	return nil
+}

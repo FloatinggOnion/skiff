@@ -331,6 +331,10 @@ func (p *Panel) handleStorageAttach(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodPost:
+		if err := p.linkResource(b.Container, teamNetwork(b.Team), app); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		for k, v := range bucketEnv(b) {
 			if err := upsertEnvVar(app, k, v, false); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -347,6 +351,9 @@ func (p *Panel) handleStorageAttach(w http.ResponseWriter, r *http.Request) {
 			deleteEnvVar(app, k)
 		}
 		_, _ = sqlDB.Exec(`DELETE FROM bucket_attachments WHERE bucket_id=? AND app=?`, id, app)
+		if src, ok := getSource(app); ok {
+			p.unlinkResource(b.Container, teamNetwork(b.Team), appNetwork(src), bucketAttachments(id))
+		}
 		w.WriteHeader(http.StatusNoContent)
 
 	default:

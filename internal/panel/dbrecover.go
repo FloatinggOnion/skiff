@@ -59,6 +59,9 @@ func (p *Panel) recreateDatabase(d dbRow) error {
 	if d.Stack == "" {
 		_ = p.eng.ConnectNetwork(dbNetwork, d.Container)
 	}
+	for _, app := range dbAttachments(d.ID) {
+		_ = p.linkResource(d.Container, d.network(), app)
+	}
 	_, _ = sqlDB.Exec(`UPDATE databases SET public=0, public_port=0 WHERE id=?`, d.ID)
 	return nil
 }

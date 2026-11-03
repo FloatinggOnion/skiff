@@ -112,9 +112,20 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
         </li>
       </ul>
 
+      <h2>Use your team&apos;s databases and buckets</h2>
+      <p>
+        A stack is on its own private network, so it can&apos;t see the rest of your team. To share a
+        database or bucket with a service, open it in the dashboard and attach it to that service, then
+        redeploy the service to pick up the connection variables.
+      </p>
+      <p>
+        The database or bucket then joins the stack&apos;s network, so every service in the stack can
+        reach its address, though they still need its password or keys. It leaves again when you detach
+        the last service using it. Other private services on your team stay out of reach.
+      </p>
+
       <Callout>
-        Previews aren&apos;t available for a stack&apos;s services, and they can&apos;t reach your team&apos;s
-        other databases and buckets yet. Pushes only reach Skiff with GitHub connected, and an access token
+        Previews aren&apos;t available for a stack&apos;s services. Pushes only reach Skiff with GitHub connected, and an access token
         is only used when you create or update the stack, so connect GitHub for private repositories.
       </Callout>
     </article>

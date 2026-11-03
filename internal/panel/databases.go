@@ -502,6 +502,10 @@ func (p *Panel) handleDatabaseAttach(w http.ResponseWriter, r *http.Request) {
 	e := dbEngines[d.Engine]
 	switch r.Method {
 	case http.MethodPost:
+		if err := p.linkResource(d.Container, d.network(), app); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		url := e.url(d.Host, d.Port, d.Username, d.Password, d.DBName, false)
 		if err := upsertEnvVar(app, e.envVar, url, false); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -512,6 +516,7 @@ func (p *Panel) handleDatabaseAttach(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		if v, ok := detachDB(id, app); ok {
 			deleteEnvVar(app, v)
+			p.unlinkResource(d.Container, d.network(), appNetwork(src), dbAttachments(id))
 		}
 		writeJSON(w, p.toDatabase(d))
 	default:
