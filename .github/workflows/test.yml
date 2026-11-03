@@ -11,6 +11,21 @@ on:
   pull_request:
 
 jobs:
+  action:
+    name: action loads on a real runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - id: unreachable
+        continue-on-error: true
+        uses: ./
+        with:
+          server: http://127.0.0.1:1
+          token: not-a-real-token
+          app: nothing
+      - name: The step must fail, because the server can't be reached
+        run: test "${{ steps.unreachable.outcome }}" = failure
+
   test:
     runs-on: ubuntu-latest
     steps:

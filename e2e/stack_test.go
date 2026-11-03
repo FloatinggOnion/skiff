@@ -343,6 +343,19 @@ func TestComposeStackFromRepo(t *testing.T) {
 	if got := dockerExec(t, ctr, "wget -qO- http://web:3000/"); got != "hello-from-stack" {
 		t.Fatalf("over its own service name: %q", got)
 	}
+
+	var tok struct{ Token string }
+	postJSON(t, c, "http://"+panel+"/api/tokens", `{"name":"e2e-stack"}`, &tok)
+	req, _ := http.NewRequest(http.MethodPost, "http://"+panel+"/api/v1/apps/e2e-repo-web/previews", strings.NewReader(`{"branch":"feat/login"}`))
+	req.Header.Set("Authorization", "Bearer "+tok.Token)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("a preview of a stack service through the API: %d", resp.StatusCode)
+	}
 	// Pushing a changed Compose file shows up as a change, and applying it reaches the app.
 	file := filepath.Join(work, "deploy", "compose.yml")
 	current, err := os.ReadFile(file)

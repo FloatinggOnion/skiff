@@ -170,6 +170,9 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		if ctxDir, sha, ok = p.cloneSource(ctx, src, authURL, sha, logln, finish, status); !ok {
 			return
 		}
+		if commit == "" {
+			setDeployCommit(src.App, id, shortCommit(sha))
+		}
 	}
 	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, deployEnv(src), appNetwork(src), p.volumeDefs(src)))
 	if err != nil {

@@ -198,6 +198,8 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/apps/{name}/deploys", p.apiAuth(p.apiDeploys))
 	mux.HandleFunc("GET /api/v1/apps/{name}/logs", p.apiAuth(p.apiLogs))
 	mux.HandleFunc("POST /api/v1/apps/{name}/rollback", p.apiAuth(p.apiRollback))
+	mux.HandleFunc("POST /api/v1/apps/{name}/previews", p.apiAuth(p.apiCreatePreview))
+	mux.HandleFunc("DELETE /api/v1/apps/{name}/previews", p.apiAuth(p.apiRemovePreview))
 	mux.HandleFunc("GET /api/v1/apps/{name}/insights", p.apiAuth(p.apiInsights))
 	mux.HandleFunc("POST /api/v1/cli/deploys", p.apiAuth(p.apiCLIDeploy))
 	mux.HandleFunc("/api/deploy", p.protected(p.handleDeploy))

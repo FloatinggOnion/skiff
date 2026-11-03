@@ -162,7 +162,68 @@ func (p *Panel) apiDeploy(w http.ResponseWriter, r *http.Request) {
 	id := newDeployID()
 	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "deploy", Target: name, Detail: "via api"})
 	go p.runDeploy(src, "", "", "", "api", id)
-	apiJSON(w, http.StatusAccepted, map[string]string{"id": id, "app": name, "status": "building"})
+	apiJSON(w, http.StatusAccepted, map[string]string{"id": id, "app": name, "status": "building", "url": p.apiAppURL(src)})
+}
+
+func (p *Panel) apiAppURL(src Source) string {
+	if src.Private {
+		return ""
+	}
+	return "https://" + src.App + "." + p.domain
+}
+
+// apiCreatePreview starts or redeploys a branch's preview, so a pipeline can test a change against a real environment.
+func (p *Panel) apiCreatePreview(w http.ResponseWriter, r *http.Request) {
+	src, ok := apiSource(r, sanitizeName(r.PathValue("name")))
+	if !ok || src.Parent != "" {
+		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	if src.Origin == originCLI {
+		apiErr(w, http.StatusConflict, cliOnlyMsg)
+		return
+	}
+	if src.Stack != "" {
+		apiErr(w, http.StatusConflict, "previews of a Compose stack's services aren't supported yet")
+		return
+	}
+	if src.Image != "" {
+		apiErr(w, http.StatusConflict, "previews deploy a branch of a repository; this app runs a prebuilt image")
+		return
+	}
+	var body struct {
+		Branch string `json:"branch"`
+	}
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&body) != nil || strings.TrimSpace(body.Branch) == "" {
+		apiErr(w, http.StatusBadRequest, "body must name a branch, e.g. {\"branch\": \"feat/login\"}")
+		return
+	}
+	branch := strings.TrimSpace(body.Branch)
+	name, id, ok := p.createPreview(src, branch, "", "preview of "+branch)
+	if !ok {
+		apiErr(w, http.StatusBadRequest, "couldn't derive a preview name from that branch")
+		return
+	}
+	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "preview.create", Target: name, Detail: "via api"})
+	apiJSON(w, http.StatusAccepted, map[string]string{"id": id, "app": name, "status": "building", "url": "https://" + name + "." + p.domain})
+}
+
+// apiRemovePreview deletes a branch's preview. The branch comes from the query string because branch names contain slashes.
+func (p *Panel) apiRemovePreview(w http.ResponseWriter, r *http.Request) {
+	parent, ok := apiSource(r, sanitizeName(r.PathValue("name")))
+	if !ok {
+		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	name := previewName(parent.App, strings.TrimSpace(r.URL.Query().Get("branch")))
+	pv, ok := getSource(name)
+	if !ok || pv.Parent != parent.App {
+		apiErr(w, http.StatusNotFound, "no preview for that branch")
+		return
+	}
+	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "project.delete", Target: name, Detail: "via api"})
+	p.removeApp(name)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (p *Panel) apiDeployStatus(w http.ResponseWriter, r *http.Request) {

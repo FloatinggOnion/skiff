@@ -22,8 +22,13 @@ export const DOCS_NAV: DocSection[] = [
       { href: "/docs/log-drains", label: "Log drains" },
       { href: "/docs/status-pages", label: "Status pages" },
       { href: "/docs/email-forwarding", label: "Email forwarding" },
+      { href: "/docs/github-actions", label: "GitHub Actions" },
       { href: "/docs/agents", label: "AI agents (MCP)" },
     ],
+  },
+  {
+    title: "Reference",
+    items: [{ href: "/docs/api", label: "API" }],
   },
 ];
 

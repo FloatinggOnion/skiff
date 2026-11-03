@@ -19,6 +19,12 @@ Skiff's own server updates itself from `main`, so a release isn't how changes re
    ```
 
    The release workflow builds the binaries, publishes the release and updates the Homebrew formula.
+
+   Then move the GitHub Action's tag, so workflows using `nuelScript/skiff@v0` get this version:
+
+   ```sh
+   git tag -f v0 && git push -f origin v0
+   ```
 4. Attach the notes:
 
    ```sh

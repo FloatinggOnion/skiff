@@ -215,6 +215,11 @@ func addDeploy(d Deploy) {
 		d.ID, d.App, d.Commit, d.Message, d.Trigger, d.Status, d.Started)
 }
 
+// setDeployCommit records what a deploy built when it wasn't known at the start, as with a manual or API deploy of a branch's newest commit.
+func setDeployCommit(app, id, commit string) {
+	_, _ = sqlDB.Exec(`UPDATE deploys SET commit_sha=? WHERE id=? AND app=?`, commit, id, app)
+}
+
 func setDeployStatus(app, id, status string) {
 	_, _ = sqlDB.Exec(`UPDATE deploys SET status=? WHERE id=? AND app=?`, status, id, app)
 }

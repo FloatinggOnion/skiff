@@ -845,7 +845,8 @@ func expectServed(t *testing.T, routerAddr, version string) {
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	t.Fatalf("router never served %q; last response: %s", want, last)
+	containers, _ := exec.Command("docker", "ps", "-a", "--filter", "label=skiff.app="+app, "--format", "{{.Names}} {{.Image}} {{.Status}} {{.Ports}}").CombinedOutput()
+	t.Fatalf("router never served %q; last response: %s\ncontainers:\n%s", want, last, containers)
 }
 
 // stream follows a deploy's SSE log to the end and fails the test unless it finished ok.

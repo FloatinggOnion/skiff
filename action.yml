@@ -1,0 +1,52 @@
+name: Skiff deploy
+description: Deploy to your own Skiff server, or create and remove a preview environment for a branch.
+branding:
+  icon: anchor
+  color: green
+inputs:
+  server:
+    description: Your Skiff dashboard address, like https://dash.example.com
+    required: true
+  token:
+    description: A Skiff API token. Keep it in a secret.
+    required: true
+  app:
+    description: The project's name in Skiff.
+    required: true
+  command:
+    description: "deploy, preview or remove-preview."
+    default: deploy
+  image:
+    description: For a project that runs a prebuilt image, the new image to deploy.
+  branch:
+    description: "For preview and remove-preview, the branch. Defaults to the branch this workflow is running on."
+  timeout:
+    description: Seconds to wait for the deploy to finish.
+    default: "900"
+outputs:
+  deploy-id:
+    description: The deploy's ID.
+    value: ${{ steps.skiff.outputs.deploy-id }}
+  app:
+    description: The name of the app that deployed. For a preview, this is the preview's own name.
+    value: ${{ steps.skiff.outputs.app }}
+  url:
+    description: The app's public address.
+    value: ${{ steps.skiff.outputs.url }}
+  commit:
+    description: The commit Skiff deployed.
+    value: ${{ steps.skiff.outputs.commit }}
+runs:
+  using: composite
+  steps:
+    - id: skiff
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/scripts/github-action.sh"
+      env:
+        SKIFF_SERVER: ${{ inputs.server }}
+        SKIFF_TOKEN: ${{ inputs.token }}
+        SKIFF_APP: ${{ inputs.app }}
+        SKIFF_COMMAND: ${{ inputs.command }}
+        SKIFF_IMAGE: ${{ inputs.image }}
+        SKIFF_BRANCH: ${{ inputs.branch }}
+        SKIFF_TIMEOUT: ${{ inputs.timeout }}
