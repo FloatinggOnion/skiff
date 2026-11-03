@@ -3,6 +3,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
@@ -220,6 +221,17 @@ func (s *Store) Members(teamID string) []Member {
 	return out
 }
 
+const storedTokenPrefix = "sha256:"
+
+// StoredToken is the form a session or invite token takes in the database, so a copy of the database can't be used to sign in.
+func StoredToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return storedTokenPrefix + hex.EncodeToString(sum[:])
+}
+
+// IsStoredToken reports whether a database value is already in stored form.
+func IsStoredToken(s string) bool { return strings.HasPrefix(s, storedTokenPrefix) }
+
 func (s *Store) CreateInvite(email, teamID, role string) (Invite, error) {
 	if role != RoleOwner {
 		role = RoleMember
@@ -227,17 +239,18 @@ func (s *Store) CreateInvite(email, teamID, role string) (Invite, error) {
 	inv := Invite{Token: id() + id(), Email: strings.ToLower(strings.TrimSpace(email)),
 		TeamID: teamID, Role: role, Created: now()}
 	_, err := s.db.Exec(`INSERT INTO invites(token,email,team_id,role,created) VALUES(?,?,?,?,?)`,
-		inv.Token, inv.Email, inv.TeamID, inv.Role, inv.Created)
+		StoredToken(inv.Token), inv.Email, inv.TeamID, inv.Role, inv.Created)
 	return inv, err
 }
 
 func (s *Store) Invite(token string) (Invite, bool) {
 	var inv Invite
-	err := s.db.QueryRow(`SELECT token,email,team_id,role,created FROM invites WHERE token = ?`, token).
-		Scan(&inv.Token, &inv.Email, &inv.TeamID, &inv.Role, &inv.Created)
+	err := s.db.QueryRow(`SELECT email,team_id,role,created FROM invites WHERE token = ?`, StoredToken(token)).
+		Scan(&inv.Email, &inv.TeamID, &inv.Role, &inv.Created)
 	if err != nil {
 		return Invite{}, false
 	}
+	inv.Token = token
 	return inv, true
 }
 
@@ -256,7 +269,7 @@ func (s *Store) AcceptInvite(token, userID string) (Team, error) {
 		userID, inv.TeamID, inv.Role); err != nil {
 		return Team{}, err
 	}
-	if _, err := tx.Exec(`DELETE FROM invites WHERE token = ?`, token); err != nil {
+	if _, err := tx.Exec(`DELETE FROM invites WHERE token = ?`, StoredToken(token)); err != nil {
 		return Team{}, err
 	}
 	var t Team

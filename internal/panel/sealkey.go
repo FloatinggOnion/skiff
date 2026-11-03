@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/auth"
 	"github.com/nuelScript/skiff/internal/seal"
 )
 
@@ -184,4 +185,48 @@ func removeOldPreEncryptionBackups(now time.Time) {
 			_ = os.Remove(f)
 		}
 	}
+}
+
+// hashStoredTokens replaces session and invite tokens stored in full, so people stay signed in and open invites keep working. sealExisting's scrub then clears the old values.
+func hashStoredTokens() error {
+	type row struct{ table, token string }
+	var found []row
+	for _, table := range []string{"sessions", "invites"} {
+		rows, err := sqlDB.Query(`SELECT token FROM ` + table)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var tok string
+			if err := rows.Scan(&tok); err != nil {
+				rows.Close()
+				return err
+			}
+			if !auth.IsStoredToken(tok) {
+				found = append(found, row{table, tok})
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+	}
+	if len(found) == 0 {
+		return nil
+	}
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	for _, r := range found {
+		if _, err := tx.Exec(`UPDATE `+r.table+` SET token=? WHERE token=?`, auth.StoredToken(r.token), r.token); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO instance_settings(key,value) VALUES(?,'1')`, sealScrubKey); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

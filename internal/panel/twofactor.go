@@ -156,7 +156,7 @@ func (p *Panel) handleTwoFactor(w http.ResponseWriter, r *http.Request) {
 		}
 		// Other sessions were opened with the password alone; end them.
 		if c, err := r.Cookie("skiff_session"); err == nil {
-			_, _ = sqlDB.Exec(`DELETE FROM sessions WHERE user_id = ? AND token != ?`, u.ID, c.Value)
+			_, _ = sqlDB.Exec(`DELETE FROM sessions WHERE user_id = ? AND token != ?`, u.ID, auth.StoredToken(c.Value))
 		}
 		p.audit(r, "account.2fa.enable", u.Email, "")
 		writeJSON(w, map[string]any{"recoveryCodes": codes})

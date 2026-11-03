@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/auth"
 	"github.com/nuelScript/skiff/internal/seal"
 )
 
@@ -476,7 +477,7 @@ func b2i(b bool) int {
 func putSession(token, userID, teamID string) error {
 	_, err := sqlDB.Exec(
 		`INSERT INTO sessions(token,user_id,team_id,created) VALUES(?,?,?,?)`,
-		token, userID, teamID, time.Now().Unix())
+		auth.StoredToken(token), userID, teamID, time.Now().Unix())
 	return err
 }
 
@@ -485,7 +486,7 @@ const sessionMaxAge = 30 * 24 * 60 * 60 // 30 days
 func getSession(token string) (sess, bool) {
 	var s sess
 	cutoff := time.Now().Unix() - sessionMaxAge
-	if sqlDB.QueryRow(`SELECT user_id,team_id FROM sessions WHERE token=? AND created > ?`, token, cutoff).
+	if sqlDB.QueryRow(`SELECT user_id,team_id FROM sessions WHERE token=? AND created > ?`, auth.StoredToken(token), cutoff).
 		Scan(&s.userID, &s.teamID) != nil {
 		return sess{}, false
 	}
@@ -493,9 +494,9 @@ func getSession(token string) (sess, bool) {
 }
 
 func deleteSession(token string) {
-	_, _ = sqlDB.Exec(`DELETE FROM sessions WHERE token=?`, token)
+	_, _ = sqlDB.Exec(`DELETE FROM sessions WHERE token=?`, auth.StoredToken(token))
 }
 
 func setSessionTeam(token, teamID string) {
-	_, _ = sqlDB.Exec(`UPDATE sessions SET team_id=? WHERE token=?`, teamID, token)
+	_, _ = sqlDB.Exec(`UPDATE sessions SET team_id=? WHERE token=?`, teamID, auth.StoredToken(token))
 }

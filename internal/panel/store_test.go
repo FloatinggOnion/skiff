@@ -40,8 +40,8 @@ func TestSourceRoundTrip(t *testing.T) {
 
 func TestSessionExpiry(t *testing.T) {
 	openTestDB(t)
-	sqlDB.Exec(`INSERT INTO sessions(token,user_id,team_id,created) VALUES('fresh','u','t',?)`, time.Now().Unix())
-	sqlDB.Exec(`INSERT INTO sessions(token,user_id,team_id,created) VALUES('stale','u','t',?)`, time.Now().Unix()-sessionMaxAge-1)
+	sqlDB.Exec(`INSERT INTO sessions(token,user_id,team_id,created) VALUES(?,'u','t',?)`, auth.StoredToken("fresh"), time.Now().Unix())
+	sqlDB.Exec(`INSERT INTO sessions(token,user_id,team_id,created) VALUES(?,'u','t',?)`, auth.StoredToken("stale"), time.Now().Unix()-sessionMaxAge-1)
 	if _, ok := getSession("fresh"); !ok {
 		t.Fatal("fresh session rejected")
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/auth"
 	"github.com/nuelScript/skiff/internal/cpbackup"
 	"github.com/nuelScript/skiff/internal/db"
 	"github.com/nuelScript/skiff/internal/seal"
@@ -280,5 +281,83 @@ func TestInterruptedScrubRunsAgain(t *testing.T) {
 	var n int
 	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM instance_settings WHERE key=?`, sealScrubKey).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("flag left set: %d %v", n, err)
+	}
+}
+
+func TestNewSessionsAreHashed(t *testing.T) {
+	openTestDB(t)
+	const tok = "cookie-value"
+	if err := putSession(tok, "u", "t"); err != nil {
+		t.Fatal(err)
+	}
+	var stored string
+	if err := sqlDB.QueryRow(`SELECT token FROM sessions`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored == tok || !auth.IsStoredToken(stored) {
+		t.Fatalf("stored as %q", stored)
+	}
+	if _, ok := getSession(stored); ok {
+		t.Fatal("the stored value must not work as a cookie")
+	}
+	setSessionTeam(tok, "t2")
+	if s, ok := getSession(tok); !ok || s.teamID != "t2" {
+		t.Fatalf("session: %+v %v", s, ok)
+	}
+	deleteSession(tok)
+	if _, ok := getSession(tok); ok {
+		t.Fatal("deleted session still works")
+	}
+}
+
+func TestExistingTokensAreHashedAndKeepWorking(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := os.MkdirAll(skiffDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "skiff.db")
+	database, err := db.OpenAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	sqlDB = database
+	if err := initSeal(); err != nil {
+		t.Fatal(err)
+	}
+	const sessTok, invTok = "old-session-token-abcdef", "old-invite-token-abcdef"
+	if _, err := sqlDB.Exec(`INSERT INTO sessions(token,user_id,team_id,created) VALUES(?,'u','t',?)`, sessTok, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO invites(token,email,team_id,role,created) VALUES(?,'e','t','member',1)`, invTok); err != nil {
+		t.Fatal(err)
+	}
+	if err := hashStoredTokens(); err != nil {
+		t.Fatal(err)
+	}
+	if err := sealExisting(); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{path, path + "-wal"} {
+		raw, err := os.ReadFile(f)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(raw), sessTok) || strings.Contains(string(raw), invTok) {
+			t.Fatalf("%s still holds a full token", f)
+		}
+	}
+	if _, ok := getSession(sessTok); !ok {
+		t.Fatal("signed-in user was logged out")
+	}
+	store := auth.NewStore(sqlDB)
+	if inv, ok := store.Invite(invTok); !ok || inv.Token != invTok {
+		t.Fatalf("open invite stopped working: %+v", inv)
+	}
+	if err := hashStoredTokens(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := getSession(sessTok); !ok {
+		t.Fatal("a second start must not hash twice")
 	}
 }
