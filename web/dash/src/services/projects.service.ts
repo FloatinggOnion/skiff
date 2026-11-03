@@ -116,6 +116,16 @@ export type Volume = {
   attached: boolean
 }
 
+export type VolumeBackup = {
+  id: string
+  volume: string
+  size: number
+  trigger: string
+  created: number
+  offsite?: string
+  live?: boolean
+}
+
 export type Volumes = {
   kind: 'project' | 'cli' | 'preview'
   volumes: Volume[]
@@ -235,6 +245,26 @@ class ProjectsService extends BaseService {
 
   deleteWorker(id: string) {
     return this.delete('/workers', { params: { id } })
+  }
+
+  volumeBackups(app: string, volume: string) {
+    return this.get<VolumeBackup[]>('/volumes/backups', { params: { app, volume } })
+  }
+
+  createVolumeBackup(app: string, volume: string) {
+    return this.post<VolumeBackup>('/volumes/backups', undefined, { params: { app, volume } })
+  }
+
+  restoreVolumeBackup(id: string) {
+    return this.post('/volumes/backups/restore', undefined, { params: { id } })
+  }
+
+  deleteVolumeBackup(id: string) {
+    return this.delete('/volumes/backups', { params: { id } })
+  }
+
+  volumeBackupDownloadUrl(id: string) {
+    return `/api/volumes/backups/download?id=${encodeURIComponent(id)}`
   }
 
   volumes(app: string) {

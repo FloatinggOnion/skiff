@@ -63,7 +63,7 @@ func (p *Panel) restoreRedis(ctx context.Context, d dbRow, dump io.Reader) error
 	if err != nil {
 		return err
 	}
-	if err := p.eng.RunInput(ctx, image, nil, redisCheckScript, in); err != nil {
+	if err := p.eng.RunIO(ctx, image, nil, redisCheckScript, in, io.Discard); err != nil {
 		return err
 	}
 	if err := p.eng.Stop(d.Container); err != nil {
@@ -73,7 +73,7 @@ func (p *Panel) restoreRedis(ctx context.Context, d dbRow, dump io.Reader) error
 	if err != nil {
 		return err
 	}
-	loadErr := p.eng.RunInput(ctx, image, []docker.Mount{{Name: d.volume(), Destination: "/data"}}, redisLoadScript, in)
+	loadErr := p.eng.RunIO(ctx, image, []docker.Mount{{Name: d.volume(), Destination: "/data"}}, redisLoadScript, in, io.Discard)
 	if err := p.eng.Start(d.Container); err != nil {
 		return fmt.Errorf("starting Redis again: %w", err)
 	}

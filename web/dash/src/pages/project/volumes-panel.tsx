@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { HardDrive, Plus, Trash2 } from 'lucide-react'
+import { Archive, HardDrive, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -12,6 +12,7 @@ import { fmtBytes } from '@/lib/format'
 import { useConfirm } from '@/providers/confirm-provider'
 import { projectsService, type Volumes } from '@/services/api.service'
 import { volumeSchema, type VolumeInput } from '@/validations/volume'
+import { VolumeBackupsDialog } from './volume-backups-dialog'
 
 export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () => void }) {
   const qc = useQueryClient()
@@ -25,6 +26,7 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
   const editable = data?.kind === 'project'
   const pending = volumes.some((v) => !v.attached)
   const [adding, setAdding] = useState(false)
+  const [backups, setBackups] = useState('')
   const [serverError, setServerError] = useState('')
   const reload = () => qc.invalidateQueries({ queryKey: queryKeys.volumes(app) })
 
@@ -154,6 +156,15 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
                 ) : (
                   <span className="shrink-0 text-[11px] text-warning">Not mounted yet</span>
                 )}
+                {data?.kind !== 'preview' && v.attached && (
+                  <button
+                    onClick={() => setBackups(v.name)}
+                    title="Backups"
+                    className="text-muted-foreground hover:text-foreground p-1.5 transition"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 {editable && (
                   <button
                     onClick={() => del(v.name)}
@@ -177,6 +188,12 @@ export function VolumesPanel({ app, onRedeploy }: { app: string; onRedeploy: () 
         </div>
       )}
       {serverError && !adding && <p className="text-xs text-danger">{serverError}</p>}
+      <VolumeBackupsDialog
+        app={app}
+        volume={backups}
+        open={backups !== ''}
+        onOpenChange={(v) => !v && setBackups('')}
+      />
     </div>
   )
 }

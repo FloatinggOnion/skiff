@@ -371,6 +371,20 @@ CREATE TABLE IF NOT EXISTS volumes (
   created INTEGER NOT NULL,
   PRIMARY KEY (app, name)
 );
+CREATE TABLE IF NOT EXISTS volume_backups (
+  id          TEXT PRIMARY KEY,
+  app         TEXT NOT NULL,
+  volume      TEXT NOT NULL,
+  team        TEXT NOT NULL,
+  file        TEXT NOT NULL,
+  size        INTEGER NOT NULL DEFAULT 0,
+  trigger     TEXT NOT NULL DEFAULT 'manual',
+  created     INTEGER NOT NULL,
+  offsite     TEXT NOT NULL DEFAULT '',
+  offsite_key TEXT NOT NULL DEFAULT '',
+  live        INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_volume_backups ON volume_backups(app, volume, created DESC);
 CREATE TABLE IF NOT EXISTS log_drains (
   team         TEXT PRIMARY KEY,
   url          TEXT NOT NULL,

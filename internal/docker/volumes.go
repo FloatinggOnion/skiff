@@ -55,6 +55,41 @@ func parseVolumeSizes(out []byte) map[string]int64 {
 	return sizes
 }
 
+// RunningUsing names the running containers that mount a volume.
+func (e *Engine) RunningUsing(volume string) []string {
+	out, err := e.command("ps", "-q", "--filter", "volume="+volume, "--filter", "status=running").Output()
+	if err != nil {
+		return nil
+	}
+	return splitLines(out)
+}
+
+// PauseUsing freezes the containers that mount a volume, so a copy of it is consistent, and returns the ones it froze.
+func (e *Engine) PauseUsing(volume string) []string {
+	var paused []string
+	for _, c := range e.RunningUsing(volume) {
+		if e.command("pause", c).Run() == nil {
+			paused = append(paused, c)
+		}
+	}
+	return paused
+}
+
+// Unpause resumes frozen containers.
+func (e *Engine) Unpause(containers []string) {
+	for _, c := range containers {
+		_ = e.command("unpause", c).Run()
+	}
+}
+
+// UnpauseLeftovers resumes containers a crash left frozen mid-backup.
+func (e *Engine) UnpauseLeftovers() {
+	out, err := e.command("ps", "-q", "--filter", "status=paused", "--filter", "label=skiff=1").Output()
+	if err == nil {
+		e.Unpause(splitLines(out))
+	}
+}
+
 func mountArgs(mounts []Mount) []string {
 	var args []string
 	for _, m := range mounts {

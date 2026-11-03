@@ -104,11 +104,13 @@ func (p *Panel) pruneVolumes(src Source) {
 	for _, name := range p.eng.AppVolumes(src.App) {
 		if !keep[name] {
 			_ = p.eng.RemoveVolume(name)
+			removeVolumeBackups(src.App, strings.TrimPrefix(name, config.VolumeName(src.App, "")))
 		}
 	}
 }
 
 func (p *Panel) removeAppVolumes(app string) {
+	removeAppVolumeBackups(app)
 	for _, name := range p.eng.AppVolumes(app) {
 		_ = p.eng.RemoveVolume(name)
 	}

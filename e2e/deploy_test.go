@@ -72,7 +72,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 
 	checkSecretsStayOutOfImage(t, c, panelAddr, routerAddr)
 	checkMCP(t, c, bin, panelAddr, routerAddr, project.Deploys[0].ID)
-	checkVolumes(t, c, panelAddr)
+	checkVolumes(t, c, home, panelAddr, routerAddr, "v2")
 	checkHealthCheck(t, c, panelAddr, routerAddr)
 	checkPreviewPassword(t, c, root, panelAddr, routerAddr)
 	checkImageProject(t, c, panelAddr, routerAddr)
@@ -92,7 +92,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 }
 
 // checkVolumes gives the project a volume and checks a file written to it survives a redeploy onto new containers.
-func checkVolumes(t *testing.T, c *http.Client, panelAddr string) {
+func checkVolumes(t *testing.T, c *http.Client, home, panelAddr, routerAddr, version string) {
 	t.Helper()
 	t.Cleanup(func() {
 		_ = exec.Command("sh", "-c", "docker volume rm -f $(docker volume ls -q --filter label=skiff.volume.app="+app+") $(docker volume ls -q --filter label=skiff.volume.app="+app+"-feat)").Run()
@@ -121,6 +121,79 @@ func checkVolumes(t *testing.T, c *http.Client, panelAddr string) {
 	getJSON(t, c, "http://"+panelAddr+"/api/volumes?app="+app, &vols)
 	if vols.Kind != "project" || len(vols.Volumes) != 1 || !vols.Volumes[0].Attached {
 		t.Fatalf("volumes view = %+v", vols)
+	}
+	checkVolumeBackups(t, c, home, panelAddr, routerAddr, version)
+}
+
+// checkVolumeBackups changes a volume after backing it up, restores, and reads the files back, then undoes it and tries a damaged backup.
+func checkVolumeBackups(t *testing.T, c *http.Client, home, panelAddr, routerAddr, version string) {
+	t.Helper()
+	base := "http://" + panelAddr + "/api/volumes/backups"
+	ctr := appContainer(t, app)
+	dockerExec(t, ctr, "mkdir -p /data/sub && echo nested > /data/sub/file && echo hidden > /data/.hidden && chmod 640 /data/note && chown 1000:1000 /data/sub/file")
+
+	var b struct{ ID string }
+	postJSON(t, c, base+"?app="+app+"&volume=data", "", &b)
+	if out, _ := exec.Command("docker", "inspect", "-f", "{{.State.Paused}}", ctr).Output(); strings.TrimSpace(string(out)) != "false" {
+		t.Fatalf("the app is still paused after a backup: %s", out)
+	}
+
+	state := func() string {
+		return dockerExec(t, appContainer(t, app), "cat /data/note; ls -A /data | tr '\\n' ' '; stat -c '%a %u' /data/note /data/sub/file 2>/dev/null | tr '\\n' ' '")
+	}
+	want := state()
+	dockerExec(t, ctr, "echo changed > /data/note; echo later > /data/later; rm -rf /data/sub /data/.hidden")
+	changed := state()
+	if changed == want {
+		t.Fatalf("the change did nothing: %q", changed)
+	}
+
+	post(t, c, base+"/restore?id="+b.ID, "")
+	if got := state(); got != want {
+		t.Fatalf("after restore:\n got %q\nwant %q", got, want)
+	}
+	if got := appContainer(t, app); got != ctr {
+		t.Fatalf("the restore replaced the container: %s", got)
+	}
+	expectServed(t, routerAddr, version)
+
+	var list []struct{ ID, Trigger string }
+	getJSON(t, c, base+"?app="+app+"&volume=data", &list)
+	undo := ""
+	for _, x := range list {
+		if x.Trigger == "pre-restore" {
+			undo = x.ID
+		}
+	}
+	if undo == "" {
+		t.Fatalf("no backup taken before the restore: %+v", list)
+	}
+	post(t, c, base+"/restore?id="+undo, "")
+	if got := state(); got != changed {
+		t.Fatalf("undoing the restore:\n got %q\nwant %q", got, changed)
+	}
+
+	files, _ := filepath.Glob(filepath.Join(home, ".skiff", "backups", "vol-"+app+"-data", b.ID+".tar.gz"))
+	if len(files) != 1 {
+		t.Fatalf("backup file: %v", files)
+	}
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(files[0], data[:len(data)/2], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := c.Post(base+"/restore?id="+b.ID, "application/json", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode < 400 {
+		t.Fatalf("a damaged backup reported success: %d", resp.StatusCode)
+	}
+	if got := state(); got != changed {
+		t.Fatalf("a failed restore changed the files:\n got %q\nwant %q", got, changed)
 	}
 }
 

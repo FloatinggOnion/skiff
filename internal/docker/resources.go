@@ -86,13 +86,14 @@ func (e *Engine) RunOnce(ctx context.Context, image string, env map[string]strin
 	return string(out), err
 }
 
-// RunInput runs a throwaway container with stdin attached and no memory limit, for one-off work on a volume whose size isn't known in advance.
-func (e *Engine) RunInput(ctx context.Context, image string, volumes []Mount, cmd string, stdin io.Reader) error {
+// RunIO runs a throwaway container with its streams attached and no memory limit, for one-off work on a volume whose size isn't known in advance.
+func (e *Engine) RunIO(ctx context.Context, image string, volumes []Mount, cmd string, stdin io.Reader, stdout io.Writer) error {
 	args := []string{"run", "--rm", "-i"}
 	args = append(args, mountArgs(volumes)...)
 	args = append(args, image, "sh", "-c", cmd)
 	c := e.contextCommand(ctx, args...)
 	c.Stdin = stdin
+	c.Stdout = stdout
 	var errb bytes.Buffer
 	c.Stderr = &errb
 	if err := c.Run(); err != nil {

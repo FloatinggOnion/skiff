@@ -42,7 +42,7 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 			exec: func(ctr, stmt string) []string {
 				return []string{"exec", ctr, "psql", "-U", "skiff", "-d", "pgrestore", "-v", "ON_ERROR_STOP=1", "-qtAc", stmt}
 			},
-			seed:   "create table t(id int primary key, v text); insert into t values (1,'original'),(2,'original');",
+			seed:   "drop table if exists t; create table t(id int primary key, v text); insert into t values (1,'original'),(2,'original');",
 			change: "update t set v='changed' where id=1; delete from t where id=2; insert into t values (3,'later'); create table later(id int); create schema extra;",
 			state:  "select (select string_agg(id||v, ',' order by id) from t) || '|' || (select string_agg(tablename, ',' order by tablename) from pg_tables where schemaname not in ('pg_catalog','information_schema')) || '|' || (select count(*) from pg_namespace where nspname='extra')",
 			want:   "1original,2original|t|0",
@@ -52,7 +52,7 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 			exec: func(ctr, stmt string) []string {
 				return []string{"exec", ctr, "sh", "-c", "MYSQL_PWD=$MYSQL_PASSWORD mysql -N -u skiff myrestore -e \"" + stmt + "\""}
 			},
-			seed:   "create table t(id int primary key, v text); insert into t values (1,'original'),(2,'original');",
+			seed:   "drop table if exists t; create table t(id int primary key, v text); insert into t values (1,'original'),(2,'original');",
 			change: "update t set v='changed' where id=1; delete from t where id=2; insert into t values (3,'later'); create table later(id int); create view lv as select id from t;",
 			state:  "select (select group_concat(concat(id,v) order by id) from t), (select group_concat(table_name order by table_name) from information_schema.tables where table_schema=database())",
 			want:   "1original,2original\tt",
@@ -62,7 +62,7 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 			exec: func(ctr, stmt string) []string {
 				return []string{"exec", ctr, "sh", "-c", "mongosh --quiet -u skiff -p $MONGO_INITDB_ROOT_PASSWORD --authenticationDatabase admin morestore --eval '" + stmt + "'"}
 			},
-			seed:   `db.t.insertMany([{_id:1,v:"original"},{_id:2,v:"original"}])`,
+			seed:   `db.t.drop();db.t.insertMany([{_id:1,v:"original"},{_id:2,v:"original"}])`,
 			change: `db.t.updateOne({_id:1},{$set:{v:"changed"}});db.t.deleteOne({_id:2});db.t.insertOne({_id:3,v:"later"});db.later.insertOne({x:1})`,
 			state:  `print(db.t.find().sort({_id:1}).toArray().map(d=>d._id+d.v).join(",")+"|"+db.getCollectionNames().sort().join(","))`,
 			want:   "1original,2original|t",
@@ -94,10 +94,19 @@ func TestRestoreReturnsToBackup(t *testing.T) {
 				return strings.TrimSpace(string(out)), err
 			}
 			// The official images restart once while initialising, so keep trying until the seed lands.
-			eventually(t, 3*time.Minute, func() bool {
-				_, err := sql(e.seed)
-				return err == nil
-			})
+			var lastSeed string
+			deadline := time.Now().Add(3 * time.Minute)
+			for {
+				out, err := sql(e.seed)
+				if err == nil {
+					break
+				}
+				lastSeed = fmt.Sprintf("%v: %s", err, out)
+				if time.Now().After(deadline) {
+					t.Fatalf("seeding never succeeded: %s", lastSeed)
+				}
+				time.Sleep(2 * time.Second)
+			}
 			if got, err := sql(e.state); err != nil || got != e.want {
 				t.Fatalf("after seeding: %q %v", got, err)
 			}
