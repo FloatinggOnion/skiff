@@ -101,7 +101,7 @@ func SelfUpdate(opts SelfUpdateOpts) error {
 	if e := runLogged(f, "docker", "run", "--rm",
 		"-e", "CGO_ENABLED=0", "-e", "GOTOOLCHAIN=local", "-e", "GOFLAGS=-buildvcs=false",
 		"-v", src+":/w", "-v", "skiff-gobuild:/root/.cache/go-build", "-v", "skiff-gomod:/go/pkg/mod",
-		"-w", "/w", "golang:1.25", "go", "build", "-o", "/w/skiff.new", ".",
+		"-w", "/w", "golang:1.26", "go", "build", "-o", "/w/skiff.new", ".",
 	); e != nil {
 		return fail("compile failed (see log)")
 	}
