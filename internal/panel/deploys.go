@@ -127,6 +127,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	defer done()
 	go p.commentOnPR(src, shortCommit(commit), "building")
 	sha := commit
+	setDeploySHA(src.App, id, sha)
 	status, stopStatus := p.statusReporter(src)
 	defer stopStatus()
 	status(sha, "building")
@@ -171,6 +172,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		}
 		if commit == "" {
 			setDeployCommit(src.App, id, shortCommit(sha))
+			setDeploySHA(src.App, id, sha)
 		}
 	}
 	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, deployEnv(src), appNetwork(src), p.volumeDefs(src)))

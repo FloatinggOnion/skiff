@@ -112,6 +112,7 @@ var migrations = []string{
 	`ALTER TABLE deploys ADD COLUMN finished INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE deploys ADD COLUMN branch TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE deploys ADD COLUMN actor TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE deploys ADD COLUMN full_sha TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `

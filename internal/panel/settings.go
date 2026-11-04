@@ -105,6 +105,10 @@ func (p *Panel) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Remove the projects and databases in “"+t.Name+"” before deleting your account.", http.StatusBadRequest)
 				return
 			}
+			if otherTeamsExist(t.ID) {
+				http.Error(w, foundingTeamInUse, http.StatusBadRequest)
+				return
+			}
 			soloTeams = append(soloTeams, t.ID)
 			continue
 		}
@@ -163,6 +167,10 @@ func (p *Panel) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if role, ok := p.auth.Role(s.userID, s.teamID); !ok || role != auth.RoleOwner {
 		http.Error(w, "only owners can delete a team", http.StatusForbidden)
+		return
+	}
+	if otherTeamsExist(s.teamID) {
+		http.Error(w, foundingTeamInUse, http.StatusBadRequest)
 		return
 	}
 	if len(p.auth.TeamsForUser(s.userID)) <= 1 {

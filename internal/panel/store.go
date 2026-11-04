@@ -253,6 +253,11 @@ func setDeployCommit(app, id, commit string) {
 	_, _ = sqlDB.Exec(`UPDATE deploys SET commit_sha=? WHERE id=? AND app=?`, commit, id, app)
 }
 
+// setDeploySHA keeps a deploy's full commit, which GitHub needs for a status. The list only shows the short one.
+func setDeploySHA(app, id, sha string) {
+	_, _ = sqlDB.Exec(`UPDATE deploys SET full_sha=? WHERE id=? AND app=?`, sha, id, app)
+}
+
 func setDeployStatus(app, id, status string) {
 	_, _ = sqlDB.Exec(`UPDATE deploys SET status=?, finished=CASE WHEN finished=0 AND ?<>'building' THEN ? ELSE finished END WHERE id=? AND app=?`,
 		status, status, time.Now().Unix(), id, app)

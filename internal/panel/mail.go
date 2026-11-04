@@ -166,11 +166,21 @@ func (p *Panel) isInstanceAdmin(r *http.Request) bool {
 // foundingTeam is the team the first account created at setup, ordered by insertion since `created` is only second-resolution.
 func foundingTeam() string {
 	var team string
-	_ = sqlDB.QueryRow(
-		`SELECT team_id FROM memberships WHERE user_id = (SELECT id FROM users ORDER BY rowid LIMIT 1)
-		   AND role = ? ORDER BY rowid LIMIT 1`, auth.RoleOwner).Scan(&team)
+	_ = sqlDB.QueryRow(`SELECT id FROM teams ORDER BY rowid LIMIT 1`).Scan(&team)
 	return team
 }
+
+// otherTeamsExist reports whether removing the founding team would hand the server to whoever owns the next one.
+func otherTeamsExist(team string) bool {
+	if team != foundingTeam() {
+		return false
+	}
+	var n int
+	_ = sqlDB.QueryRow(`SELECT COUNT(*) FROM teams WHERE id<>?`, team).Scan(&n)
+	return n > 0
+}
+
+const foundingTeamInUse = "This team runs the server, and removing it would hand the server to another team. Remove the other teams first."
 
 // servedByAnotherTeam reports whether another team already serves this domain on the web, so its mail can't be claimed out from under them.
 func servedByAnotherTeam(domain, team string) bool {

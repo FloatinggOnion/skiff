@@ -98,6 +98,12 @@ func (p *Panel) settleOrphanDeploy(d orphanDeploy) {
 	}
 	setDeployStatus(d.app, d.id, status)
 	log.Printf("skiff: deploy %s of %s, cut short by a panel restart: %s", d.id, d.app, status)
+	// The panel that was reporting to GitHub is gone, so the commit would stay pending.
+	var sha string
+	_ = sqlDB.QueryRow(`SELECT full_sha FROM deploys WHERE id=? AND app=?`, d.id, d.app).Scan(&sha)
+	if src, ok := getSource(d.app); ok && sha != "" {
+		go p.reportStatus(src, sha, status)
+	}
 	if status == "failed" {
 		if src, ok := getSource(d.app); ok {
 			go dispatchAlert(alertEvent{Team: src.Team, Kind: "deploy.failed", App: d.app,
