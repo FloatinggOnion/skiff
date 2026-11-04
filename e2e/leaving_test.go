@@ -71,6 +71,40 @@ func TestLeaving(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// A bucket copies out through its own container's network, because its address is private to Skiff's.
+	var bucket struct{ Name, Endpoint, AccessKey, SecretKey string }
+	postJSON(t, b.c, b.url("/api/storage"), `{"name":"media"}`, &bucket)
+	store := strings.TrimSuffix(strings.TrimPrefix(bucket.Endpoint, "http://"), ":8333")
+	t.Cleanup(func() {
+		_ = exec.Command("docker", "rm", "-f", store).Run()
+		_ = exec.Command("docker", "volume", "rm", store+"-data").Run()
+	})
+	copied := filepath.Join(b.root, "bucket")
+	aws := func(args ...string) (string, error) {
+		full := append([]string{"run", "--rm", "--network", "container:" + store, "-v", copied + ":/out",
+			"-e", "AWS_ACCESS_KEY_ID=" + bucket.AccessKey, "-e", "AWS_SECRET_ACCESS_KEY=" + bucket.SecretKey, "-e", "AWS_DEFAULT_REGION=us-east-1",
+			"amazon/aws-cli:2.27.50", "--endpoint-url", "http://localhost:8333"}, args...)
+		out, err := exec.Command("docker", full...).CombinedOutput()
+		return string(out), err
+	}
+	if err := os.MkdirAll(copied, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(copied, "seed.txt"), []byte("kept"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 3*time.Minute, func() bool {
+		_, err := aws("s3", "cp", "/out/seed.txt", "s3://"+bucket.Name+"/nested/seed.txt")
+		return err == nil
+	})
+	_ = os.Remove(filepath.Join(copied, "seed.txt"))
+	if out, err := aws("s3", "sync", "s3://"+bucket.Name, "/out"); err != nil {
+		t.Fatalf("copying the bucket out: %v: %s", err, out)
+	}
+	if got, err := os.ReadFile(filepath.Join(copied, "nested", "seed.txt")); err != nil || string(got) != "kept" {
+		t.Fatalf("object copied out: %q %v", got, err)
+	}
+
 	// Skiff is gone: its processes, the app's container and the database.
 	b.stopPanel()
 	b.stopRouter()
