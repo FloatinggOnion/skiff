@@ -36,7 +36,11 @@ func adoptCLIApps(apps map[string]registry.App, team string) []string {
 			App: name, Team: team, Port: strconv.Itoa(a.Port), Origin: originCLI,
 			Replicas: replicas, ScaleMin: 1, ScaleMax: 1,
 		}
+		if envStage.heldByOther(name, team, time.Now()) {
+			_ = setEnv(name, nil)
+		}
 		if putSource(src) == nil {
+			envStage.release(name)
 			adopted = append(adopted, name)
 		}
 	}

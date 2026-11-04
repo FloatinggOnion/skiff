@@ -40,8 +40,8 @@ type serverInfo struct {
 }
 
 func (p *Panel) handleServer(w http.ResponseWriter, r *http.Request) {
-	// The box view lists every container across teams, so it's owners-only — a member mustn't enumerate other teams' apps.
-	if !p.isOwner(r) {
+	// The box view lists every container across teams, so it's for whoever runs the box — no team's owner or member may enumerate other teams' apps.
+	if !p.isInstanceAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

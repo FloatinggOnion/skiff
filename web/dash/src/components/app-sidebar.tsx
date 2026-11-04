@@ -129,7 +129,9 @@ export default function AppSidebar({
             )}
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {section.items.map((n) => (
+                {section.items
+                  .filter((n) => n.to !== '/server' || me.admin)
+                  .map((n) => (
                   <SidebarMenuItem key={n.to}>
                     <SidebarMenuButton
                       asChild

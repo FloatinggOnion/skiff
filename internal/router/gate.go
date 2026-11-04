@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,14 +17,21 @@ const (
 	gateLifetime = 7 * 24 * time.Hour
 	maxFailures  = 10
 	failWindow   = 10 * time.Minute
+	// Wrong guesses allowed per app across all visitors, and the most keys tracked at once.
+	maxAppFailures = 2000
+	maxGateKeys    = 10_000
+	maxGateWork    = 4
 )
+
+// gateWork bounds password hashing running at once, so guesses can't use up the edge's CPU.
+var gateWork = make(chan struct{}, maxGateWork)
 
 type gateState struct {
 	mu       sync.Mutex
 	apps     gate.Apps
 	modTime  time.Time
 	size     int64
-	failures map[string][]time.Time // client IP → recent wrong passwords
+	failures map[string][]time.Time // app|visitor and app → recent wrong passwords
 }
 
 // protectedApps re-reads the list as soon as it changes rather than on a timer, so a preview that comes up within seconds of being locked is never served open.
@@ -69,13 +77,22 @@ func (rt *Router) unlock(w http.ResponseWriter, r *http.Request, app, hash strin
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	_ = r.ParseForm()
 	next := safeNext(r.PostForm.Get("next"))
-	ip := clientIP(r)
-	if !rt.allowAttempt(ip) {
+	visitor := app + "|" + limitKey(r)
+	if !rt.allowAttempt(visitor, app) {
 		askPassword(w, next, "Too many attempts. Try again in a few minutes.", http.StatusTooManyRequests)
 		return
 	}
-	if !gate.Check(hash, r.PostForm.Get("password")) {
-		rt.noteFailure(ip)
+	select {
+	case gateWork <- struct{}{}:
+	case <-time.After(2 * time.Second):
+		w.Header().Set("Retry-After", "5")
+		askPassword(w, next, "Busy right now. Try again in a moment.", http.StatusServiceUnavailable)
+		return
+	}
+	ok := gate.Check(hash, r.PostForm.Get("password"))
+	<-gateWork
+	if !ok {
+		rt.noteFailure(visitor, app)
 		askPassword(w, next, "That password isn't right.", http.StatusUnauthorized)
 		return
 	}
@@ -86,40 +103,72 @@ func (rt *Router) unlock(w http.ResponseWriter, r *http.Request, app, hash strin
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
-func (rt *Router) allowAttempt(ip string) bool {
-	rt.gate.mu.Lock()
-	defer rt.gate.mu.Unlock()
-	recent := rt.gate.failures[ip][:0]
-	for _, t := range rt.gate.failures[ip] {
+// recent returns the unexpired failures for key, dropping the key once none remain.
+func (g *gateState) recent(key string) []time.Time {
+	recent := g.failures[key][:0]
+	for _, t := range g.failures[key] {
 		if time.Since(t) < failWindow {
 			recent = append(recent, t)
 		}
 	}
 	if len(recent) == 0 {
-		delete(rt.gate.failures, ip)
+		delete(g.failures, key)
 	} else {
-		rt.gate.failures[ip] = recent
+		g.failures[key] = recent
 	}
-	return len(recent) < maxFailures
+	return recent
 }
 
-func (rt *Router) noteFailure(ip string) {
+// allowAttempt checks the visitor's own failures and the app's total, so spreading guesses across addresses doesn't help.
+func (rt *Router) allowAttempt(visitor, app string) bool {
+	rt.gate.mu.Lock()
+	defer rt.gate.mu.Unlock()
+	return len(rt.gate.recent(visitor)) < maxFailures && len(rt.gate.recent(app)) < maxAppFailures
+}
+
+func (rt *Router) noteFailure(visitor, app string) {
 	rt.gate.mu.Lock()
 	defer rt.gate.mu.Unlock()
 	if rt.gate.failures == nil {
 		rt.gate.failures = map[string][]time.Time{}
 	}
-	// Bound memory if a flood of addresses tries.
-	if len(rt.gate.failures) > 10_000 {
-		rt.gate.failures = map[string][]time.Time{}
+	if len(rt.gate.failures) >= maxGateKeys {
+		rt.gate.evictOldest()
 	}
-	rt.gate.failures[ip] = append(rt.gate.failures[ip], time.Now())
+	now := time.Now()
+	rt.gate.failures[visitor] = append(rt.gate.failures[visitor], now)
+	rt.gate.failures[app] = append(rt.gate.failures[app], now)
 }
 
-// safeNext keeps the post-unlock redirect on this host.
+// evictOldest drops the tenth of keys whose latest failure is oldest, so a flood of addresses forgets the stalest history rather than everyone's.
+func (g *gateState) evictOldest() {
+	type entry struct {
+		key  string
+		last time.Time
+	}
+	all := make([]entry, 0, len(g.failures))
+	for k, ts := range g.failures {
+		last := time.Time{}
+		if len(ts) > 0 {
+			last = ts[len(ts)-1]
+		}
+		all = append(all, entry{k, last})
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].last.Before(all[j].last) })
+	for _, e := range all[:len(all)/10+1] {
+		delete(g.failures, e.key)
+	}
+}
+
+// safeNext keeps the post-unlock redirect on this host; browsers drop tabs and newlines inside a URL, so "/\t/host" would otherwise leave it.
 func safeNext(next string) string {
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") || strings.HasPrefix(next, unlockPath) {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, unlockPath) {
 		return "/"
+	}
+	for _, c := range next {
+		if c < 0x20 || c == 0x7f || c == '\\' {
+			return "/"
+		}
 	}
 	return next
 }

@@ -88,7 +88,7 @@ func TestAddBranchDomainBindsToPreview(t *testing.T) {
 	p := &Panel{auth: store, domain: "skiff.test"}
 	req := httptest.NewRequest("POST", "/api/domains",
 		strings.NewReader(`{"app":"web","host":"staging.acme.com","branch":"staging"}`))
-	req.AddCookie(&http.Cookie{Name: "skiff_session", Value: "s"})
+	req.AddCookie(&http.Cookie{Name: p.cookieName(), Value: "s"})
 	w := httptest.NewRecorder()
 	p.handleDomains(w, req)
 
@@ -105,7 +105,7 @@ func TestAddBranchDomainBindsToPreview(t *testing.T) {
 
 	req2 := httptest.NewRequest("POST", "/api/domains",
 		strings.NewReader(`{"app":"ghost","host":"x.acme.com","branch":"staging"}`))
-	req2.AddCookie(&http.Cookie{Name: "skiff_session", Value: "s"})
+	req2.AddCookie(&http.Cookie{Name: p.cookieName(), Value: "s"})
 	w2 := httptest.NewRecorder()
 	p.handleDomains(w2, req2)
 	if w2.Code == http.StatusOK {

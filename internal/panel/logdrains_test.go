@@ -285,7 +285,7 @@ func TestLogDrainHandler(t *testing.T) {
 	_ = putSession("member-token", member.ID, team.ID)
 	call := func(token, method, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, "/api/log-drain", strings.NewReader(body))
-		req.AddCookie(&http.Cookie{Name: "skiff_session", Value: token})
+		req.AddCookie(&http.Cookie{Name: p.cookieName(), Value: token})
 		w := httptest.NewRecorder()
 		p.handleLogDrain(w, req)
 		return w

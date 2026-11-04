@@ -52,6 +52,9 @@ env vars set in the dashboard (skiff.toml still wins when both set a key).`,
 			if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
 				base = "https://" + base
 			}
+			if strings.HasPrefix(base, "http://") && !isLocalURL(base) {
+				ui.Note("warning: " + base + " is plain http, so the sign-in and the token it returns travel unencrypted. Use https:// unless this is a network you trust.")
+			}
 			host, _ := os.Hostname()
 			body := strings.NewReader(fmt.Sprintf(`{"host":%q}`, host))
 			resp, err := http.Post(base+"/api/cli/login", "application/json", body)
@@ -67,8 +70,10 @@ env vars set in the dashboard (skiff.toml still wins when both set a key).`,
 
 			fmt.Println()
 			ui.Field("code", start.Code)
-			ui.Note("approve it in your browser: " + start.ApproveURL)
-			openBrowser(start.ApproveURL)
+			ui.Note("open this in your browser and enter the code: " + stripControl(start.ApproveURL))
+			if approveURLOK(start.ApproveURL, base) {
+				openBrowser(start.ApproveURL)
+			}
 
 			deadline := time.Now().Add(10 * time.Minute)
 			for time.Now().Before(deadline) {
@@ -98,6 +103,27 @@ env vars set in the dashboard (skiff.toml still wins when both set a key).`,
 			return fmt.Errorf("timed out waiting for approval")
 		},
 	}
+}
+
+// approveURLOK reports whether the address the server returned is on the dashboard the user named, so a server can't send the browser elsewhere.
+func approveURLOK(approve, base string) bool {
+	if approve == base || strings.HasPrefix(approve, base+"/") {
+		return true
+	}
+	u, err := url.Parse(base)
+	return err == nil && u.Host != "" && strings.HasPrefix(approve, "https://"+u.Host+"/")
+}
+
+func isLocalURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }
 
 func newLogoutCmd() *cobra.Command {

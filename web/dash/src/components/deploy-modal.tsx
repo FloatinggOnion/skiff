@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, ArrowLeft, Database, GitBranch, MemoryStick, Search, Plus } from 'lucide-react'
 import { useGithub } from '@/hooks/use-github'
+import { useAuthContext } from '@/context/auth-context'
 import { useDeployForm } from '@/hooks/use-deploy-form'
 import {
   envService,
@@ -55,6 +56,7 @@ const descriptions: Record<Mode, string> = {
 
 export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onDeployImage }: Props) {
   const gh = useGithub(open)
+  const { me } = useAuthContext()
   const [mode, setMode] = useState<Mode>('github')
   const [selected, setSelected] = useState<Repo | null>(null)
   const [search, setSearch] = useState('')
@@ -128,9 +130,18 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
           <p className="text-muted-foreground py-8 text-center text-sm">…</p>
         ) : !gh.status.configured ? (
           <ConnectCard
-            hint="Create the Skiff GitHub App once to deploy any of your repositories."
+            hint={
+              me?.admin
+                ? 'Create the Skiff GitHub App once to deploy any of your repositories.'
+                : "GitHub isn't connected yet. Ask whoever set up this Skiff to connect it."
+            }
             label="Connect GitHub"
-            href="/api/github/create"
+            href={me?.admin ? '/api/github/create' : undefined}
+          />
+        ) : gh.status.usable === false ? (
+          <ConnectCard
+            hint="This server's GitHub connection belongs to the team that set it up. Deploy from a git URL with your own token instead."
+            label="Not available to your team"
           />
         ) : !gh.status.installed ? (
           <ConnectCard
@@ -262,14 +273,16 @@ export function DeployModal({ open, onOpenChange, onDeployUrl, onDeployRepo, onD
   )
 }
 
-function ConnectCard({ hint, label, href }: { hint: string; label: string; href: string }) {
+function ConnectCard({ hint, label, href }: { hint: string; label: string; href?: string }) {
   return (
     <div className="flex flex-col items-center gap-4 py-8 text-center">
       <GitBranch className="text-muted-foreground h-8 w-8" />
       <p className="text-muted-foreground max-w-xs text-sm">{hint}</p>
-      <Button asChild>
-        <a href={href}>{label}</a>
-      </Button>
+      {href && (
+        <Button asChild>
+          <a href={href}>{label}</a>
+        </Button>
+      )}
     </div>
   )
 }

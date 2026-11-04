@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"strings"
 	"syscall"
@@ -170,10 +171,28 @@ func publicHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
+// extraBlocked are ranges net.IP doesn't call private: shared address space, protocol assignments, and the IPv6 forms that wrap an IPv4 address.
+var extraBlocked = func() []*net.IPNet {
+	var out []*net.IPNet
+	for _, c := range []string{"100.64.0.0/10", "192.0.0.0/24", "64:ff9b::/96", "2002::/16"} {
+		_, n, _ := net.ParseCIDR(c)
+		out = append(out, n)
+	}
+	return out
+}()
+
 func isBlockedDialIP(ip net.IP) bool {
-	return ip == nil || ip.IsLoopback() || ip.IsPrivate() ||
+	if ip == nil || ip.IsLoopback() || ip.IsPrivate() ||
 		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsUnspecified() || ip.IsMulticast()
+		ip.IsUnspecified() || ip.IsMulticast() {
+		return true
+	}
+	for _, n := range extraBlocked {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func postJSON(url string, payload any) error {
@@ -210,11 +229,26 @@ func slackText(ev alertEvent) string {
 
 func nowUnix() int64 { return time.Now().Unix() }
 
+// maskURL keeps a webhook's scheme and host so members can tell where alerts go without the path or key that authorises posting there.
+func maskURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "••••"
+	}
+	return u.Scheme + "://" + u.Host + "/••••"
+}
+
 func (p *Panel) handleAlerts(w http.ResponseWriter, r *http.Request) {
 	team := p.teamID(r)
 	switch r.Method {
 	case http.MethodGet:
 		cfg := getAlerts(team)
+		if !p.isOwner(r) {
+			cfg.SlackURL, cfg.WebhookURL = maskURL(cfg.SlackURL), maskURL(cfg.WebhookURL)
+		}
 		_, smtpOK := smtpConfig()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(struct {
@@ -222,6 +256,10 @@ func (p *Panel) handleAlerts(w http.ResponseWriter, r *http.Request) {
 			SMTP bool `json:"smtp"`
 		}{cfg, smtpOK})
 	case http.MethodPut:
+		if !p.isOwner(r) {
+			http.Error(w, "only team owners can change alerts", http.StatusForbidden)
+			return
+		}
 		var body AlertConfig
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		cfg := AlertConfig{

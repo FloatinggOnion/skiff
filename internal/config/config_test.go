@@ -209,3 +209,20 @@ func TestValidateResources(t *testing.T) {
 		}
 	}
 }
+
+func TestServerHostIsValidated(t *testing.T) {
+	for _, h := range []string{"", "local", "root@203.0.113.7", "deploy@host.example:2222", "host-1.example"} {
+		if err := ValidateHost(h); err != nil {
+			t.Errorf("%q should be accepted: %v", h, err)
+		}
+	}
+	for _, h := range []string{"-oProxyCommand=id", "-host", "host name", "host;id", "a@b/c", "host\n", "ssh://x"} {
+		if err := ValidateHost(h); err == nil {
+			t.Errorf("%q should be refused", h)
+		}
+	}
+	p := write(t, "skiff.toml", "name = \"a\"\n[server]\nhost = \"-oProxyCommand=id\"\n")
+	if _, err := Load(p); err == nil {
+		t.Error("Load should refuse an option-shaped host")
+	}
+}

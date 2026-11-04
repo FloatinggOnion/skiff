@@ -42,6 +42,7 @@ func (p *Panel) handlePassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	p.endOtherSessions(r, s.userID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -62,8 +63,8 @@ func (p *Panel) reassignTeam(w http.ResponseWriter, r *http.Request, userID stri
 	if teams := p.auth.TeamsForUser(userID); len(teams) > 0 {
 		next = teams[0].ID
 	}
-	if c, err := r.Cookie("skiff_session"); err == nil {
-		setSessionTeam(c.Value, next)
+	if tok, ok := p.sessionToken(r); ok {
+		setSessionTeam(tok, next)
 	}
 }
 
@@ -73,8 +74,8 @@ func (p *Panel) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	var body struct{ Password string }
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	var body struct{ Password, Code string }
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body)
 	u, ok := p.auth.User(s.userID)
 	if !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -83,6 +84,17 @@ func (p *Panel) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 	if _, valid := p.auth.Authenticate(u.Email, body.Password); !valid {
 		http.Error(w, "wrong password", http.StatusUnauthorized)
 		return
+	}
+	if p.auth.HasTwoFactor(u.ID) {
+		ok, locked := p.checkFactor(u.ID, body.Code)
+		if locked {
+			http.Error(w, "too many attempts — try again later", http.StatusTooManyRequests)
+			return
+		}
+		if !ok {
+			http.Error(w, auth.ErrBadCode.Error(), http.StatusUnauthorized)
+			return
+		}
 	}
 
 	var soloTeams []string
@@ -121,7 +133,7 @@ func (p *Panel) handleAccountDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = sqlDB.Exec(`DELETE FROM sessions WHERE user_id = ?`, s.userID)
-	http.SetCookie(w, &http.Cookie{Name: "skiff_session", Value: "", Path: "/", MaxAge: -1})
+	p.clearSessionCookie(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 

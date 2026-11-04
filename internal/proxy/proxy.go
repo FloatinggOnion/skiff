@@ -13,7 +13,7 @@ import (
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
-const DefaultAddr = ":8080"
+const DefaultAddr = "127.0.0.1:8080"
 
 type Proxy struct {
 	mu sync.Mutex
@@ -38,7 +38,7 @@ func URL(name string) string {
 }
 
 func portSuffix(addr string) string {
-	p := strings.TrimPrefix(addr, ":")
+	p := addr[strings.LastIndexByte(addr, ':')+1:]
 	if p == "" || p == "80" {
 		return ""
 	}
@@ -56,6 +56,10 @@ func Serve(addr string) error {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !localHost(r.Host) {
+		http.Error(w, "skiff: only *.localhost names are served here", http.StatusForbidden)
+		return
+	}
 	name := appName(r.Host)
 	if name == "" {
 		http.Error(w, "skiff: no app in host "+r.Host, http.StatusNotFound)
@@ -82,6 +86,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	rp.ServeHTTP(w, r)
+}
+
+// localHost accepts only localhost-style names, so a page on another site can't reach local apps by rebinding its own name to 127.0.0.1.
+func localHost(host string) bool {
+	if i := strings.LastIndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	return host == "localhost" || strings.HasSuffix(host, ".localhost")
 }
 
 func appName(host string) string {

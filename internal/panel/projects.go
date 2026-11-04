@@ -15,13 +15,13 @@ import (
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
-// cloneURLAllowed rejects non-http(s) clone URLs: git's ext::/file::/ssh transports can execute arbitrary commands during clone (GIT_ALLOW_PROTOCOL is the second line of defense).
+// cloneURLAllowed rejects non-http(s) clone URLs, since git's ext::/file::/ssh transports can execute arbitrary commands during clone (GIT_ALLOW_PROTOCOL is the second line of defense), and hosts on private networks.
 func cloneURLAllowed(raw string) bool {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
 		return false
 	}
-	return u.Scheme == "https" || u.Scheme == "http"
+	return cloneHostAllowed(u.Hostname())
 }
 
 type appView struct {
@@ -247,6 +247,10 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			src.Branch = strings.TrimSpace(body.Branch)
 			src.RootDir = strings.TrimSpace(body.RootDir)
 			if port := strings.TrimSpace(body.Port); port != "" {
+				if !validPort(port) {
+					http.Error(w, "port must be a number from 1 to 65535", http.StatusBadRequest)
+					return
+				}
 				src.Port = port
 			}
 		}
@@ -276,7 +280,10 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 		if src.Private {
 			src.SleepAfter = 0
 		}
-		_ = putSource(src)
+		if err := putSource(src); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		_ = writeEdgeFile()
 		p.audit(r, "settings.update", app, "")
 		w.WriteHeader(http.StatusNoContent)
@@ -426,13 +433,21 @@ func (p *Panel) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !cloneURLAllowed(git) {
-		http.Error(w, "git url must be an http(s) URL", http.StatusBadRequest)
+		http.Error(w, "git url must be a public http(s) URL (for a private git host, set SKIFF_ALLOW_PRIVATE_ENDPOINTS=1 on the server)", http.StatusBadRequest)
+		return
+	}
+	if !validPort(port) {
+		http.Error(w, "port must be a number from 1 to 65535", http.StatusBadRequest)
 		return
 	}
 	team := p.teamID(r)
 	existing, ok := getSource(name)
 	if ok && existing.Team != team {
 		http.Error(w, "an app with that name exists in another team", http.StatusConflict)
+		return
+	}
+	if !ok && nameReserved(name, team) {
+		http.Error(w, reservedNameMsg, http.StatusBadRequest)
 		return
 	}
 	if !ok && envStage.heldByOther(name, team, time.Now()) {
@@ -443,7 +458,10 @@ func (p *Panel) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		port = "3000"
 	}
 	src := Source{App: name, Port: port, CloneURL: git, RootDir: rootDir, Team: team}
-	_ = putSource(src)
+	if err := putSource(src); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
 	envStage.release(name)
 
 	auth := ""

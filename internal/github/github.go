@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -219,16 +220,56 @@ func (c *Config) ListRepos() ([]Repo, error) {
 	return repos, nil
 }
 
-func (c *Config) CloneURLWithToken(cloneURL string) (string, error) {
+// CloneURL is the plain https address of a repo given as owner/name.
+func CloneURL(repo string) string { return "https://github.com/" + repo + ".git" }
+
+var repoName = regexp.MustCompile(`^[\w.-]+/[\w.-]+$`)
+
+// ValidRepo reports whether s is an owner/name pair, not a path.
+func ValidRepo(s string) bool {
+	if !repoName.MatchString(s) {
+		return false
+	}
+	for _, part := range strings.Split(s, "/") {
+		if part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// IsCloneURLOf reports whether cloneURL is exactly the github.com address of repo, so the installation token is only ever offered to that one repository.
+func IsCloneURLOf(cloneURL, repo string) bool {
+	if !ValidRepo(repo) {
+		return false
+	}
+	u, err := url.Parse(strings.TrimSpace(cloneURL))
+	if err != nil || u.Scheme != "https" || u.Host != "github.com" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	path := strings.TrimSuffix(strings.TrimSuffix(strings.TrimPrefix(u.Path, "/"), "/"), ".git")
+	return strings.EqualFold(path, repo)
+}
+
+// CloneEnv hands git the installation token through its environment, so it isn't written to the clone's .git/config. Empty when cloneURL isn't repo's address.
+func (c *Config) CloneEnv(cloneURL, repo string) ([]string, error) {
+	if !IsCloneURLOf(cloneURL, repo) {
+		return nil, nil
+	}
 	token, err := c.InstallationToken()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	const p = "https://"
-	if strings.HasPrefix(cloneURL, p) {
-		return p + "x-access-token:" + token + "@" + cloneURL[len(p):], nil
+	return cloneAuthEnv(token), nil
+}
+
+func cloneAuthEnv(token string) []string {
+	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
+	return []string{
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http.https://github.com/.extraheader",
+		"GIT_CONFIG_VALUE_0=Authorization: basic " + basic,
 	}
-	return cloneURL, nil
 }
 
 func VerifySignature(secret string, body []byte, sig string) bool {

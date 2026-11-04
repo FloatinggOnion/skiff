@@ -66,18 +66,16 @@ func handleAppsAPI(w http.ResponseWriter, r *http.Request) {
 	for _, a := range apps {
 		state := docker.For(a.Host).State(a.Container)
 
-		probeHost := "127.0.0.1"
 		url := proxy.URL(a.Name)
 		target := "local"
 		if a.Host != "" {
-			probeHost = docker.SSHHostname(a.Host)
-			url = fmt.Sprintf("http://%s:%d", probeHost, a.HostPort)
+			url = ""
 			target = a.Host
 		}
 
 		health := "—"
 		if state == "running" {
-			if probe(probeHost, a.HostPort) {
+			if probeApp(a) {
 				health = "healthy"
 			} else {
 				health = "unreachable"

@@ -74,3 +74,68 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
+
+// factorThrottle locks a user out of second-factor attempts after too many wrong codes; unlike loginLimiter a correct password never clears it, only a correct code does.
+type factorThrottle struct {
+	mu    sync.Mutex
+	fails map[string]*factorFails
+}
+
+type factorFails struct {
+	count int
+	until time.Time
+}
+
+const (
+	factorMaxFails = 10
+	factorLockout  = 15 * time.Minute
+)
+
+var factorLimiter = &factorThrottle{fails: map[string]*factorFails{}}
+
+func (t *factorThrottle) locked(user string, now time.Time) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	f, ok := t.fails[user]
+	if !ok || f.count < factorMaxFails {
+		return false
+	}
+	if now.After(f.until) {
+		delete(t.fails, user)
+		return false
+	}
+	return true
+}
+
+func (t *factorThrottle) fail(user string, now time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	f, ok := t.fails[user]
+	if !ok {
+		f = &factorFails{}
+		t.fails[user] = f
+	}
+	f.count++
+	if f.count >= factorMaxFails {
+		f.until = now.Add(factorLockout)
+	}
+}
+
+func (t *factorThrottle) ok(user string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.fails, user)
+}
+
+// checkFactor verifies a second-factor code under the per-user lockout, reporting whether the user is locked out.
+func (p *Panel) checkFactor(userID, code string) (ok, locked bool) {
+	if factorLimiter.locked(userID, time.Now()) {
+		return false, true
+	}
+	if !p.auth.CheckSecondFactor(userID, code) {
+		factorLimiter.fail(userID, time.Now())
+		return false, false
+	}
+	factorLimiter.ok(userID)
+	return true, false
+}

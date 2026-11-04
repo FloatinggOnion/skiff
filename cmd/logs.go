@@ -30,10 +30,10 @@ func newLogsCmd() *cobra.Command {
 			}
 			app, ok := apps[name]
 			if ok && docker.For(app.Host).State(app.Container) != "missing" {
-				return docker.For(app.Host).Logs(app.Container, follow, tail, os.Stdout)
+				return docker.For(app.Host).Logs(app.Container, follow, tail, termSafe(os.Stdout))
 			}
 			if creds, signedIn := loadCredentials(); signedIn {
-				return remoteLogs(creds, name, follow, tail, os.Stdout)
+				return remoteLogs(creds, name, follow, tail, termSafe(os.Stdout))
 			}
 			ui.Fail("No app named " + name + " — run `skiff ls`, or `skiff login` to read logs from a server")
 			return fmt.Errorf("unknown app %q", name)

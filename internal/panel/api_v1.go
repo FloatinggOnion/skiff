@@ -203,7 +203,7 @@ func (p *Panel) apiCreatePreview(w http.ResponseWriter, r *http.Request) {
 	branch := strings.TrimSpace(body.Branch)
 	name, id, ok := p.createPreview(src, branch, "", "preview of "+branch)
 	if !ok {
-		apiErr(w, http.StatusBadRequest, "couldn't derive a preview name from that branch")
+		apiErr(w, http.StatusBadRequest, "couldn't make a preview name from that branch: it's empty or clashes with another app")
 		return
 	}
 	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "preview.create", Target: name, Detail: "via api"})

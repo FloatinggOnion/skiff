@@ -77,6 +77,7 @@ export default function Backends() {
       </p>
       <ul>
         <li>Your app sees connections coming from Skiff, not the client&apos;s address.</li>
+        <li>A connection that sends nothing in either direction for an hour is closed, so keep long-lived clients alive with pings.</li>
         <li>You may also need to allow the port in your provider&apos;s firewall.</li>
         <li>Connections aren&apos;t encrypted by Skiff, so use your service&apos;s own TLS and passwords.</li>
         <li>UDP isn&apos;t supported yet.</li>

@@ -31,7 +31,7 @@ const remoteScript = `d="$HOME/.skiff"; mkdir -p "$d" || exit 1; body='` + remot
 
 // sshCommand is swapped out in tests to run the script against a local $HOME.
 var sshCommand = func(target, script string) *exec.Cmd {
-	return exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", "-T", target,
+	return exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", "-T", "--", target,
 		"sh -c "+shQuote(script))
 }
 

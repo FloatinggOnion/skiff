@@ -121,6 +121,39 @@ func (p *Panel) copySegments(d dbRow, t OffsiteTarget) {
 	_, _ = sqlDB.Exec(`UPDATE pitr SET offsite_at=?, offsite_error='' WHERE db_id=? AND gen=?`, began, d.ID, gen)
 }
 
+// maxSegmentBytes bounds a file read from the database's archive directory, which the database's own user can write to; WAL segments are 16 MiB by default.
+const maxSegmentBytes = 80 << 20
+
+type capWriter struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (w *capWriter) Write(b []byte) (int, error) {
+	if w.buf.Len()+len(b) > w.max {
+		return 0, errors.New("file is larger than a WAL segment should be")
+	}
+	return w.buf.Write(b)
+}
+
+// readSegment reads one archived file, refusing it by size before reading and again while reading.
+func readSegment(run func(cmd []string, out io.Writer) error, name string) ([]byte, error) {
+	path := pitrMount + "/" + name
+	var sz strings.Builder
+	if err := run([]string{"stat", "-c", "%s", path}, &sz); err != nil {
+		return nil, err
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(sz.String()), 10, 64)
+	if err != nil || n < 0 || n > maxSegmentBytes {
+		return nil, fmt.Errorf("unexpected size %q", strings.TrimSpace(sz.String()))
+	}
+	w := &capWriter{max: maxSegmentBytes}
+	if err := run([]string{"cat", path}, w); err != nil {
+		return nil, err
+	}
+	return w.buf.Bytes(), nil
+}
+
 func (p *Panel) uploadSegments(d dbRow, t OffsiteTarget, gen string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -142,22 +175,28 @@ func (p *Panel) uploadSegments(d dbRow, t OffsiteTarget, gen string) error {
 	rows.Close()
 	root := historyRoot(t.Prefix, d) + gen + "/wal/"
 	c := t.client()
+	var skipped error
 	for _, name := range strings.Fields(out.String()) {
 		if !strings.HasSuffix(name, ".gz") || done[name] {
 			continue
 		}
-		var body bytes.Buffer
-		if err := p.eng.Exec(ctx, d.Container, []string{"cat", pitrMount + "/" + name}, nil, &body); err != nil {
-			return err
+		run := func(cmd []string, w io.Writer) error { return p.eng.Exec(ctx, d.Container, cmd, nil, w) }
+		body, err := readSegment(run, name)
+		if err != nil {
+			log.Printf("skiff: skipping %s of %s: %v", name, d.Name, err)
+			if skipped == nil {
+				skipped = fmt.Errorf("couldn't copy %s: %w", name, err)
+			}
+			continue
 		}
-		if err := c.Put(ctx, root+name, bytes.NewReader(body.Bytes()), int64(body.Len())); err != nil {
+		if err := c.Put(ctx, root+name, bytes.NewReader(body), int64(len(body))); err != nil {
 			return err
 		}
 		if _, err := sqlDB.Exec(`INSERT OR IGNORE INTO pitr_offsite(db_id,gen,name) VALUES(?,?,?)`, d.ID, gen, name); err != nil {
 			return err
 		}
 	}
-	return nil
+	return skipped
 }
 
 // copyBases only sends a snapshot once a later pass has copied its segments, so the newest snapshot in the bucket can always be replayed.

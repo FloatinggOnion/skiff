@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/config"
-	"github.com/nuelScript/skiff/internal/github"
 )
 
 // inflightBuild is the app's currently-building deploy; a newer deploy supersedes (cancels) an older one still building instead of racing it.
@@ -234,15 +233,14 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 // cloneSource checks out a repo source and returns the directory to build from, with the commit it resolved to.
 func (p *Panel) cloneSource(ctx context.Context, src Source, authURL, sha string, logln, finish func(string), status func(string, string)) (string, string, bool) {
 	clone := authURL
+	var authEnv []string
 	if clone == "" {
 		clone = src.CloneURL
-		if src.Repo != "" {
-			if gh := github.Load(); gh.Installed() {
-				if u, e := gh.CloneURLWithToken(src.CloneURL); e == nil {
-					clone = u
-				}
-			}
-		}
+		authEnv = appCloneEnv(src.Team, src.CloneURL, src.Repo)
+	}
+	if !cloneURLAllowed(clone) {
+		finish("✗ clone failed: the git address must be a public http(s) URL (for a private git host, set SKIFF_ALLOW_PRIVATE_ENDPOINTS=1 on the server)")
+		return "", sha, false
 	}
 
 	work := filepath.Join(p.buildsDir, sanitizeName(src.App))
@@ -260,7 +258,7 @@ func (p *Panel) cloneSource(ctx context.Context, src Source, authURL, sha string
 	args = append(args, clone, work)
 	cl := exec.CommandContext(ctx, "git", args...)
 	// GIT_ALLOW_PROTOCOL restricts clone to http(s) so a crafted URL can't reach git's command-executing transports (ext::, file::) even if it slips past the scheme check.
-	cl.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ALLOW_PROTOCOL=https:http")
+	cl.Env = gitCloneEnv(authEnv)
 	if out, e := cl.CombinedOutput(); e != nil {
 		finish("✗ clone failed: " + cloneError(out))
 		return "", sha, false
@@ -272,10 +270,19 @@ func (p *Panel) cloneSource(ctx context.Context, src Source, authURL, sha string
 		}
 	}
 
+	if err := checkSymlinks(work); err != nil {
+		finish("✗ " + err.Error())
+		return "", sha, false
+	}
+
 	// Root dir (monorepo support), joined safely so a "../.." can't escape the clone.
 	ctxDir := filepath.Join(work, filepath.Clean("/"+src.RootDir))
 	if fi, err := os.Stat(ctxDir); err != nil || !fi.IsDir() {
 		finish("✗ root directory not found in the repo: " + orRoot(src.RootDir))
+		return "", sha, false
+	}
+	if !insideCheckout(work, ctxDir) {
+		finish("✗ root directory is outside the repo: " + orRoot(src.RootDir))
 		return "", sha, false
 	}
 	return ctxDir, sha, true
@@ -570,24 +577,24 @@ func orRoot(d string) string {
 // projectToml renders the deploy skiff.toml; env vars split into [env] (build+runtime) vs [secrets] (runtime-only, never baked into the image).
 func projectToml(src Source, env []EnvVar, network string, volumes []config.Volume) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "name = %q\n", src.App)
+	fmt.Fprintf(&b, "name = %s\n", tomlQuote(src.App))
 	if src.Replicas > 1 {
 		fmt.Fprintf(&b, "replicas = %d\n", src.Replicas)
 	}
 	b.WriteString("\n[build]\n")
-	if src.Port != "" {
-		fmt.Fprintf(&b, "port = %s\n", src.Port)
+	if n, err := strconv.Atoi(src.Port); err == nil && validPort(src.Port) {
+		fmt.Fprintf(&b, "port = %d\n", n)
 	}
 	if src.Image != "" {
-		fmt.Fprintf(&b, "image = %q\n", src.Image)
+		fmt.Fprintf(&b, "image = %s\n", tomlQuote(src.Image))
 	}
 	if src.Dockerfile != "" {
-		fmt.Fprintf(&b, "dockerfile = %q\n", src.Dockerfile)
+		fmt.Fprintf(&b, "dockerfile = %s\n", tomlQuote(src.Dockerfile))
 	}
 	b.WriteString("\n[deploy]\n")
-	fmt.Fprintf(&b, "network = %q\n", network)
+	fmt.Fprintf(&b, "network = %s\n", tomlQuote(network))
 	if src.HealthMode != "" {
-		fmt.Fprintf(&b, "health_mode = %q\n", src.HealthMode)
+		fmt.Fprintf(&b, "health_mode = %s\n", tomlQuote(src.HealthMode))
 	}
 	if a := stackAliases(src); len(a) > 0 {
 		fmt.Fprintf(&b, "aliases = %s\n", tomlList(a))
@@ -596,11 +603,11 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 		fmt.Fprintf(&b, "command = %s\n", tomlList(c))
 	}
 	if strings.TrimSpace(src.Release) != "" {
-		fmt.Fprintf(&b, "release = %q\n", src.Release)
+		fmt.Fprintf(&b, "release = %s\n", tomlQuote(src.Release))
 	}
 	if hc := healthOf(src); hc.HealthPath != "" || hc.HealthTimeout > 0 {
 		if hc.HealthPath != "" {
-			fmt.Fprintf(&b, "health_path = %q\n", hc.HealthPath)
+			fmt.Fprintf(&b, "health_path = %s\n", tomlQuote(hc.HealthPath))
 		}
 		if hc.HealthTimeout > 0 {
 			fmt.Fprintf(&b, "health_timeout = %d\n", hc.HealthTimeout)
@@ -609,10 +616,10 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if hc := healthOf(src); hc.Memory != "" || hc.CPU != "" {
 		b.WriteString("\n[resources]\n")
 		if hc.Memory != "" {
-			fmt.Fprintf(&b, "memory = %q\n", hc.Memory)
+			fmt.Fprintf(&b, "memory = %s\n", tomlQuote(hc.Memory))
 		}
 		if hc.CPU != "" {
-			fmt.Fprintf(&b, "cpu = %q\n", hc.CPU)
+			fmt.Fprintf(&b, "cpu = %s\n", tomlQuote(hc.CPU))
 		}
 	}
 	var buildVars, secretVars []EnvVar
@@ -626,17 +633,17 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if len(buildVars) > 0 {
 		b.WriteString("\n[env]\n")
 		for _, e := range buildVars {
-			fmt.Fprintf(&b, "%s = %q\n", e.Key, e.Value)
+			fmt.Fprintf(&b, "%s = %s\n", e.Key, tomlQuote(e.Value))
 		}
 	}
 	if len(secretVars) > 0 {
 		b.WriteString("\n[secrets]\n")
 		for _, e := range secretVars {
-			fmt.Fprintf(&b, "%s = %q\n", e.Key, e.Value)
+			fmt.Fprintf(&b, "%s = %s\n", e.Key, tomlQuote(e.Value))
 		}
 	}
 	for _, v := range volumes {
-		fmt.Fprintf(&b, "\n[[volumes]]\nname = %q\npath = %q\n", v.Name, v.Path)
+		fmt.Fprintf(&b, "\n[[volumes]]\nname = %s\npath = %s\n", tomlQuote(v.Name), tomlQuote(v.Path))
 	}
 	return b.String()
 }

@@ -77,9 +77,27 @@ export default function Agents() {
         </li>
         <li>
           <strong>get_env</strong>, <strong>set_env</strong> — read and change environment
-          variables. Changes merge with what&apos;s there and apply on the next deploy.
+          variables. Values stay hidden unless the assistant asks for one variable by name. Changes
+          merge with what&apos;s there and apply on the next deploy.
         </li>
       </ul>
+      <p>
+        Logs, build output and traffic include text written by visitors and repo authors. Skiff
+        fences it and tells the assistant to treat it as data, but a read-only connection is the
+        safer default for an assistant that reads logs.
+      </p>
+
+      <h2>Read-only mode</h2>
+      <p>
+        Start the server with <code>--read-only</code>, or set <code>SKIFF_MCP_READONLY=1</code>, and{" "}
+        <strong>deploy</strong>, <strong>rollback</strong> and <strong>set_env</strong> are left out.
+        The assistant can still look at projects, logs and traffic.
+      </p>
+      <CodeBlock label="shell">{`claude mcp add skiff \
+  --env SKIFF_URL=https://dash.example.com \
+  --env SKIFF_TOKEN=skiff_... \
+  --env SKIFF_MCP_READONLY=1 \
+  -- skiff mcp`}</CodeBlock>
       <Callout>
         The token can do anything its team can — deploy, roll back and read secrets. Give each
         assistant its own token so you can see its actions in <strong>Activity</strong> and revoke

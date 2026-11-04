@@ -505,7 +505,7 @@ func (p *Panel) applyStackChanges(s *stackSource, team, token string, vars map[s
 }
 
 func stacksForPush(repo, branch string) []string {
-	rows, err := sqlDB.Query(`SELECT name FROM stacks WHERE repo=? AND repo<>'' AND (branch='' OR branch=?)`, repo, branch)
+	rows, err := sqlDB.Query(`SELECT name FROM stacks WHERE repo=? AND repo<>'' AND (branch='' OR branch=?) AND team=?`, repo, branch, foundingTeam())
 	if err != nil {
 		return nil
 	}

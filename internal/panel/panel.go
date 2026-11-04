@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -219,13 +220,13 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/deploys/log", p.protected(p.handleDeployLog))
 	mux.HandleFunc("/api/github/status", p.protected(p.handleGithubStatus))
 	mux.HandleFunc("/api/github/create", p.protected(p.handleGithubCreate))
-	mux.HandleFunc("/api/github/created", p.protected(p.handleGithubCreated))
-	mux.HandleFunc("/api/github/installed", p.protected(p.handleGithubInstalled))
+	mux.HandleFunc("/api/github/created", p.protectedCallback(p.handleGithubCreated))
+	mux.HandleFunc("/api/github/installed", p.protectedCallback(p.handleGithubInstalled))
 	mux.HandleFunc("/api/github/repos", p.protected(p.handleGithubRepos))
 	mux.HandleFunc("/api/github/deploy", p.protected(p.handleGithubDeploy))
 	mux.HandleFunc("/api/github/hook", p.handleHook)
 	mux.Handle("/", p.spa())
-	return logRequests(mux)
+	return logRequests(p.secureHeaders(mux))
 }
 
 func (p *Panel) protected(h http.HandlerFunc) http.HandlerFunc {
@@ -234,16 +235,102 @@ func (p *Panel) protected(h http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		if crossSiteRequest(r) || refusedNavigation(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		h(w, r)
 	}
 }
 
+// protectedCallback is for pages another site sends the browser back to (the app-setup redirects), so a cross-site top-level navigation is let through.
+func (p *Panel) protectedCallback(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := p.session(r); !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !callbackNavigation(r) && crossSiteRequest(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		h(w, r)
+	}
+}
+
+// callbackNavigation is a top-level visit from another site. A sibling subdomain is same-site, so it can't use this to reach a callback with the session cookie attached.
+func callbackNavigation(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.Header.Get("Sec-Fetch-Mode") == "navigate" && r.Header.Get("Sec-Fetch-Site") == "cross-site"
+}
+
+// crossSiteRequest reports a browser request that came from another origin; apps on sibling subdomains are same-site but must not drive the dashboard. Clients that send neither header (curl, tests) pass.
+func crossSiteRequest(r *http.Request) bool {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" {
+		return site != "same-origin" && site != "none"
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		u, err := url.Parse(origin)
+		return err != nil || !strings.EqualFold(u.Host, r.Host)
+	}
+	return false
+}
+
+// navigationBlocked are the GET routes that change state; the dashboard calls them with EventSource, so a link or address-bar visit has no business there.
+var navigationBlocked = map[string]bool{
+	"/api/deploy": true, "/api/github/deploy": true, "/api/redeploy": true,
+	"/api/rollback": true, "/api/preview": true,
+}
+
+func refusedNavigation(r *http.Request) bool {
+	return navigationBlocked[r.URL.Path] && r.Header.Get("Sec-Fetch-Mode") == "navigate"
+}
+
+const (
+	sessionCookie     = "skiff_session"
+	hostSessionCookie = "__Host-skiff_session"
+)
+
+// secure reports whether the panel is served over https, where the session cookie takes the __Host- form so a sibling subdomain can't plant one.
+func (p *Panel) secure() bool { return p.domain != "" && p.domain != "localhost" }
+
+func (p *Panel) cookieName() string {
+	if p.secure() {
+		return hostSessionCookie
+	}
+	return sessionCookie
+}
+
+func (p *Panel) sessionToken(r *http.Request) (string, bool) {
+	c, err := r.Cookie(p.cookieName())
+	if err != nil || c.Value == "" {
+		return "", false
+	}
+	return c.Value, true
+}
+
+func (p *Panel) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: p.cookieName(), Value: "", Path: "/", MaxAge: -1, Secure: p.secure()})
+	if p.secure() {
+		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
+	}
+}
+
+// session resolves the cookie to a user, with the team dropped if they've since left it.
 func (p *Panel) session(r *http.Request) (sess, bool) {
-	c, err := r.Cookie("skiff_session")
-	if err != nil {
+	tok, ok := p.sessionToken(r)
+	if !ok {
 		return sess{}, false
 	}
-	return getSession(c.Value)
+	s, ok := getSession(tok)
+	if !ok {
+		return sess{}, false
+	}
+	if s.teamID != "" {
+		if _, member := p.auth.Role(s.userID, s.teamID); !member {
+			s.teamID = ""
+		}
+	}
+	return s, true
 }
 
 // setSession returns an error and sets no cookie if the session can't be stored, so the browser never gets a cookie with no backing row (would look logged-in, then 401).
@@ -252,11 +339,11 @@ func (p *Panel) setSession(w http.ResponseWriter, userID, teamID string) error {
 	if err := putSession(tok, userID, teamID); err != nil {
 		return err
 	}
-	// SameSite=Strict is the CSRF defense — the browser won't attach the session cross-site, so a crafted link can't trigger a deploy. Secure off only for local http.
+	// Strict keeps the cookie off cross-site requests; sibling subdomains are same-site, so crossSiteRequest covers those. Secure off only for local http.
 	http.SetCookie(w, &http.Cookie{
-		Name: "skiff_session", Value: tok, Path: "/", HttpOnly: true,
+		Name: p.cookieName(), Value: tok, Path: "/", HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   p.domain != "" && p.domain != "localhost",
+		Secure:   p.secure(),
 	})
 	return nil
 }

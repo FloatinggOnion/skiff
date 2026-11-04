@@ -10,6 +10,7 @@ export type Me = {
   teams?: Team[]
   team?: string
   role?: string
+  admin?: boolean
 }
 
 // A sign-in that still needs a code from the user's authenticator app; empty when the password was enough.
@@ -109,8 +110,8 @@ class AuthService extends BaseService {
     return this.post('/teams/delete')
   }
 
-  deleteAccount(password: string) {
-    return this.post('/account/delete', { password })
+  deleteAccount(password: string, code?: string) {
+    return this.post('/account/delete', { password, code })
   }
 }
 

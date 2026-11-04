@@ -59,6 +59,7 @@ var migrations = []string{
 	`ALTER TABLE sources ADD COLUMN autoscale INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE sources ADD COLUMN scale_min INTEGER NOT NULL DEFAULT 1`,
 	`ALTER TABLE sources ADD COLUMN scale_max INTEGER NOT NULL DEFAULT 1`,
+	`ALTER TABLE api_tokens ADD COLUMN created_by TEXT`,
 	`ALTER TABLE sources ADD COLUMN scale_cpu INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE domains ADD COLUMN parent TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE domains ADD COLUMN branch TEXT NOT NULL DEFAULT ''`,
@@ -498,6 +499,11 @@ CREATE TABLE IF NOT EXISTS registry_creds (
 CREATE TABLE IF NOT EXISTS preview_passwords (
   app  TEXT PRIMARY KEY,
   hash TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS env_stage (
+  app   TEXT PRIMARY KEY,
+  team  TEXT NOT NULL,
+  until INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS offsite_objects (
   db_id   TEXT NOT NULL,

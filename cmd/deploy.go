@@ -6,10 +6,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -76,6 +78,11 @@ func runDeploy(configPath, buildContext string, timeout, buildTimeout time.Durat
 	case bc.Start != "" || bc.Static != "":
 		b = builder.Custom(bc.Base, bc.Install, bc.Build, bc.Start, bc.Static)
 	default:
+		if os.Getenv("SKIFF_DEPLOY_ID") != "" && !dockerfileInside(cfg.Build.Dockerfile) {
+			err = fmt.Errorf("the dockerfile must be a path inside the build folder")
+			ui.Fail(err.Error())
+			return err
+		}
 		b, err = builder.Select(contextDir, cfg.Build.Dockerfile)
 		if err != nil {
 			ui.Fail(err.Error())
@@ -128,7 +135,10 @@ func runDeploy(configPath, buildContext string, timeout, buildTimeout time.Durat
 			return err
 		}
 		ui.Step("Building " + image)
-		if err := eng.BuildFromDockerfile(ctx, image, dockerfile, contextDir, os.Stdout); err != nil {
+		// Builds the panel runs for a team pull their base images, so they can't use another team's local ones.
+		onPanel := os.Getenv("SKIFF_DEPLOY_ID") != ""
+		out := &pullSniffer{w: termSafe(os.Stdout)}
+		if err := eng.BuildFromDockerfile(ctx, image, dockerfile, contextDir, onPanel, out); err != nil {
 			switch ctx.Err() {
 			case context.DeadlineExceeded:
 				ui.Fail(fmt.Sprintf("Build exceeded %s — canceled", buildTimeout))
@@ -136,6 +146,9 @@ func runDeploy(configPath, buildContext string, timeout, buildTimeout time.Durat
 				ui.Fail("Build canceled")
 			default:
 				ui.Fail("Build failed")
+				if onPanel && out.denied {
+					ui.Note("A base image couldn't be pulled. Builds here use images from a registry, not images stored on this server: check the name in your Dockerfile, and sign in if it's private.")
+				}
 			}
 			return err
 		}
@@ -159,6 +172,27 @@ func runDeploy(configPath, buildContext string, timeout, buildTimeout time.Durat
 		reportDeploy(panel, cfg, deployID, labels)
 	}
 	return nil
+}
+
+// dockerfileInside reports whether a dockerfile path stays within the build folder.
+func dockerfileInside(p string) bool {
+	if filepath.IsAbs(p) {
+		return false
+	}
+	return !slices.Contains(strings.Split(filepath.ToSlash(p), "/"), "..")
+}
+
+// pullSniffer passes build output through and notes when an image couldn't be pulled.
+type pullSniffer struct {
+	w      io.Writer
+	denied bool
+}
+
+func (s *pullSniffer) Write(b []byte) (int, error) {
+	if bytes.Contains(b, []byte("pull access denied")) {
+		s.denied = true
+	}
+	return s.w.Write(b)
 }
 
 // pullPrebuilt fetches a prebuilt image and tags it as the app's build, so the release and rollback paths treat it like one Skiff built.
@@ -270,10 +304,6 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	if eng.EnsureNetwork(netName) == nil {
 		network = netName
 	}
-	healthHost := "127.0.0.1"
-	if eng.IsRemote() {
-		healthHost = docker.SSHHostname(cfg.Server.Host)
-	}
 
 	var mounts []docker.Mount
 	for _, v := range cfg.Volumes {
@@ -329,6 +359,12 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			_ = eng.Remove(rp.Container)
 		}
 	}
+	// With no router on a remote box, the published port is the only way in.
+	direct := false
+	if eng.IsRemote() {
+		running, known := docker.RouterOn(cfg.RemoteHost())
+		direct = known && !running
+	}
 	for range replicas {
 		container := fmt.Sprintf("%s-%s", cfg.Name, shortID())
 		if !eng.IsRemote() {
@@ -342,10 +378,10 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			App:           cfg.Name,
 			Image:         image,
 			ContainerPort: cfg.Build.Port,
+			Public:        direct,
 			Memory:        cfg.Resources.Memory,
 			CPU:           cfg.Resources.CPU,
 			Env:           runtimeEnv,
-			Public:        eng.IsRemote(),
 			Network:       network,
 			Labels:        labels,
 			Volumes:       mounts,
@@ -364,7 +400,12 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			}
 			return err
 		}
-		if err := health.WaitMode(cfg.Deploy.HealthMode, healthHost, hostPort, cfg.Deploy.HealthPath, timeout); err != nil {
+		healthHost, healthPort, stopReach, err := reach(eng, cfg.RemoteHost(), hostPort)
+		if err == nil {
+			err = health.WaitMode(cfg.Deploy.HealthMode, healthHost, healthPort, cfg.Deploy.HealthPath, timeout)
+			stopReach()
+		}
+		if err != nil {
 			crashed := keptExiting(eng, container)
 			output := lastOutput(eng, container)
 			_ = eng.Remove(container)
@@ -421,8 +462,10 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	}
 
 	fmt.Println()
-	if eng.IsRemote() {
-		ui.Live(fmt.Sprintf("http://%s:%d", healthHost, reps[0].HostPort), time.Since(start))
+	if eng.IsRemote() && direct {
+		ui.Live(fmt.Sprintf("http://%s:%d", docker.SSHHostname(cfg.RemoteHost()), reps[0].HostPort), time.Since(start))
+	} else if eng.IsRemote() {
+		ui.Done(fmt.Sprintf("Running on %s, served by its router (%.1fs)", cfg.RemoteHost(), time.Since(start).Seconds()))
 	} else {
 		ui.Live(proxy.URL(cfg.Name), time.Since(start))
 		ui.Field("direct", fmt.Sprintf("http://localhost:%d", reps[0].HostPort))
@@ -511,7 +554,7 @@ func showOutput(output string) {
 	}
 	ui.Note("Last output from the app:")
 	for _, line := range strings.Split(output, "\n") {
-		ui.Note("  " + line)
+		ui.Note("  " + stripControl(line))
 	}
 }
 

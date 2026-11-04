@@ -99,7 +99,7 @@ func TestStatusPageHandler(t *testing.T) {
 	_ = putSource(Source{App: "theirs", Team: "other", Port: "80"})
 	put := func(token, body string) int {
 		req := httptest.NewRequest(http.MethodPut, "/api/status-page", strings.NewReader(body))
-		req.AddCookie(&http.Cookie{Name: "skiff_session", Value: token})
+		req.AddCookie(&http.Cookie{Name: p.cookieName(), Value: token})
 		w := httptest.NewRecorder()
 		p.handleStatusPage(w, req)
 		return w.Code

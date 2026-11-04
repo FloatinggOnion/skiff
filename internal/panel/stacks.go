@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"github.com/nuelScript/skiff/internal/compose"
 	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
-	"github.com/nuelScript/skiff/internal/github"
 )
 
 func stackNetwork(stack string) string { return "skiff-s-" + sanitizeName(stack) }
@@ -51,7 +51,7 @@ func stackCommand(src Source) []string {
 func tomlList(items []string) string {
 	quoted := make([]string, len(items))
 	for i, s := range items {
-		quoted[i] = strconv.Quote(s)
+		quoted[i] = tomlQuote(s)
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
@@ -149,7 +149,7 @@ func loadStack(ctx context.Context, req stackRequest, team string, updating bool
 	case strings.TrimSpace(req.Git) != "":
 		git := strings.TrimSpace(req.Git)
 		if !cloneURLAllowed(git) {
-			return nil, errors.New("git url must be an http(s) URL")
+			return nil, errors.New("git url must be a public http(s) URL (for a private git host, set SKIFF_ALLOW_PRIVATE_ENDPOINTS=1 on the server)")
 		}
 		out.cloneURL = git
 		work, err := os.MkdirTemp("", "skiff-stack-")
@@ -158,23 +158,23 @@ func loadStack(ctx context.Context, req stackRequest, team string, updating bool
 		}
 		defer os.RemoveAll(work)
 		auth := git
+		var authEnv []string
 		if req.Token != "" {
 			auth = injectToken(git, req.Token)
-		} else if githubRepo(git) != "" {
-			if gh := github.Load(); gh.Installed() {
-				if u, err := gh.CloneURLWithToken(git); err == nil {
-					auth = u
-				}
-			}
+		} else {
+			authEnv = appCloneEnv(team, git, githubRepo(git))
 		}
 		args := []string{"clone", "--depth", "1"}
 		if out.branch != "" {
 			args = append(args, "--branch", out.branch)
 		}
 		cl := exec.CommandContext(ctx, "git", append(args, auth, work)...)
-		cl.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ALLOW_PROTOCOL=https:http")
+		cl.Env = gitCloneEnv(authEnv)
 		if b, err := cl.CombinedOutput(); err != nil {
 			return nil, errors.New("couldn't clone the repository: " + cloneError(b))
+		}
+		if err := checkSymlinks(work); err != nil {
+			return nil, err
 		}
 		if out.branch == "" {
 			if b, err := exec.CommandContext(ctx, "git", "-C", work, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
@@ -243,6 +243,11 @@ func checkStack(s *stackSource, team string, updating bool) {
 			p.Problems = append(p.Problems, "this name is taken")
 		}
 	}
+	for i := range p.Items {
+		if p.Items[i].Replicas > maxReplicas() {
+			p.Items[i].Replicas = maxReplicas()
+		}
+	}
 	for _, it := range p.Items {
 		if it.Kind != compose.KindApp {
 			continue
@@ -256,6 +261,9 @@ func checkStack(s *stackSource, team string, updating bool) {
 		if it.Build != nil {
 			if rel := filepath.Clean(filepath.Join(s.dir, it.Build.Context)); strings.HasPrefix(rel, "..") {
 				p.Problems = append(p.Problems, it.Service+": its build folder is outside the repository")
+			}
+			if df := it.Build.Dockerfile; df != "" && (filepath.IsAbs(df) || slices.Contains(strings.Split(filepath.ToSlash(df), "/"), "..")) {
+				p.Problems = append(p.Problems, it.Service+": its dockerfile must be a path inside the build folder")
 			}
 		}
 		if it.Build == nil && it.Image != "" {

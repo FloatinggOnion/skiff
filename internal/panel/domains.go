@@ -223,6 +223,10 @@ func (p *Panel) handleDomains(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "that domain is already in use", http.StatusConflict)
 			return
 		}
+		if msg := p.proveOwnership(r, host); msg != "" {
+			http.Error(w, msg, http.StatusUnprocessableEntity)
+			return
+		}
 		if _, err := sqlDB.Exec(
 			`INSERT INTO domains(host,app,team,parent,branch,created) VALUES(?,?,?,?,?,?)`,
 			host, target, p.teamID(r), parent, branch, time.Now().Unix()); err != nil {

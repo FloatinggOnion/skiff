@@ -23,6 +23,7 @@ type meResponse struct {
 	Teams         []auth.Team `json:"teams,omitempty"`
 	Team          string      `json:"team,omitempty"`
 	Role          string      `json:"role,omitempty"`
+	Admin         bool        `json:"admin,omitempty"`
 }
 
 func (p *Panel) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +41,7 @@ func (p *Panel) handleMe(w http.ResponseWriter, r *http.Request) {
 		Teams:         p.auth.TeamsForUser(s.userID),
 		Team:          s.teamID,
 		Role:          role,
+		Admin:         p.isInstanceAdmin(r),
 	})
 }
 
@@ -97,10 +99,10 @@ func (p *Panel) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Panel) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie("skiff_session"); err == nil {
-		deleteSession(c.Value)
+	if tok, ok := p.sessionToken(r); ok {
+		deleteSession(tok)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "skiff_session", Value: "", Path: "/", MaxAge: -1})
+	p.clearSessionCookie(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -152,8 +154,8 @@ func (p *Panel) handleTeamSwitch(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not a member of that team", http.StatusForbidden)
 		return
 	}
-	if c, err := r.Cookie("skiff_session"); err == nil {
-		setSessionTeam(c.Value, body.Team)
+	if tok, ok := p.sessionToken(r); ok {
+		setSessionTeam(tok, body.Team)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

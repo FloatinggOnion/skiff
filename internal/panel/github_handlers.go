@@ -20,11 +20,12 @@ func baseURL(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
-func (p *Panel) handleGithubStatus(w http.ResponseWriter, _ *http.Request) {
+func (p *Panel) handleGithubStatus(w http.ResponseWriter, r *http.Request) {
 	cfg := github.Load()
 	out := map[string]any{
 		"configured": cfg.Configured(),
-		"installed":  cfg.Installed(),
+		"installed":  cfg.Installed() && githubUsable(p.teamID(r)),
+		"usable":     githubUsable(p.teamID(r)),
 	}
 	if cfg.Configured() {
 		out["slug"] = cfg.Slug
@@ -37,8 +38,8 @@ func (p *Panel) handleGithubStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (p *Panel) handleGithubCreate(w http.ResponseWriter, r *http.Request) {
-	if !p.isOwner(r) {
-		http.Error(w, "only team owners can connect GitHub", http.StatusForbidden)
+	if !p.isInstanceAdmin(r) {
+		http.Error(w, "only this instance's owner can connect GitHub", http.StatusForbidden)
 		return
 	}
 	name := "Skiff Deploys (" + p.domain + ")"
@@ -53,8 +54,8 @@ func (p *Panel) handleGithubCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Panel) handleGithubCreated(w http.ResponseWriter, r *http.Request) {
-	if !p.isOwner(r) {
-		http.Error(w, "only team owners can connect GitHub", http.StatusForbidden)
+	if !p.isInstanceAdmin(r) {
+		http.Error(w, "only this instance's owner can connect GitHub", http.StatusForbidden)
 		return
 	}
 	code := r.URL.Query().Get("code")
@@ -75,8 +76,8 @@ func (p *Panel) handleGithubCreated(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Panel) handleGithubInstalled(w http.ResponseWriter, r *http.Request) {
-	if !p.isOwner(r) {
-		http.Error(w, "only team owners can connect GitHub", http.StatusForbidden)
+	if !p.isInstanceAdmin(r) {
+		http.Error(w, "only this instance's owner can connect GitHub", http.StatusForbidden)
 		return
 	}
 	cfg := github.Load()
@@ -93,9 +94,9 @@ func (p *Panel) handleGithubInstalled(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func (p *Panel) handleGithubRepos(w http.ResponseWriter, _ *http.Request) {
+func (p *Panel) handleGithubRepos(w http.ResponseWriter, r *http.Request) {
 	cfg := github.Load()
-	if !cfg.Installed() {
+	if !cfg.Installed() || !githubUsable(p.teamID(r)) {
 		http.Error(w, "github not connected", http.StatusBadRequest)
 		return
 	}
@@ -116,18 +117,37 @@ func (p *Panel) handleGithubDeploy(w http.ResponseWriter, r *http.Request) {
 	branch := strings.TrimSpace(q.Get("branch"))
 	rootDir := strings.TrimSpace(q.Get("rootdir"))
 	port := strings.TrimSpace(q.Get("port"))
-	if repo == "" || clone == "" || name == "" {
-		http.Error(w, "repo, clone and name are required", http.StatusBadRequest)
+	if repo == "" || name == "" {
+		http.Error(w, "repo and name are required", http.StatusBadRequest)
 		return
 	}
-	if !cloneURLAllowed(clone) {
-		http.Error(w, "clone url must be an http(s) URL", http.StatusBadRequest)
+	if !github.ValidRepo(repo) {
+		http.Error(w, "repo must look like owner/name", http.StatusBadRequest)
+		return
+	}
+	if clone == "" {
+		clone = github.CloneURL(repo)
+	}
+	if !github.IsCloneURLOf(clone, repo) {
+		http.Error(w, "clone url doesn't match the repository", http.StatusBadRequest)
+		return
+	}
+	if !validPort(port) {
+		http.Error(w, "port must be a number from 1 to 65535", http.StatusBadRequest)
 		return
 	}
 	team := p.teamID(r)
+	if !githubUsable(team) {
+		http.Error(w, "the GitHub connection belongs to the team that set up this server: deploy from a git URL with your own token instead", http.StatusForbidden)
+		return
+	}
 	existing, ok := getSource(name)
 	if ok && existing.Team != team {
 		http.Error(w, "an app with that name exists in another team", http.StatusConflict)
+		return
+	}
+	if !ok && nameReserved(name, team) {
+		http.Error(w, reservedNameMsg, http.StatusBadRequest)
 		return
 	}
 	if !ok && envStage.heldByOther(name, team, time.Now()) {
@@ -141,7 +161,10 @@ func (p *Panel) handleGithubDeploy(w http.ResponseWriter, r *http.Request) {
 		App: name, Team: team, Repo: repo, Branch: branch, RootDir: rootDir,
 		Port: port, CloneURL: clone, Auto: q.Get("auto") == "1",
 	}
-	_ = putSource(src)
+	if err := putSource(src); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
 	envStage.release(name)
 	id := newDeployID()
 	go p.runDeploy(src, "", "", "", "manual", id)
@@ -219,6 +242,10 @@ func (p *Panel) handleHook(w http.ResponseWriter, r *http.Request) {
 	}
 	if !github.VerifySignature(cfg.WebhookSecret, body, r.Header.Get("X-Hub-Signature-256")) {
 		http.Error(w, "bad signature", http.StatusUnauthorized)
+		return
+	}
+	if !hookDeliveries.firstSeen(r.Header.Get("X-GitHub-Delivery")) {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	switch r.Header.Get("X-GitHub-Event") {

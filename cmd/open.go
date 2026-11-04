@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 
 	"github.com/nuelScript/skiff/internal/docker"
@@ -31,8 +33,20 @@ func newOpenCmd() *cobra.Command {
 			}
 
 			url := proxy.URL(app.Name)
+			if app.Host != "" && printOnly {
+				fmt.Printf("ssh -N -L %d:127.0.0.1:%d %s\n", app.HostPort, app.HostPort, app.Host)
+				return nil
+			}
 			if app.Host != "" {
-				url = fmt.Sprintf("http://%s:%d", docker.SSHHostname(app.Host), app.HostPort)
+				// A remote app listens only on its server's loopback: reach it through a tunnel that lasts until this command is stopped.
+				port, stop, err := docker.Forward(app.Host, app.HostPort)
+				if err != nil {
+					ui.Fail(err.Error())
+					return err
+				}
+				defer stop()
+				url = fmt.Sprintf("http://127.0.0.1:%d", port)
+				defer waitForInterrupt()
 			}
 
 			if printOnly {
@@ -63,4 +77,11 @@ func openURL(url string) error {
 		cmd = exec.Command("xdg-open", url)
 	}
 	return cmd.Start()
+}
+
+func waitForInterrupt() {
+	ui.Note("Connected through an SSH tunnel. Press ctrl-c to close it.")
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	<-ch
 }

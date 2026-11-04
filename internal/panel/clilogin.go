@@ -15,13 +15,18 @@ const (
 )
 
 type cliLogin struct {
-	code    string // short, shown in both the terminal and the browser so the user can match them
+	code    string // shown only in the terminal; the person types it into the browser, so a link alone can't approve it
 	host    string
+	ip      string
+	started time.Time
 	expires time.Time
 	token   string
 	team    string
 	denied  bool
 }
+
+// cliCodeLimiter caps wrong codes per signed-in user, so the short code can't be guessed through the approve page.
+var cliCodeLimiter = &loginThrottle{windows: map[string]*failWindow{}, max: 5, window: 15 * time.Minute}
 
 var (
 	cliMu     sync.Mutex
@@ -61,9 +66,9 @@ func (p *Panel) handleCLILogin(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "too many sign-ins in progress; try again shortly", http.StatusTooManyRequests)
 			return
 		}
-		cliLogins[poll] = &cliLogin{code: code, host: host, expires: time.Now().Add(cliLoginTTL)}
+		cliLogins[poll] = &cliLogin{code: code, host: host, ip: clientIP(r), started: time.Now(), expires: time.Now().Add(cliLoginTTL)}
 		cliMu.Unlock()
-		writeJSON(w, map[string]string{"code": code, "poll": poll, "approveUrl": baseURL(r) + "/cli-login?code=" + code})
+		writeJSON(w, map[string]string{"code": code, "poll": poll, "approveUrl": baseURL(r) + "/cli-login"})
 	case http.MethodGet:
 		poll := r.URL.Query().Get("poll")
 		cliMu.Lock()
@@ -95,29 +100,43 @@ func (p *Panel) handleCLILogin(w http.ResponseWriter, r *http.Request) {
 
 // handleCLIApprove is the browser's side: a signed-in user sees the pending sign-in and approves or declines it for their current team.
 func (p *Panel) handleCLIApprove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s, _ := p.session(r)
+	if cliCodeLimiter.blocked(s.userID, time.Now()) {
+		http.Error(w, "too many wrong codes — try again later", http.StatusTooManyRequests)
+		return
+	}
 	code := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("code")))
 	cliMu.Lock()
 	defer cliMu.Unlock()
 	_, l := cliLoginByCode(code)
 	if l == nil || l.token != "" {
+		cliCodeLimiter.fail(s.userID, time.Now())
 		http.Error(w, "no pending sign-in with that code", http.StatusNotFound)
 		return
 	}
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, map[string]string{"code": l.code, "host": l.host})
+		writeJSON(w, map[string]any{"code": l.code, "host": l.host, "ip": l.ip, "requested": l.started.Unix()})
 	case http.MethodPost:
 		if r.URL.Query().Get("deny") == "1" {
 			l.denied = true
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		team := p.teamID(r)
+		team := s.teamID
+		if team == "" {
+			http.Error(w, "pick a team first", http.StatusForbidden)
+			return
+		}
 		name := "cli"
 		if l.host != "" {
 			name = "cli (" + l.host + ")"
 		}
-		t, err := createToken(team, name)
+		t, err := createToken(team, name, s.userID)
 		if err != nil {
 			http.Error(w, "couldn't create a token", http.StatusInternalServerError)
 			return
@@ -125,8 +144,6 @@ func (p *Panel) handleCLIApprove(w http.ResponseWriter, r *http.Request) {
 		l.token, l.team = t.Token, team
 		p.audit(r, "cli.login", name, "")
 		w.WriteHeader(http.StatusNoContent)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -150,13 +167,21 @@ func (p *Panel) apiCLIDeploy(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case !ok:
 		src = Source{App: name, Team: team, Port: "3000", Origin: originCLI, Replicas: 1, ScaleMin: 1, ScaleMax: 1}
-		if body.Port > 0 {
+		if body.Port > 0 && body.Port <= 65535 {
 			src.Port = strconv.Itoa(body.Port)
+		}
+		if nameReserved(name, team) {
+			apiErr(w, http.StatusBadRequest, reservedNameMsg)
+			return
+		}
+		if envStage.heldByOther(name, team, time.Now()) {
+			_ = setEnv(name, nil)
 		}
 		if err := putSource(src); err != nil {
 			apiErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		envStage.release(name)
 	case src.Team != team:
 		apiErr(w, http.StatusConflict, "an app with that name belongs to another team")
 		return

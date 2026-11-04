@@ -55,7 +55,7 @@ func (p *Panel) statusReporter(src Source) (report func(sha, status string), sto
 
 // reportStatus shows a deploy's progress on its commit in GitHub, next to CI.
 func (p *Panel) reportStatus(src Source, sha, status string) {
-	if src.Repo == "" || len(sha) != 40 || statusGate.blocked() {
+	if src.Repo == "" || len(sha) != 40 || !githubUsable(src.Team) || statusGate.blocked() {
 		return
 	}
 	gh := github.Load()

@@ -171,7 +171,7 @@ func (p *Panel) handleOverview(w http.ResponseWriter, r *http.Request) {
 			attention = append(attention, attentionItem{Kind: "oom", App: src.App, At: t.Unix()})
 		}
 	}
-	if p.isOwner(r) {
+	if p.isInstanceAdmin(r) {
 		attention = append(attention, usageAttention(usageOf())...)
 	}
 	writeJSON(w, map[string]any{
@@ -182,7 +182,7 @@ func (p *Panel) handleOverview(w http.ResponseWriter, r *http.Request) {
 
 // handleServerUsage feeds the sidebar's gauge; light enough to poll from every page.
 func (p *Panel) handleServerUsage(w http.ResponseWriter, r *http.Request) {
-	if !p.isOwner(r) {
+	if !p.isInstanceAdmin(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

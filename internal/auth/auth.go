@@ -119,9 +119,13 @@ func (s *Store) CreateUserNoTeam(email, name, password string) (User, error) {
 	return u, nil
 }
 
+// dummyHash lets a login for an unknown email cost the same as a real one.
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("skiff-no-such-user"), bcrypt.DefaultCost)
+
 func (s *Store) Authenticate(email, password string) (User, bool) {
 	u, ok := s.UserByEmail(email)
 	if !ok {
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 		return User{}, false
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
@@ -232,6 +236,9 @@ func StoredToken(token string) string {
 // IsStoredToken reports whether a database value is already in stored form.
 func IsStoredToken(s string) bool { return strings.HasPrefix(s, storedTokenPrefix) }
 
+// InviteTTL is how long an invite link stays valid.
+const InviteTTL = 7 * 24 * time.Hour
+
 func (s *Store) CreateInvite(email, teamID, role string) (Invite, error) {
 	if role != RoleOwner {
 		role = RoleMember
@@ -247,7 +254,7 @@ func (s *Store) Invite(token string) (Invite, bool) {
 	var inv Invite
 	err := s.db.QueryRow(`SELECT email,team_id,role,created FROM invites WHERE token = ?`, StoredToken(token)).
 		Scan(&inv.Email, &inv.TeamID, &inv.Role, &inv.Created)
-	if err != nil {
+	if err != nil || time.Now().Unix() > inv.Created+int64(InviteTTL/time.Second) {
 		return Invite{}, false
 	}
 	inv.Token = token
@@ -329,8 +336,7 @@ func (s *Store) RemoveMember(teamID, userID string) error {
 			return fmt.Errorf("can't remove the last owner")
 		}
 	}
-	_, err := s.db.Exec(`DELETE FROM memberships WHERE team_id = ? AND user_id = ?`, teamID, userID)
-	return err
+	return s.dropMembership(teamID, userID)
 }
 
 // LeaveTeam drops the caller's own membership, refusing if they're the last owner.
@@ -347,8 +353,26 @@ func (s *Store) LeaveTeam(userID, teamID string) error {
 			return fmt.Errorf("you're the last owner — delete the team instead")
 		}
 	}
-	_, err := s.db.Exec(`DELETE FROM memberships WHERE team_id = ? AND user_id = ?`, teamID, userID)
-	return err
+	return s.dropMembership(teamID, userID)
+}
+
+// dropMembership removes the membership along with what it granted: sessions pointing at the team and API tokens the user made for it.
+func (s *Store) dropMembership(teamID, userID string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	if _, err := tx.Exec(`DELETE FROM memberships WHERE team_id = ? AND user_id = ?`, teamID, userID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE sessions SET team_id = '' WHERE user_id = ? AND team_id = ?`, userID, teamID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM api_tokens WHERE team = ? AND created_by = ?`, teamID, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // DeleteTeam removes a team with its memberships and invites; callers must first ensure it owns no apps or databases.
@@ -381,6 +405,9 @@ func (s *Store) DeleteUser(userID string) error {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM recovery_codes WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM api_tokens WHERE created_by = ?`, userID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM users WHERE id = ?`, userID); err != nil {

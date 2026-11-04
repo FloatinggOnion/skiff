@@ -9,6 +9,7 @@ import (
 )
 
 type RunSpec struct {
+	Public        bool // on all interfaces, for a box with no router in front of its apps
 	Name          string
 	App           string // app name, for the skiff.app route label
 	Image         string
@@ -16,7 +17,6 @@ type RunSpec struct {
 	Memory        string // optional, e.g. "512m"
 	CPU           string // optional, e.g. "0.5"
 	Env           map[string]string
-	Public        bool   // publish on all interfaces instead of 127.0.0.1
 	Network       string // optional docker network to join (for reaching managed resources by name)
 	Labels        map[string]string
 	Volumes       []Mount
@@ -61,10 +61,32 @@ func safetyCap(total int64) int64 { return total / 100 * SafetyCapPercent }
 
 const hostPortWait = 10 * time.Second
 
+// limitArgs caps what one container can use besides memory: processes, and the log file docker keeps for it. A server shipping logs through another driver keeps its own setup.
+func (e *Engine) limitArgs() []string {
+	args := []string{"--pids-limit", "4096"}
+	if e.usesJSONFileLogs() {
+		args = append(args, "--log-opt", "max-size=50m", "--log-opt", "max-file=3")
+	}
+	return args
+}
+
+func (e *Engine) usesJSONFileLogs() bool {
+	out, err := e.command("info", "--format", "{{.LoggingDriver}}").Output()
+	return err == nil && strings.TrimSpace(string(out)) == "json-file"
+}
+
 func (e *Engine) Run(s RunSpec) (int, error) {
 	defer invalidateStates()
 	_ = e.command("rm", "-f", s.Name).Run()
 
+	out, err := e.command(e.runArgs(s)...).CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("docker run failed: %s", firstLine(out))
+	}
+	return e.waitHostPort(s.Name, s.ContainerPort)
+}
+
+func (e *Engine) runArgs(s RunSpec) []string {
 	bind := "127.0.0.1"
 	if s.Public {
 		bind = "0.0.0.0"
@@ -76,6 +98,7 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 		"-e", fmt.Sprintf("PORT=%d", s.ContainerPort),
 		"-p", fmt.Sprintf("%s::%d", bind, s.ContainerPort),
 	}
+	args = append(args, e.limitArgs()...)
 	if s.App != "" {
 		args = append(args, "--label", "skiff.app="+s.App, "--label", fmt.Sprintf("skiff.port=%d", s.ContainerPort))
 	}
@@ -103,13 +126,7 @@ func (e *Engine) Run(s RunSpec) (int, error) {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
 	}
 	args = append(args, s.Image)
-	args = append(args, s.Command...)
-
-	out, err := e.command(args...).CombinedOutput()
-	if err != nil {
-		return 0, fmt.Errorf("docker run failed: %s", firstLine(out))
-	}
-	return e.waitHostPort(s.Name, s.ContainerPort)
+	return append(args, s.Command...)
 }
 
 // waitHostPort allows for an app that exits straight away: a restarting container has no published port until it's running again, and one that crashes once waiting for its database can still come up.
@@ -140,6 +157,7 @@ func (e *Engine) RunWorker(s WorkerSpec) error {
 	args := []string{"run", "-d", "--name", s.Name, "--restart", "unless-stopped",
 		"--label", "skiff.kind=worker", "--label", "skiff.worker.app=" + s.App,
 		"--memory", e.memoryOr(s.Memory)}
+	args = append(args, e.limitArgs()...)
 	if s.CPU != "" {
 		args = append(args, "--cpus", s.CPU)
 	}

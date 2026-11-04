@@ -151,6 +151,12 @@ func (p *Panel) handleStatusPage(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "that domain is already used by another status page", http.StatusConflict)
 				return
 			}
+			if host != s.Host {
+				if problem := p.proveOwnership(r, host); problem != "" {
+					http.Error(w, problem, http.StatusUnprocessableEntity)
+					return
+				}
+			}
 			s.Host = host
 		}
 		// Only this team's own projects, and never a preview.

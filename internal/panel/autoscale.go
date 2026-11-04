@@ -167,7 +167,6 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 			Image:         image,
 			ContainerPort: app.Port,
 			Env:           env,
-			Public:        p.eng.IsRemote(),
 			Network:       net,
 			Volumes:       mounts,
 			Memory:        memory,

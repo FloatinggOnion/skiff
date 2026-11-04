@@ -74,7 +74,7 @@ func previewCommentBody(app, url, commit, status string, at time.Time) string {
 
 // commentOnPR keeps one comment on the branch's open pull request in step with its preview deploy.
 func (p *Panel) commentOnPR(src Source, commit, status string) {
-	if src.Parent == "" || src.Repo == "" || src.Branch == "" {
+	if src.Parent == "" || src.Repo == "" || src.Branch == "" || !githubUsable(src.Team) {
 		return
 	}
 	gh := github.Load()

@@ -40,7 +40,10 @@ type mailResponse struct {
 	Forwards []MailForward `json:"forwards"`
 }
 
-const maxDestinations = 10
+const (
+	maxDestinations     = 10
+	maxAliasesPerDomain = 100
+)
 
 var (
 	aliasRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$`)
@@ -259,6 +262,24 @@ func (p *Panel) handleMail(w http.ResponseWriter, r *http.Request) {
 		if servedByAnotherTeam(domain, team) {
 			http.Error(w, "another team already uses "+domain, http.StatusConflict)
 			return
+		}
+		var claimedByOther, onDomain int
+		_ = sqlDB.QueryRow(`SELECT COUNT(*) FROM mail_forwards WHERE domain=? AND team<>?`, domain, team).Scan(&claimedByOther)
+		if claimedByOther > 0 {
+			http.Error(w, "another team already forwards mail for "+domain, http.StatusConflict)
+			return
+		}
+		_ = sqlDB.QueryRow(`SELECT COUNT(*) FROM mail_forwards WHERE domain=?`, domain).Scan(&onDomain)
+		if onDomain >= maxAliasesPerDomain {
+			http.Error(w, "a domain can have at most 100 addresses", http.StatusBadRequest)
+			return
+		}
+		// A team already forwarding for the domain has been through this once.
+		if onDomain == 0 {
+			if msg := p.proveOwnership(r, domain); msg != "" {
+				http.Error(w, msg, http.StatusUnprocessableEntity)
+				return
+			}
 		}
 		f := MailForward{ID: randHex(8), Domain: domain, Alias: alias, Destinations: dests, Created: nowUnix()}
 		// One statement, so two teams claiming an unclaimed domain at once can't both win.

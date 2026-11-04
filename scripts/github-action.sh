@@ -3,7 +3,7 @@
 set -uo pipefail
 
 fail() {
-  echo "::error::$1"
+  echo "::error::$(printf '%s' "$1" | tr '\r\n' '  ')"
   exit 1
 }
 
@@ -44,7 +44,7 @@ api_error() {
 
 output() {
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
-    echo "$1=$2" >>"$GITHUB_OUTPUT"
+    printf '%s=%s\n' "$1" "$(printf '%s' "$2" | tr -d '\r\n')" >>"$GITHUB_OUTPUT"
   fi
 }
 
@@ -85,8 +85,8 @@ remove-preview)
   ;;
 esac
 
-deploy_id="$(jq -r '.id' "$body_file")"
-target="$(jq -r '.app' "$body_file")"
+deploy_id="$(jq -r '.id' "$body_file" | tr -d '\r\n')"
+target="$(jq -r '.app' "$body_file" | tr -d '\r\n')"
 url="$(jq -r '.url // empty' "$body_file")"
 output deploy-id "$deploy_id"
 output app "$target"
@@ -115,8 +115,11 @@ output commit "${commit:-}"
 if [ "$status" != live ]; then
   api GET "/deploys/$deploy_id/log"
   if [ "$code" = 200 ]; then
+    stop="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
     echo "::group::Build log"
+    echo "::stop-commands::$stop"
     jq -r '.log' "$body_file"
+    echo "::$stop::"
     echo "::endgroup::"
   fi
   fail "The deploy of $target ended as $status."
@@ -124,6 +127,7 @@ fi
 
 echo "$target is live${url:+ at $url}"
 if [ -n "${commit:-}" ] && [ -n "${GITHUB_SHA:-}" ] && [ "$command" = deploy ] && [ "${GITHUB_SHA#"$commit"}" = "$GITHUB_SHA" ]; then
+  commit="$(printf '%s' "$commit" | tr -cd 'A-Za-z0-9')"
   echo "::notice::Skiff deployed $commit, the newest commit on the branch, not ${GITHUB_SHA:0:7}, which this workflow ran on."
 fi
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then

@@ -13,7 +13,12 @@ const (
 	tcpSyncEvery   = 2 * time.Second
 	tcpDialTimeout = 5 * time.Second
 	tcpMaxConns    = 10000
+	tcpMaxTotal    = 20000
+	tcpMaxPerIP    = 200
 )
+
+// tcpIdle is how long a forwarded connection may carry no data in either direction before it is closed.
+var tcpIdle = time.Hour
 
 // tcpProxy forwards public ports to apps' containers. The router holds the port, so a deploy's new containers take over without the address changing.
 type tcpProxy struct {
@@ -21,6 +26,54 @@ type tcpProxy struct {
 	mu     sync.Mutex
 	active map[int]*tcpListener
 	addr   string // the address to listen on, normally every interface
+
+	connMu sync.Mutex
+	total  int
+	perIP  map[string]int
+}
+
+// admit counts a new connection against the global and per-source limits.
+func (t *tcpProxy) admit(key string) bool {
+	t.connMu.Lock()
+	defer t.connMu.Unlock()
+	if t.perIP == nil {
+		t.perIP = map[string]int{}
+	}
+	if t.total >= tcpMaxTotal || t.perIP[key] >= tcpMaxPerIP {
+		return false
+	}
+	t.total++
+	t.perIP[key]++
+	return true
+}
+
+func (t *tcpProxy) release(key string) {
+	t.connMu.Lock()
+	defer t.connMu.Unlock()
+	t.total--
+	if t.perIP[key]--; t.perIP[key] <= 0 {
+		delete(t.perIP, key)
+	}
+}
+
+// idleConn pushes the deadline out on every transfer, so only a connection that has gone quiet is closed.
+type idleConn struct{ net.Conn }
+
+func (c idleConn) Read(b []byte) (int, error) {
+	_ = c.SetDeadline(time.Now().Add(tcpIdle))
+	return c.Conn.Read(b)
+}
+
+func (c idleConn) Write(b []byte) (int, error) {
+	_ = c.SetDeadline(time.Now().Add(tcpIdle))
+	return c.Conn.Write(b)
+}
+
+func (c idleConn) CloseWrite() error {
+	if w, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return w.CloseWrite()
+	}
+	return nil
 }
 
 type tcpListener struct {
@@ -107,13 +160,21 @@ func (t *tcpProxy) accept(l *tcpListener) {
 		if err != nil {
 			return
 		}
+		host, _, _ := net.SplitHostPort(c.RemoteAddr().String())
+		key := limitKeyFor(host)
+		if !t.admit(key) {
+			_ = c.Close()
+			continue
+		}
 		if !l.track(c) {
+			t.release(key)
 			_ = c.Close()
 			continue
 		}
 		go func() {
+			defer t.release(key)
 			defer l.forget(c)
-			t.forward(l.app, c)
+			t.forward(l.app, idleConn{c})
 		}()
 	}
 }
@@ -159,6 +220,7 @@ func (t *tcpProxy) forward(app string, c net.Conn) {
 		return
 	}
 	defer up.Close()
+	up = idleConn{up}
 	if addr, ok := up.RemoteAddr().(*net.TCPAddr); ok {
 		defer t.rt.trackOpen(addr.Port)()
 	}
@@ -166,7 +228,7 @@ func (t *tcpProxy) forward(app string, c net.Conn) {
 	pipe := func(dst, src net.Conn) {
 		_, _ = io.Copy(dst, src)
 		// Pass on one side finishing, so protocols that half-close still get their reply.
-		if w, ok := dst.(*net.TCPConn); ok {
+		if w, ok := dst.(idleConn); ok {
 			_ = w.CloseWrite()
 		}
 		done <- struct{}{}

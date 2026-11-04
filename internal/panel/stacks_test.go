@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nuelScript/skiff/internal/auth"
 	"github.com/nuelScript/skiff/internal/compose"
 	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/seal"
@@ -27,10 +28,14 @@ func TestGithubRepo(t *testing.T) {
 
 func TestStackAppsFollowPushes(t *testing.T) {
 	openTestDB(t)
+	_, founder, err := auth.NewStore(sqlDB).CreateUser("dev@acme.dev", "Dev", "password123")
+	if err != nil {
+		t.Fatal(err)
+	}
 	s := &stackSource{cloneURL: "https://github.com/acme/shop", branch: "main", dir: "/deploy",
 		plan: &compose.Plan{Stack: "shop"}}
-	built := stackSourceFor(s, "t1", compose.Item{Service: "api", Name: "shop-api", Build: &compose.Build{Context: "../api", Dockerfile: "Dockerfile.prod"}, Port: 3000, Public: true})
-	pulled := stackSourceFor(s, "t1", compose.Item{Service: "search", Name: "shop-search", Image: "meili:1", Port: 7700})
+	built := stackSourceFor(s, founder.ID, compose.Item{Service: "api", Name: "shop-api", Build: &compose.Build{Context: "../api", Dockerfile: "Dockerfile.prod"}, Port: 3000, Public: true})
+	pulled := stackSourceFor(s, founder.ID, compose.Item{Service: "search", Name: "shop-search", Image: "meili:1", Port: 7700})
 	for _, src := range []Source{built, pulled} {
 		if err := putSource(src); err != nil {
 			t.Fatal(err)

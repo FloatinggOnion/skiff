@@ -102,3 +102,16 @@ func TestUpdateRemoteReportsAnUnreachableServer(t *testing.T) {
 		t.Errorf("want an error surfacing ssh's message, got %v", err)
 	}
 }
+
+func TestSSHTargetCannotBeAnOption(t *testing.T) {
+	args := sshCommand("-oProxyCommand=id", "true").Args
+	for i, a := range args {
+		if a == "-oProxyCommand=id" {
+			if args[i-1] != "--" {
+				t.Fatalf("target must follow --: %v", args)
+			}
+			return
+		}
+	}
+	t.Fatalf("target missing: %v", args)
+}

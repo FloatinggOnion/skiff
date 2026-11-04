@@ -374,15 +374,22 @@ func splitMessage(data []byte) (head string, body []byte, sep string) {
 // headerFields splits a header block into whole fields, each keeping its folded continuation lines.
 func headerFields(head string) []string {
 	var fields []string
-	for _, line := range strings.SplitAfter(head, "\n") {
-		if line == "" {
-			continue
+	start, begun := 0, false
+	for pos := 0; pos < len(head); {
+		next := len(head)
+		if i := strings.IndexByte(head[pos:], '\n'); i >= 0 {
+			next = pos + i + 1
 		}
-		if (line[0] == ' ' || line[0] == '\t') && len(fields) > 0 {
-			fields[len(fields)-1] += line
-			continue
+		if c := head[pos]; !begun || (c != ' ' && c != '\t') {
+			if begun {
+				fields = append(fields, head[start:pos])
+			}
+			start, begun = pos, true
 		}
-		fields = append(fields, line)
+		pos = next
+	}
+	if begun {
+		fields = append(fields, head[start:])
 	}
 	return fields
 }

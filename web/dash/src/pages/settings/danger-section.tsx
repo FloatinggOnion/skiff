@@ -1,15 +1,22 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
-import { authService } from '@/services/api.service'
+import { authService, type TwoFactorStatus } from '@/services/api.service'
+import { queryKeys } from '@/constants/query-keys'
 import { errText } from '@/lib/errors'
-import { RevealInput } from './ui'
+import { RevealInput, inputCls } from './ui'
 
 export function DangerSection() {
   const [open, setOpen] = useState(false)
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const { data: twoFactor } = useQuery<TwoFactorStatus>({
+    queryKey: queryKeys.twoFactor,
+    queryFn: () => authService.twoFactor(),
+  })
+  const needsCode = !!twoFactor?.enabled
   const del = useMutation({
-    mutationFn: () => authService.deleteAccount(password),
+    mutationFn: () => authService.deleteAccount(password, needsCode ? code.trim() : undefined),
     onSuccess: () => {
       window.location.href = '/'
     },
@@ -40,10 +47,22 @@ export function DangerSection() {
               del.reset()
             }}
           />
+          {needsCode && (
+            <input
+              className={inputCls}
+              placeholder="Authenticator or recovery code"
+              autoComplete="one-time-code"
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value)
+                del.reset()
+              }}
+            />
+          )}
           <div className="flex items-center gap-3">
             <button
               onClick={() => del.mutate()}
-              disabled={del.isPending || !password}
+              disabled={del.isPending || !password || (needsCode && !code.trim())}
               className="inline-flex items-center gap-1.5 rounded-[6px] bg-danger/90 px-2.5 py-1 text-xs font-medium text-foreground transition hover:bg-danger disabled:opacity-50"
             >
               {del.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -53,6 +72,7 @@ export function DangerSection() {
               onClick={() => {
                 setOpen(false)
                 setPassword('')
+                setCode('')
                 del.reset()
               }}
               className="text-muted-foreground hover:text-foreground text-xs"

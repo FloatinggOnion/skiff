@@ -1,6 +1,6 @@
 import { BaseService } from '@/services/base.service'
 
-export type CliLoginRequest = { code: string; host: string }
+export type CliLoginRequest = { code: string; host: string; ip: string; requested: number }
 
 class CliService extends BaseService {
   pending(code: string) {

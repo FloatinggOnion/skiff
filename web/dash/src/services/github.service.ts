@@ -11,6 +11,7 @@ export type Repo = {
 export type GithubStatus = {
   configured: boolean
   installed: boolean
+  usable?: boolean
   slug?: string
   permissionsUrl?: string // set when preview comments need "Pull requests: write"
 }

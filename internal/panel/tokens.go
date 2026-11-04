@@ -29,12 +29,12 @@ func newAPIToken() string {
 	return "skiff_" + randHex(24)
 }
 
-func createToken(team, name string) (APIToken, error) {
+func createToken(team, name, createdBy string) (APIToken, error) {
 	tok := newAPIToken()
 	t := APIToken{ID: randToken()[:12], Name: name, Created: time.Now().Unix()}
 	_, err := sqlDB.Exec(
-		`INSERT INTO api_tokens(id,team,name,token_hash,created,last_used) VALUES(?,?,?,?,?,0)`,
-		t.ID, team, name, hashToken(tok), t.Created)
+		`INSERT INTO api_tokens(id,team,name,token_hash,created,last_used,created_by) VALUES(?,?,?,?,?,0,?)`,
+		t.ID, team, name, hashToken(tok), t.Created, createdBy)
 	if err != nil {
 		return APIToken{}, err
 	}
@@ -97,7 +97,8 @@ func (p *Panel) handleTokens(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			name = "token"
 		}
-		t, err := createToken(team, name)
+		s, _ := p.session(r)
+		t, err := createToken(team, name, s.userID)
 		if err != nil {
 			http.Error(w, "could not create token", http.StatusInternalServerError)
 			return

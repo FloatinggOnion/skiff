@@ -12,6 +12,7 @@ import (
 	"net/textproto"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,8 @@ const (
 	maxHops        = 30
 	maxErrors      = 10
 	maxLine        = 4096
+	maxHeaderBytes = 1 << 20
+	maxHeaderLines = 1000
 	cmdTimeout     = 5 * time.Minute
 	sessionTimeout = 30 * time.Minute
 	forwardTimeout = 3 * time.Minute
@@ -38,6 +41,13 @@ type Server struct {
 	Logf      func(format string, args ...any)
 
 	data chan struct{}
+	lim  *limits
+	once sync.Once
+}
+
+func (s *Server) limits() *limits {
+	s.once.Do(func() { s.lim = newLimits() })
+	return s.lim
 }
 
 func (s *Server) logf(format string, args ...any) {
@@ -77,6 +87,15 @@ func (s *Server) Serve(ln net.Listener) error {
 		case conns <- struct{}{}:
 			go func() {
 				defer func() { <-conns }()
+				host, _, _ := net.SplitHostPort(c.RemoteAddr().String())
+				key := ipKey(host)
+				if !s.limits().acquire(key) {
+					_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+					_, _ = io.WriteString(c, "421 "+s.Hostname+" too many connections from your address\r\n")
+					_ = c.Close()
+					return
+				}
+				defer s.limits().release(key)
 				s.serveConn(c)
 			}()
 		default:
@@ -90,6 +109,7 @@ func (s *Server) Serve(ln net.Listener) error {
 type session struct {
 	s       *Server
 	conn    net.Conn
+	dc      *deadlineConn
 	r       *bufio.Reader
 	w       *bufio.Writer
 	remote  string
@@ -101,10 +121,17 @@ type session struct {
 }
 
 // deadlineConn pushes the read deadline out on every read, so a slow-but-alive sender isn't cut off mid-DATA.
-type deadlineConn struct{ net.Conn }
+type deadlineConn struct {
+	net.Conn
+	until time.Time
+}
 
-func (c deadlineConn) Read(b []byte) (int, error) {
-	_ = c.SetReadDeadline(time.Now().Add(cmdTimeout))
+func (c *deadlineConn) Read(b []byte) (int, error) {
+	d := time.Now().Add(cmdTimeout)
+	if !c.until.IsZero() && c.until.Before(d) {
+		d = c.until
+	}
+	_ = c.SetReadDeadline(d)
 	return c.Conn.Read(b)
 }
 
@@ -142,7 +169,8 @@ func (s *Server) serveConn(c net.Conn) {
 
 func (ss *session) attach(c net.Conn) {
 	ss.conn = c
-	ss.r = bufio.NewReaderSize(deadlineConn{c}, maxLine)
+	ss.dc = &deadlineConn{Conn: c}
+	ss.r = bufio.NewReaderSize(ss.dc, maxLine)
 	ss.w = bufio.NewWriter(c)
 }
 
@@ -297,6 +325,10 @@ func (ss *session) mail(arg string) int {
 			}
 		}
 	}
+	if !ss.s.limits().perIP.take(ipKey(ss.remote), time.Now()) {
+		ss.reply(451, "too many messages, try again later")
+		return 451
+	}
 	ss.hasFrom, ss.from = true, addr
 	ss.reply(250, "ok")
 	return 250
@@ -338,6 +370,10 @@ func (ss *session) rcpt(arg string) int {
 		}
 		rc = Recipient{Addr: addr, Destinations: dst}
 	}
+	if !ss.s.limits().perAlias.take(strings.ToLower(addr), time.Now()) {
+		ss.reply(452, "too many messages for this address, try again later")
+		return 452
+	}
 	ss.rcpts = append(ss.rcpts, rc)
 	ss.reply(250, "ok")
 	return 250
@@ -357,7 +393,8 @@ func (ss *session) data() int {
 	}
 	ss.reply(354, "end data with <CRLF>.<CRLF>")
 
-	dr := textproto.NewReader(ss.r).DotReader()
+	dr := &progressReader{r: textproto.NewReader(ss.r).DotReader(), dc: ss.dc, start: time.Now()}
+	defer func() { ss.dc.until = time.Time{} }()
 	var buf bytes.Buffer
 	limit := ss.s.maxSize()
 	if _, err := io.Copy(&buf, io.LimitReader(dr, limit+1)); err != nil {
@@ -372,7 +409,12 @@ func (ss *session) data() int {
 		return 552
 	}
 	defer ss.reset()
-	if countReceived(buf.Bytes()) >= maxHops {
+	hops, ok := countReceived(buf.Bytes())
+	if !ok {
+		ss.reply(552, "message headers too large")
+		return 552
+	}
+	if hops >= maxHops {
 		ss.reply(554, "too many hops, possible mail loop")
 		return 554
 	}
@@ -408,18 +450,31 @@ func (ss *session) received() []byte {
 		sanitizeReply(ss.helo), ss.remote, ss.s.Hostname, proto, time.Now().UTC().Format(time.RFC1123Z))
 }
 
-func countReceived(data []byte) int {
-	n := 0
-	for _, line := range bytes.Split(data, []byte("\n")) {
-		line = bytes.TrimRight(line, "\r")
+// countReceived counts Received headers up to the first blank line; ok is false when the header block is too large to handle.
+func countReceived(data []byte) (n int, ok bool) {
+	lines := 0
+	for pos := 0; pos < len(data); {
+		end := bytes.IndexByte(data[pos:], '\n')
+		next := len(data)
+		if end >= 0 {
+			end += pos
+			next = end + 1
+		} else {
+			end = len(data)
+		}
+		line := bytes.TrimRight(data[pos:end], "\r")
 		if len(line) == 0 {
-			break
+			return n, true
+		}
+		if lines++; lines > maxHeaderLines || next > maxHeaderBytes {
+			return n, false
 		}
 		if len(line) >= 9 && strings.EqualFold(string(line[:9]), "received:") {
 			n++
 		}
+		pos = next
 	}
-	return n
+	return n, true
 }
 
 func sanitizeReply(s string) string {

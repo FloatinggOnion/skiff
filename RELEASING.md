@@ -18,7 +18,7 @@ Skiff's own server updates itself from `main`, so a release isn't how changes re
    git tag v0.x.y && git push origin v0.x.y
    ```
 
-   The release workflow builds the binaries, publishes the release and updates the Homebrew formula.
+   Only tags shaped like `v0.x.y` start a release, so the moving `v0` tag below never does. The release workflow builds the binaries, publishes them with a `SHA256SUMS` file and a build attestation, and updates the Homebrew formula.
 
    Then move the GitHub Action's tag, so workflows using `nuelScript/skiff@v0` get this version:
 
@@ -31,4 +31,8 @@ Skiff's own server updates itself from `main`, so a release isn't how changes re
    gh release edit v0.x.y --notes-file notes.md
    ```
 
-5. Check the install paths deliver it: the Homebrew formula's version, and a downloaded binary's `skiff --version`.
+5. Check the install paths deliver it: `SHA256SUMS` is among the release's assets (the install scripts refuse a release without it), the Homebrew formula's version, and a downloaded binary's `skiff --version`.
+
+## Security fixes
+
+A security fix ships as a patch the same day. The release notes say what was fixed, who was affected and what to do about it, such as upgrading or rotating a token. For anything serious, publish a GitHub Security Advisory too, crediting the reporter unless they asked not to be named, as SECURITY.md promises.

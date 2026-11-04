@@ -84,6 +84,15 @@ func listVolumeBackups(app, volume string) []volumeBackupRow {
 
 func volumeBackupDirName(app, volume string) string { return "vol-" + app + "-" + volume }
 
+// volumeOffsiteOwner keys a volume's offsite copies; ':' can't appear in an app or volume name, so two pairs never share one.
+func volumeOffsiteOwner(app, volume string) string { return "vol:" + app + ":" + volume }
+
+// adoptVolumeOffsiteRows moves copies recorded under the older joined name to the new owner, matching on the key (which has the app and volume as separate path parts) so another pair that shared the old name keeps its own.
+func adoptVolumeOffsiteRows(owner, app, volume string) {
+	_, _ = sqlDB.Exec(`UPDATE offsite_objects SET db_id=? WHERE db_id=? AND instr(key, ?) > 0`,
+		owner, volumeBackupDirName(app, volume), "volumes/"+app+"/"+volume+"/")
+}
+
 func volumeBackupPath(b volumeBackupRow) string {
 	return filepath.Join(backupsDir(), volumeBackupDirName(b.App, b.Volume), b.File)
 }
@@ -257,7 +266,8 @@ func uploadVolumeOffsite(b volumeBackupRow) error {
 		return fail(err)
 	}
 	setVolumeBackupOffsite(b.ID, "ok", key)
-	owner := volumeBackupDirName(b.App, b.Volume)
+	owner := volumeOffsiteOwner(b.App, b.Volume)
+	adoptVolumeOffsiteRows(owner, b.App, b.Volume)
 	_, _ = sqlDB.Exec(`INSERT OR REPLACE INTO offsite_objects(db_id,key,created) VALUES(?,?,?)`, owner, key, b.Created)
 	pruneOffsite(c, owner, offsiteRetention)
 	return nil

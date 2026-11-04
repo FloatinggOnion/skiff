@@ -53,7 +53,7 @@ func previewSources(parent string) []Source {
 
 // branchPreviews are the previews built from one branch of a repo.
 func branchPreviews(repo, branch string) []Source {
-	rows, err := sqlDB.Query(`SELECT `+sourceCols+` FROM sources WHERE parent<>'' AND repo=? AND branch=?`, repo, branch)
+	rows, err := sqlDB.Query(`SELECT `+sourceCols+` FROM sources WHERE parent<>'' AND repo=? AND branch=? AND team=?`, repo, branch, foundingTeam())
 	if err != nil {
 		return nil
 	}
@@ -150,7 +150,7 @@ func (p *Panel) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	name, id, ok := p.createPreview(src, branch, "", fmt.Sprintf("preview of %s", branch))
 	if !ok {
-		http.Error(w, "couldn't derive a preview name from that branch", http.StatusBadRequest)
+		http.Error(w, "couldn't make a preview name from that branch: it's empty or clashes with another app", http.StatusBadRequest)
 		return
 	}
 	p.tailLog(w, r, name, id)
@@ -161,13 +161,19 @@ func (p *Panel) createPreview(parent Source, branch, commit, message string) (na
 	if name == "" || name == parent.App {
 		return "", "", false
 	}
+	// A preview's name is derived from the branch, so it can land on someone else's app; only this project's own preview may be reused.
+	if existing, taken := getSource(name); taken && (existing.Parent != parent.App || existing.Team != parent.Team) {
+		return "", "", false
+	}
 	// auto so a push to that branch redeploys the preview through the webhook path.
 	pv := Source{
 		App: name, Team: parent.Team, Repo: parent.Repo, Branch: branch,
 		RootDir: parent.RootDir, Port: parent.Port, CloneURL: parent.CloneURL,
 		Auto: true, Parent: parent.App,
 	}
-	_ = putSource(pv)
+	if putSource(pv) != nil {
+		return "", "", false
+	}
 	// Lock the preview before it has anything to serve.
 	_ = writeGateFile()
 	_ = writeEdgeFile()

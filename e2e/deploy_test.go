@@ -745,6 +745,12 @@ func checkMCP(t *testing.T, c *http.Client, bin, panelAddr, routerAddr, v2Deploy
 	if text, _ := tool("get_env", map[string]any{"name": app}); !strings.Contains(text, "GREETING") || !strings.Contains(text, "OTHER") {
 		t.Fatalf("set_env should merge, not replace: %s", text)
 	}
+	if text, _ := tool("get_env", map[string]any{"name": app}); strings.Contains(text, `"hi"`) {
+		t.Fatalf("get_env should hide values unless asked for a key: %s", text)
+	}
+	if text, isErr := tool("get_env", map[string]any{"name": app, "key": "GREETING"}); isErr || !strings.Contains(text, `"hi"`) {
+		t.Fatalf("get_env with a key: %s", text)
+	}
 	if text, isErr := tool("rollback", map[string]any{"name": app, "deploy": v2Deploy}); isErr || !strings.Contains(text, "live") {
 		t.Fatalf("rollback via mcp: %s", text)
 	}

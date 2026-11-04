@@ -12,7 +12,7 @@ import (
 
 func mailRequest(p *Panel, method, target, body, session string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
-	req.AddCookie(&http.Cookie{Name: "skiff_session", Value: session})
+	req.AddCookie(&http.Cookie{Name: p.cookieName(), Value: session})
 	w := httptest.NewRecorder()
 	p.handleMail(w, req)
 	return w

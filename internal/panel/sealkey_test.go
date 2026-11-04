@@ -329,7 +329,7 @@ func TestExistingTokensAreHashedAndKeepWorking(t *testing.T) {
 	if _, err := sqlDB.Exec(`INSERT INTO sessions(token,user_id,team_id,created) VALUES(?,'u','t',?)`, sessTok, time.Now().Unix()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sqlDB.Exec(`INSERT INTO invites(token,email,team_id,role,created) VALUES(?,'e','t','member',1)`, invTok); err != nil {
+	if _, err := sqlDB.Exec(`INSERT INTO invites(token,email,team_id,role,created) VALUES(?,'e','t','member',?)`, invTok, time.Now().Unix()); err != nil {
 		t.Fatal(err)
 	}
 	if err := hashStoredTokens(); err != nil {

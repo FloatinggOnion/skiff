@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
 import { alertsService } from '@/services/api.service'
+import { useAuthContext } from '@/context/auth-context'
 import { queryKeys } from '@/constants/query-keys'
 import { errText } from '@/lib/errors'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,8 @@ import { Section, Field, SaveButton, inputCls } from './ui'
 
 export function AlertsSection() {
   const qc = useQueryClient()
+  const { me } = useAuthContext()
+  const owner = me?.role === 'owner'
   const { data } = useQuery({ queryKey: queryKeys.alerts, queryFn: () => alertsService.config() })
   const [email, setEmail] = useState('')
   const [slackUrl, setSlackUrl] = useState('')
@@ -62,9 +65,15 @@ export function AlertsSection() {
       description="Get notified when a deploy fails, an app goes down or runs out of memory, or 5xx errors spike."
     >
       <form onSubmit={submit} className="space-y-3">
+        {!owner && (
+          <p className="text-muted-foreground text-xs">
+            Only team owners can change where alerts go.
+          </p>
+        )}
         <Field label="Email">
           <input
             className={inputCls}
+            disabled={!owner}
             type="email"
             placeholder="you@example.com"
             value={email}
@@ -77,6 +86,7 @@ export function AlertsSection() {
         <Field label="Slack">
           <input
             className={inputCls}
+            disabled={!owner}
             placeholder="https://hooks.slack.com/services/…"
             value={slackUrl}
             onChange={(e) => {
@@ -88,6 +98,7 @@ export function AlertsSection() {
         <Field label="Webhook">
           <input
             className={inputCls}
+            disabled={!owner}
             placeholder="https://your-service/hook"
             value={webhookUrl}
             onChange={(e) => {
@@ -113,12 +124,12 @@ export function AlertsSection() {
             variant="outline"
             loading={test.isPending}
             onClick={() => test.mutate()}
-            disabled={!hasChannels || dirty}
+            disabled={!owner || !hasChannels || dirty}
           >
             <Bell className="h-4 w-4" />
             Send test
           </Button>
-          <SaveButton busy={save.isPending} saved={save.isSuccess} disabled={!dirty} />
+          <SaveButton busy={save.isPending} saved={save.isSuccess} disabled={!owner || !dirty} />
         </div>
       </form>
     </Section>

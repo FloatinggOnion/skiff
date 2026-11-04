@@ -81,7 +81,12 @@ func (p *Panel) handleLoginCode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "sign-in expired — enter your password again", http.StatusUnauthorized)
 		return
 	}
-	if !p.auth.CheckSecondFactor(t.userID, body.Code) {
+	ok, locked := p.checkFactor(t.userID, body.Code)
+	if locked {
+		http.Error(w, "too many attempts — try again later", http.StatusTooManyRequests)
+		return
+	}
+	if !ok {
 		loginLimiter.fail(ip, time.Now())
 		http.Error(w, auth.ErrBadCode.Error(), http.StatusUnauthorized)
 		return
@@ -155,9 +160,7 @@ func (p *Panel) handleTwoFactor(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Other sessions were opened with the password alone; end them.
-		if c, err := r.Cookie("skiff_session"); err == nil {
-			_, _ = sqlDB.Exec(`DELETE FROM sessions WHERE user_id = ? AND token != ?`, u.ID, auth.StoredToken(c.Value))
-		}
+		p.endOtherSessions(r, u.ID)
 		p.audit(r, "account.2fa.enable", u.Email, "")
 		writeJSON(w, map[string]any{"recoveryCodes": codes})
 
@@ -166,7 +169,12 @@ func (p *Panel) handleTwoFactor(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "two-factor is off", http.StatusConflict)
 			return
 		}
-		if !p.auth.CheckSecondFactor(u.ID, body.Code) {
+		ok, locked := p.checkFactor(u.ID, body.Code)
+		if locked {
+			http.Error(w, "too many attempts — try again later", http.StatusTooManyRequests)
+			return
+		}
+		if !ok {
 			loginLimiter.fail(ip, time.Now())
 			http.Error(w, auth.ErrBadCode.Error(), http.StatusUnauthorized)
 			return
@@ -176,6 +184,7 @@ func (p *Panel) handleTwoFactor(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "couldn't turn two-factor off", http.StatusInternalServerError)
 				return
 			}
+			p.endOtherSessions(r, u.ID)
 			p.audit(r, "account.2fa.disable", u.Email, "")
 			w.WriteHeader(http.StatusNoContent)
 			return

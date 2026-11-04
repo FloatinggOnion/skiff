@@ -77,7 +77,9 @@ func (p *Panel) recreateDatabase(d dbRow) error {
 		return err
 	}
 	if d.Stack == "" {
-		_ = p.eng.ConnectNetwork(dbNetwork, d.Container)
+		for _, n := range rejoinNetworks(d, nil) {
+			_ = p.eng.ConnectNetwork(n, d.Container)
+		}
 	}
 	for _, app := range dbAttachments(d.ID) {
 		_ = p.linkResource(d.Container, d.network(), app)

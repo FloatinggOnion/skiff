@@ -8,32 +8,36 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
 
       - name: Build dashboard into the binary
         working-directory: web/dash
         run: |
-          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npm run build
           rm -rf ../../internal/panel/dist
           cp -r dist ../../internal/panel/dist
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
 
       - name: Cross-compile binaries
         env:
@@ -46,12 +50,19 @@ jobs:
             GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags="$LDFLAGS" -o "skiff-$os-$arch" .
           done
 
+      - name: Checksums
+        run: sha256sum skiff-linux-amd64 skiff-linux-arm64 skiff-darwin-amd64 skiff-darwin-arm64 > SHA256SUMS
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: skiff-*
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
-            skiff-linux-amd64 skiff-linux-arm64 skiff-darwin-amd64 skiff-darwin-arm64 \
+            skiff-linux-amd64 skiff-linux-arm64 skiff-darwin-amd64 skiff-darwin-arm64 SHA256SUMS \
             --title "${{ github.ref_name }}" \
             --generate-notes
 
@@ -60,6 +71,8 @@ jobs:
   # be re-run on its own (gh run rerun --failed, or gh workflow run homebrew.yml).
   homebrew:
     needs: release
+    permissions:
+      contents: read
     uses: ./.github/workflows/homebrew.yml
     with:
       tag: ${{ github.ref_name }}

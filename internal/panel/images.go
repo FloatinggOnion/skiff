@@ -76,6 +76,10 @@ func (p *Panel) handleImageProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "a project with that name already exists", http.StatusConflict)
 		return
 	}
+	if nameReserved(name, team) {
+		http.Error(w, reservedNameMsg, http.StatusBadRequest)
+		return
+	}
 	if envStage.heldByOther(name, team, time.Now()) {
 		_ = setEnv(name, nil)
 	}
