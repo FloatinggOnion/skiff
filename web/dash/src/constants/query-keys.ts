@@ -41,6 +41,7 @@ export const queryKeys = {
   volumeBackups: (app: string, volume: string) => ['volume-backups', app, volume] as const,
   registry: (app: string) => ['registry', app] as const,
   backups: (dbId: string) => ['backups', dbId] as const,
+  pitr: (dbId: string) => ['pitr', dbId] as const,
   deploys: (app: string | null) => ['deploys', app] as const,
   deploysPaged: (app: string) => ['deploys', app, 'page'] as const,
   deploysAll: ['deploys', 'all'] as const,

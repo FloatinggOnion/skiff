@@ -1,5 +1,6 @@
 import { queryKeys } from '@/constants/query-keys'
 import { fmtBytes, relTime } from '@/lib/format'
+import { Input } from '@/components/ui/input'
 import { errText } from '@/lib/errors'
 import { useCopy } from '@/hooks/use-copy'
 import { useMemo, useState, type FormEvent } from 'react'
@@ -24,7 +25,7 @@ import { useApps } from '@/hooks/use-apps'
 import { useDatabases } from '@/hooks/use-databases'
 import { ConsoleTerminal } from '@/components/console-terminal'
 import { UnmanagedDatabases } from '@/components/unmanaged-databases'
-import { databasesService, type Backup } from '@/services/api.service'
+import { databasesService, type Backup, type PitrStatus } from '@/services/api.service'
 import { useConfirm } from '@/providers/confirm-provider'
 import { Button } from '@/components/ui/button'
 import {
@@ -481,6 +482,8 @@ function BackupsDialog({
           </Button>
         </div>
 
+        {db.engine === 'postgres' && <PitrSection db={db} onRecovered={reload} />}
+
         <div className="max-h-[50vh] divide-y divide-foreground/5 overflow-y-auto rounded-lg border border-foreground/8">
           {isLoading ? (
             <p className="text-muted-foreground p-5 text-center text-sm">Loading…</p>
@@ -570,6 +573,118 @@ function BackupsDialog({
         {error && <p className="text-xs text-danger">{error}</p>}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function PitrSection({ db, onRecovered }: { db: Db; onRecovered: () => void }) {
+  const qc = useQueryClient()
+  const confirm = useConfirm()
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const [target, setTarget] = useState('')
+  const { data: status } = useQuery<PitrStatus>({
+    queryKey: queryKeys.pitr(db.id),
+    queryFn: () => databasesService.pitrStatus(db.id),
+    refetchInterval: (q) => (q.state.data?.enabled && !q.state.data.windowStart ? 3000 : false),
+  })
+  if (!status?.supported) return null
+  const reload = () => qc.invalidateQueries({ queryKey: queryKeys.pitr(db.id) })
+
+  const run = async (label: string, fn: () => Promise<unknown>) => {
+    setError('')
+    setBusy(label)
+    try {
+      await fn()
+      reload()
+    } catch (err) {
+      setError(errText(err, 'Something went wrong.'))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const toggle = async () => {
+    const on = !status.enabled
+    const ok = await confirm(
+      on
+        ? {
+            title: `Turn on point-in-time recovery for ${db.name}?`,
+            description:
+              'The database restarts, which takes a few seconds, so your apps will reconnect. It also uses more disk, because Skiff keeps a few days of its history on this server.',
+            confirmText: 'Turn on',
+          }
+        : {
+            title: `Turn off point-in-time recovery for ${db.name}?`,
+            description:
+              'The database restarts, which takes a few seconds, and its history is deleted. Daily backups keep running.',
+            confirmText: 'Turn off',
+            destructive: true,
+          },
+    )
+    if (ok) run('toggle', () => databasesService.setPitr(db.id, on))
+  }
+
+  const recover = async () => {
+    const at = Math.floor(new Date(target).getTime() / 1000)
+    if (!at || at < (status.windowStart ?? 0) || at >= Date.now() / 1000) {
+      setError('Choose a time inside the range shown.')
+      return
+    }
+    const ok = await confirm({
+      title: `Return ${db.name} to ${fmtDate(at)}?`,
+      description:
+        'Everything after that moment is removed. Skiff backs up the current data first, so you can undo it from the list below. The database restarts, and its history starts again from now.',
+      confirmText: 'Return to this time',
+      destructive: true,
+    })
+    if (ok) {
+      await run('recover', () => databasesService.recoverToTime(db.id, at))
+      onRecovered()
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-foreground/8 p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium">Point-in-time recovery</p>
+          <p className="text-muted-foreground mt-0.5 text-[11px]">
+            Return to any moment in the last few days, not just the last daily backup.
+          </p>
+        </div>
+        <Toggle on={status.enabled} busy={busy === 'toggle'} onClick={toggle} />
+      </div>
+      {status.paused && <p className="mt-2 text-[11px] text-warning">{status.paused}</p>}
+      {status.enabled && !status.paused && !status.windowStart && (
+        <p className="text-muted-foreground mt-2 text-[11px]">Taking the first snapshot…</p>
+      )}
+      {status.enabled && status.windowStart ? (
+        <div className="mt-3 border-t border-foreground/5 pt-3">
+          <p className="text-muted-foreground text-[11px]">
+            You can return to any time since {fmtDate(status.windowStart)}.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <Input
+              type="datetime-local"
+              step={1}
+              aria-label="Time to return to"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              className="h-8 text-xs"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!target || busy === 'recover'}
+              onClick={recover}
+            >
+              {busy === 'recover' ? 'Recovering…' : 'Return to this time'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+    </div>
   )
 }
 

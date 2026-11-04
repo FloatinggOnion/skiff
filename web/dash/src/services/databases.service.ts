@@ -47,6 +47,14 @@ export type Database = {
   checkFailed?: boolean
 }
 
+export type PitrStatus = {
+  supported: boolean
+  enabled: boolean
+  paused?: string
+  windowStart?: number
+  size?: number
+}
+
 class DatabasesService extends BaseService {
   list() {
     return this.get<Database[]>('/databases')
@@ -108,6 +116,26 @@ class DatabasesService extends BaseService {
 
   restoreBackup(id: string) {
     return this.post('/backups/restore', undefined, { params: { id } })
+  }
+
+  pitrStatus(dbId: string) {
+    return this.get<PitrStatus>('/databases/pitr', { params: { db: dbId } })
+  }
+
+  setPitr(dbId: string, enabled: boolean) {
+    return this.post<PitrStatus>(
+      '/databases/pitr',
+      { action: enabled ? 'enable' : 'disable' },
+      { params: { db: dbId } },
+    )
+  }
+
+  recoverToTime(dbId: string, at: number) {
+    return this.post<PitrStatus>(
+      '/databases/pitr',
+      { action: 'restore', at },
+      { params: { db: dbId } },
+    )
   }
 
   checkBackup(id: string) {

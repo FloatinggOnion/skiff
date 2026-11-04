@@ -28,6 +28,7 @@ func (p *Panel) recoverDatabases() {
 		if !freshVolume {
 			continue
 		}
+		p.resetPITR(d) // its history belongs to the data that's gone
 		if key, err := p.restoreLatestOffsite(d); err != nil {
 			log.Printf("skiff: database %s came back empty: %v", d.Name, err)
 		} else if key != "" {
@@ -48,9 +49,13 @@ func (p *Panel) recreateDatabase(d dbRow) error {
 	if err := p.eng.EnsureNetwork(net); err != nil {
 		return err
 	}
-	_, err := p.eng.RunDatabase(docker.DBRunSpec{
+	pitrCmd, pitrBinds, err := p.pitrRunArgs(d, cmd)
+	if err != nil {
+		return err
+	}
+	_, err = p.eng.RunDatabase(docker.DBRunSpec{
 		Name: d.Container, Image: d.image(), Network: net,
-		Volume: d.volume(), MountAt: e.mountAt, Env: env, Cmd: cmd, Aliases: d.aliases(),
+		Volume: d.volume(), MountAt: e.mountAt, Env: env, Cmd: pitrCmd, Binds: pitrBinds, Aliases: d.aliases(),
 		Labels: map[string]string{"skiff.kind": "database", "skiff.db": d.ID, "skiff.team": d.Team},
 	})
 	if err != nil {

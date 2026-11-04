@@ -20,7 +20,8 @@ export default function Backups() {
 
       <Callout>
         Backups start on the same server as your apps, so a dead server takes them with it until you
-        add an offsite bucket. Daily backups also mean you can lose up to 24 hours of data.
+        add an offsite bucket. Daily backups also mean you can lose up to 24 hours of data, unless you
+        turn on point-in-time recovery for a Postgres database.
       </Callout>
 
       <h2>What gets backed up</h2>
@@ -68,6 +69,38 @@ export default function Backups() {
         A passing check means the backup loads and contains tables, collections or keys. It
         doesn&apos;t check that the contents are what your app expects. It tests the copy on your
         server, not the one in your offsite bucket, and volumes and previews aren&apos;t checked.
+      </Callout>
+
+      <h2>Point-in-time recovery</h2>
+      <p>
+        Daily backups can lose up to 24 hours of data. For a Postgres database, turn on{" "}
+        <strong>Point-in-time recovery</strong> under <strong>Backups</strong>, and you can return it
+        to any moment since its oldest snapshot, which is usually two to three days back. It&apos;s
+        made for mistakes like a bad migration or an accidental delete. It&apos;s off by default.
+      </p>
+      <ul>
+        <li>
+          <strong>Turning it on or off</strong> restarts the database for a few seconds. Your apps will
+          reconnect.
+        </li>
+        <li>
+          <strong>Returning to a time</strong> recovers into a separate copy first, so a failure leaves
+          your database as it was. Once the copy has started, Skiff backs up the current data, then
+          restarts the database on the recovered copy. Undo it by restoring the{" "}
+          <em>before restore</em> backup. The history then starts again from that point.
+        </li>
+        <li>
+          <strong>Disk:</strong> Skiff keeps a daily snapshot and every change in between, so a
+          database that writes a lot uses a lot more disk. If the server runs low, Skiff stops keeping
+          history and deletes it rather than fill the disk, and alerts you. Daily backups keep running,
+          and it starts again when there&apos;s room.
+        </li>
+      </ul>
+      <Callout>
+        This history is kept on the same server as your database and isn&apos;t copied to your offsite
+        bucket, so it won&apos;t help if you lose the server. The database also has to be running to
+        return it to a time. Snapshots and history aren&apos;t encrypted. Adopted databases and previews
+        don&apos;t support it.
       </Callout>
 
       <h2>Add an offsite bucket</h2>

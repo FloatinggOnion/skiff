@@ -325,3 +325,142 @@ func TestVolumeBackupFromBucket(t *testing.T) {
 		t.Fatalf("the fetched copy should be kept: %v", err)
 	}
 }
+
+// TestPointInTimeRecovery returns a real database to a moment between two writes, twice, with an app's public access and connection intact.
+func TestPointInTimeRecovery(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	var db struct {
+		ID   string `json:"id"`
+		Host string `json:"host"`
+	}
+	postJSON(t, c, "http://"+panel+"/api/databases", `{"engine":"postgres","name":"pitr"}`, &db)
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", db.Host).Run() })
+	sql := func(stmt string) (string, error) {
+		out, err := exec.Command("docker", "exec", db.Host, "psql", "-U", "skiff", "-d", "pitr", "-v", "ON_ERROR_STOP=1", "-qtAc", stmt).CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+	eventually(t, time.Minute, func() bool {
+		_, err := sql("create table if not exists t(v text)")
+		return err == nil
+	})
+	state := func() string {
+		var got string
+		var err error
+		eventually(t, time.Minute, func() bool {
+			got, err = sql("select string_agg(v, ',' order by v) from t")
+			return err == nil
+		})
+		return got
+	}
+	mustSQL := func(stmt string) {
+		t.Helper()
+		if out, err := sql(stmt); err != nil {
+			t.Fatalf("%s: %v: %s", stmt, err, out)
+		}
+	}
+	pitr := "http://" + panel + "/api/databases/pitr?db=" + db.ID
+	var status struct {
+		Enabled     bool  `json:"enabled"`
+		WindowStart int64 `json:"windowStart"`
+	}
+	mustSQL("insert into t values ('a')")
+	postJSON(t, c, pitr, `{"action":"enable"}`, &status)
+	if !status.Enabled {
+		t.Fatalf("not enabled: %+v", status)
+	}
+	if got := state(); got != "a" {
+		t.Fatalf("turning recovery on changed the data: %q", got)
+	}
+	eventually(t, 2*time.Minute, func() bool {
+		getJSON(t, c, pitr, &status)
+		return status.WindowStart > 0
+	})
+
+	recoverTo := func(at int64, want string) {
+		t.Helper()
+		postJSON(t, c, pitr, fmt.Sprintf(`{"action":"restore","at":%d}`, at), &status)
+		if got := state(); got != want {
+			t.Fatalf("after recovering: got %q, want %q", got, want)
+		}
+	}
+	time.Sleep(2 * time.Second)
+	mustSQL("insert into t values ('b')")
+	time.Sleep(2 * time.Second)
+	between := time.Now().Unix()
+	time.Sleep(2 * time.Second)
+	mustSQL("insert into t values ('bad'); delete from t where v='a'")
+	time.Sleep(2 * time.Second)
+	post(t, c, "http://"+panel+"/api/databases/public?id="+db.ID+"&on=1", "")
+	eventually(t, time.Minute, func() bool {
+		got, err := sql("show archive_mode")
+		return err == nil && got == "on"
+	})
+	recoverTo(between, "a,b")
+	if got, _ := sql("show ssl"); got != "on" {
+		t.Fatalf("recovering dropped the public database's encryption: %q", got)
+	}
+	if got, _ := sql("show archive_mode"); got != "on" {
+		t.Fatalf("recovering turned archiving off: %q", got)
+	}
+	post(t, c, "http://"+panel+"/api/databases/public?id="+db.ID+"&on=0", "")
+
+	// The recovered database has to keep working, including a second recovery from its new history.
+	if status.WindowStart == 0 {
+		t.Fatalf("no history after recovering: %+v", status)
+	}
+	time.Sleep(2 * time.Second)
+	mustSQL("insert into t values ('c')")
+	time.Sleep(2 * time.Second)
+	second := time.Now().Unix()
+	time.Sleep(2 * time.Second)
+	mustSQL("delete from t")
+	time.Sleep(2 * time.Second)
+	recoverTo(second, "a,b,c")
+
+	// Nothing was written after this moment, and recovery still has to be able to reach it.
+	time.Sleep(3 * time.Second)
+	recoverTo(time.Now().Unix()-1, "a,b,c")
+
+	// A time before the history starts changes nothing.
+	resp, err := c.Post(pitr, "application/json", strings.NewReader(fmt.Sprintf(`{"action":"restore","at":%d}`, status.WindowStart-3600)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode < 400 {
+		t.Fatalf("recovering to before the history: %d", resp.StatusCode)
+	}
+	if got := state(); got != "a,b,c" {
+		t.Fatalf("a refused recovery changed the data: %q", got)
+	}
+
+	postJSON(t, c, pitr, `{"action":"disable"}`, &status)
+	if got := state(); got != "a,b,c" {
+		t.Fatalf("turning recovery off changed the data: %q", got)
+	}
+	if out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "name="+db.Host+"-wal").Output(); strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("history left after turning it off: %s", out)
+	}
+	req, _ := http.NewRequest(http.MethodDelete, "http://"+panel+"/api/databases?id="+db.ID, nil)
+	if resp, err := c.Do(req); err != nil {
+		t.Fatal(err)
+	} else {
+		resp.Body.Close()
+	}
+	if out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "name="+db.Host).Output(); strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("volumes left after deleting the database: %s", out)
+	}
+}

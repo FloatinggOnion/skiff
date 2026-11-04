@@ -2,6 +2,7 @@ package panel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -499,6 +500,7 @@ func (p *Panel) handleDatabases(w http.ResponseWriter, r *http.Request) {
 		_ = p.eng.Stop(d.Container)
 		_ = p.eng.Remove(d.Container)
 		_ = p.eng.RemoveVolume(d.volume())
+		p.removePITR(d)
 		removeDatabaseBackups(id)
 		deleteDBRow(id)
 		p.audit(r, "database.delete", d.Name, d.Engine)
@@ -547,24 +549,10 @@ func (p *Panel) handleDatabaseAttach(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	id := sanitizeID(r.URL.Query().Get("id"))
-	d, ok := p.canAccessDB(r, id)
-	if !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	on := r.URL.Query().Get("on") == "1"
+// runDatabaseContainer replaces the container with the same data and networks, open to the internet or not.
+func (p *Panel) runDatabaseContainer(d dbRow, on bool) (int, error) {
 	e := dbEngines[d.Engine]
 	adopted := d.Image != ""
-	if adopted && d.Volume == "" {
-		http.Error(w, "this database's data isn't in a named volume, so it can't be recreated safely", http.StatusConflict)
-		return
-	}
 	env, cmd := e.container(d.Username, d.Password, d.DBName)
 	net := d.network()
 	_ = p.eng.EnsureNetwork(net)
@@ -576,8 +564,7 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 			_ = json.Unmarshal([]byte(d.Cmd), &cmd)
 		}
 	} else if adopted {
-		http.Error(w, "couldn't read the database container", http.StatusInternalServerError)
-		return
+		return 0, errors.New("couldn't read the database container")
 	}
 	spec := docker.DBRunSpec{
 		Name: d.Container, Image: d.image(), Network: net,
@@ -596,10 +583,14 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 			spec.Cmd = e.tls.cmd
 		}
 	}
+	pitrCmd, pitrBinds, err := p.pitrRunArgs(d, spec.Cmd)
+	if err != nil {
+		return 0, err
+	}
+	spec.Cmd, spec.Binds = pitrCmd, append(spec.Binds, pitrBinds...)
 	port, err := p.eng.RunDatabase(spec)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return 0, err
 	}
 	// Recreating drops the container's other networks; rejoin them so apps that reached it there still can.
 	for _, n := range append(prevNets, dbNetwork) {
@@ -607,8 +598,28 @@ func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
 			_ = p.eng.ConnectNetwork(n, d.Container)
 		}
 	}
-	if _, err := sqlDB.Exec(`UPDATE databases SET public = ?, public_port = ? WHERE id = ?`,
-		b2i(on), port, d.ID); err != nil {
+	_, err = sqlDB.Exec(`UPDATE databases SET public = ?, public_port = ? WHERE id = ?`, b2i(on), port, d.ID)
+	return port, err
+}
+
+func (p *Panel) handleDatabasePublic(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := sanitizeID(r.URL.Query().Get("id"))
+	d, ok := p.canAccessDB(r, id)
+	if !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	on := r.URL.Query().Get("on") == "1"
+	if d.Image != "" && d.Volume == "" {
+		http.Error(w, "this database's data isn't in a named volume, so it can't be recreated safely", http.StatusConflict)
+		return
+	}
+	port, err := p.runDatabaseContainer(d, on)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

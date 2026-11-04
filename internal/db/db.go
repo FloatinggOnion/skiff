@@ -253,6 +253,19 @@ CREATE TABLE IF NOT EXISTS backups (
   check_at     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_backups_db ON backups(db_id, created DESC);
+CREATE TABLE IF NOT EXISTS pitr (
+  db_id   TEXT PRIMARY KEY,
+  enabled INTEGER NOT NULL,
+  paused  TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS pitr_bases (
+  id      TEXT PRIMARY KEY,
+  db_id   TEXT NOT NULL,
+  file    TEXT NOT NULL,
+  size    INTEGER NOT NULL DEFAULT 0,
+  wal     TEXT NOT NULL DEFAULT '',
+  created INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS jobs (
   id       TEXT PRIMARY KEY,
   app      TEXT NOT NULL,
