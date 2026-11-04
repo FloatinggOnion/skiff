@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	pitrOffsiteEvery    = 30 * time.Second
-	pitrOffsiteGrace    = int64(10 * 60) // a bucket that fails for less than this isn't worth an alert
+	pitrOffsiteEvery = 30 * time.Second
+	pitrOffsiteGrace = int64(10 * 60) // a bucket that fails for less than this isn't worth an alert
 )
 
 // pitrCopying keeps it to one pass of each kind per database, so a slow snapshot upload doesn't hold up the segments.
