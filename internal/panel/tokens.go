@@ -42,6 +42,17 @@ func createToken(team, name, createdBy string) (APIToken, error) {
 	return t, nil
 }
 
+func allowDatabases(id string) error {
+	_, err := sqlDB.Exec(`UPDATE api_tokens SET reach_databases=1 WHERE id=?`, id)
+	return err
+}
+
+func tokenReachesDatabases(tok string) bool {
+	var allowed int
+	err := sqlDB.QueryRow(`SELECT reach_databases FROM api_tokens WHERE token_hash=?`, hashToken(tok)).Scan(&allowed)
+	return err == nil && allowed == 1
+}
+
 func listTokens(team string) []APIToken {
 	rows, err := sqlDB.Query(
 		`SELECT id,name,created,last_used FROM api_tokens WHERE team=? ORDER BY created DESC`, team)
@@ -91,8 +102,15 @@ func (p *Panel) handleTokens(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(w, listTokens(team))
 	case http.MethodPost:
-		var body struct{ Name string }
+		var body struct {
+			Name      string
+			Databases bool
+		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Databases && !p.isOwner(r) {
+			http.Error(w, "only a team owner can create a token that reaches databases", http.StatusForbidden)
+			return
+		}
 		name := strings.TrimSpace(body.Name)
 		if name == "" {
 			name = "token"
@@ -102,6 +120,13 @@ func (p *Panel) handleTokens(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, "could not create token", http.StatusInternalServerError)
 			return
+		}
+		if body.Databases {
+			if err := allowDatabases(t.ID); err != nil {
+				revokeToken(team, t.ID)
+				http.Error(w, "could not create token", http.StatusInternalServerError)
+				return
+			}
 		}
 		p.audit(r, "token.create", name, "")
 		writeJSON(w, t) // includes the plaintext token, this one time

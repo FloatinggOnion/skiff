@@ -173,6 +173,7 @@ type ContainerRuntime struct {
 	Env      map[string]string
 	Cmd      []string
 	Networks []string
+	IPs      map[string]string // by network
 	Mounts   []Mount
 	Labels   map[string]string
 	Running  bool
@@ -197,7 +198,9 @@ func parseRuntime(out []byte) (ContainerRuntime, error) {
 		}
 		State           struct{ Running bool }
 		Mounts          []struct{ Type, Name, Destination string }
-		NetworkSettings struct{ Networks map[string]json.RawMessage }
+		NetworkSettings struct {
+			Networks map[string]struct{ IPAddress string }
+		}
 	}
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return ContainerRuntime{}, err
@@ -208,15 +211,16 @@ func parseRuntime(out []byte) (ContainerRuntime, error) {
 	c := raw[0]
 	rt := ContainerRuntime{
 		Image: c.Config.Image, Cmd: c.Config.Cmd, Labels: c.Config.Labels,
-		Running: c.State.Running, Env: map[string]string{},
+		Running: c.State.Running, Env: map[string]string{}, IPs: map[string]string{},
 	}
 	for _, pair := range c.Config.Env {
 		if k, v, ok := strings.Cut(pair, "="); ok {
 			rt.Env[k] = v
 		}
 	}
-	for n := range c.NetworkSettings.Networks {
+	for n, settings := range c.NetworkSettings.Networks {
 		rt.Networks = append(rt.Networks, n)
+		rt.IPs[n] = settings.IPAddress
 	}
 	sort.Strings(rt.Networks)
 	for _, m := range c.Mounts {

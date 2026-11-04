@@ -141,6 +141,12 @@ func (p *Panel) handleCLIApprove(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "couldn't create a token", http.StatusInternalServerError)
 			return
 		}
+		// A person approved this one, unlike a token made for a pipeline.
+		if err := allowDatabases(t.ID); err != nil {
+			revokeToken(team, t.ID)
+			http.Error(w, "couldn't create a token", http.StatusInternalServerError)
+			return
+		}
 		l.token, l.team = t.Token, team
 		p.audit(r, "cli.login", name, "")
 		w.WriteHeader(http.StatusNoContent)

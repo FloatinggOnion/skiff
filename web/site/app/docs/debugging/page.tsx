@@ -73,9 +73,23 @@ skiff logs shop-api -n 500   # more history`}</CodeBlock>
         also recorded under Activity.
       </p>
       <p>
-        To connect from a desktop client, turn on <strong>Public access</strong> and copy the public
-        address. Your database then accepts connections from the whole internet, protected by its
-        password, so turn it off when you finish. Doing either restarts the database briefly.
+        To use a desktop client or a local script, sign in with <code>skiff login</code> and open a
+        private tunnel. The database stays closed to the internet, and traffic travels over your
+        dashboard&apos;s HTTPS address.
+      </p>
+      <CodeBlock label="shell">{`skiff db ls                   # your team's databases
+skiff db connect orders       # prints an address on 127.0.0.1, press Ctrl-C to close
+skiff db connect orders -p 15432   # choose the local port`}</CodeBlock>
+      <p>
+        Only a token from <code>skiff login</code> can open a tunnel, so tokens you create for CI
+        can&apos;t. Activity records each one, and revoking the token closes its tunnels within a minute. When the dashboard itself restarts, open connections drop
+        and your client reconnects through the same tunnel.
+      </p>
+      <p>
+        If something outside your machine has to connect, turn on <strong>Public access</strong> and
+        copy the public address. Your database then accepts connections from the whole internet,
+        protected by its password, so turn it off when you finish. Turning it on or off restarts the
+        database briefly.
       </p>
     </article>
   );

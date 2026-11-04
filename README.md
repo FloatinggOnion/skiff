@@ -151,6 +151,7 @@ logs, metrics and rollback.
 | `skiff open <app>` | open a deployed app's URL |
 | `skiff status` / `skiff ls` | app state + health / list apps |
 | `skiff logs [-f] <app>` | app logs |
+| `skiff db ls` / `skiff db connect <name>` | list databases / reach a private one from your own machine |
 | `skiff down <app>` | stop + remove |
 | `skiff sync` | prune orphans / dead entries |
 | `skiff proxy` | local `*.localhost` router |

@@ -315,7 +315,9 @@ function DatabaseCard({
               <div>
                 <p className="text-xs font-medium">Public access</p>
                 <p className="text-muted-foreground text-[11px]">
-                  Let external clients connect over the internet.
+                  Let external clients connect over the internet. From your own machine,{' '}
+                  <code className="font-mono">skiff db connect {db.name}</code> needs no public
+                  access.
                 </p>
               </div>
             </div>
