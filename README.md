@@ -69,7 +69,7 @@ No Dockerfile required — Skiff detects the stack and generates the build:
 | Stack | Detected by |
 |---|---|
 | **Node.js** | `package.json` — framework-aware (Next, Vite, Astro, SvelteKit, Remix, Nuxt, …) |
-| **Python** | `requirements.txt` / `*.py` |
+| **Python** | `requirements.txt`, `uv.lock`, `poetry.lock`, `Pipfile`, `pyproject.toml` / `*.py` |
 | **Go** | `go.mod` → multi-stage, tiny image |
 | **Rust** | `Cargo.toml` → multi-stage |
 | **Ruby** | `Gemfile` |
