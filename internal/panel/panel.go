@@ -80,6 +80,7 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	go p.backupLoop()
 	go p.restoreCheckLoop()
 	go p.pitrLoop()
+	go p.pitrOffsiteLoop()
 	go p.volumeBackupLoop()
 	go p.jobLoop()
 	go p.resourceLoop()

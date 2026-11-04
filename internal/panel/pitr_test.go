@@ -76,3 +76,32 @@ func TestPITRErrorShows(t *testing.T) {
 		t.Fatalf("the failure doesn't show: %q", got)
 	}
 }
+
+func TestSegmentNeeded(t *testing.T) {
+	start := "000000010000000000000005.00000028.backup"
+	cases := []struct {
+		name, start string
+		want        bool
+	}{
+		{"000000010000000000000004.gz", start, false},
+		{"000000010000000000000005.gz", start, true},
+		{"000000010000000000000005.00000028.backup.gz", start, true},
+		{"000000020000000000000006.gz", start, true},
+		{"00000002.history.gz", start, true},
+		{"000000010000000000000001.gz", "", true},
+	}
+	for _, c := range cases {
+		if got := segmentNeeded(c.name, c.start); got != c.want {
+			t.Errorf("segmentNeeded(%q, %q) = %v", c.name, c.start, got)
+		}
+	}
+}
+
+func TestBaseObjectName(t *testing.T) {
+	for _, wal := range []string{"000000010000000000000005.00000028.backup", ""} {
+		created, got, ok := parseBaseObject(baseObjectName(1790000000, wal))
+		if !ok || created != 1790000000 || got != wal {
+			t.Errorf("round trip of %q: %d %q %v", wal, created, got, ok)
+		}
+	}
+}

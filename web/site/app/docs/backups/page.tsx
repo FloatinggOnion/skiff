@@ -96,11 +96,18 @@ export default function Backups() {
           and it starts again when there&apos;s room.
         </li>
       </ul>
+      <p>
+        With an offsite bucket, the history and snapshots are copied there too, usually within a minute
+        or two of the write. Without one, they stay on the same server as your database, so they
+        won&apos;t help if you lose it. Add a bucket to protect against that. If you then lose the
+        server, the database comes back with everything that reached the bucket, usually losing only
+        the last minute or two of writes. Returning to an earlier time isn&apos;t offered on the new
+        server, because its history starts again from there. Turning recovery off removes its history
+        from the bucket too, and deleting a database leaves it there.
+      </p>
       <Callout>
-        This history is kept on the same server as your database and isn&apos;t copied to your offsite
-        bucket, so it won&apos;t help if you lose the server. The database also has to be running to
-        return it to a time. Snapshots and history aren&apos;t encrypted. Previews and adopted databases
-        without a named volume don&apos;t support it. Turning it on recreates an adopted database&apos;s
+        The database has to be running to return it to a time. Snapshots and history aren&apos;t
+        encrypted. Previews and adopted databases without a named volume don&apos;t support it. Turning it on recreates an adopted database&apos;s
         container, so published ports and extra mounts you set up yourself don&apos;t carry over.
       </Callout>
 
@@ -143,8 +150,8 @@ export default function Backups() {
         </li>
       </ul>
       <p>
-        After moving to a new server, managed databases load their newest offsite backup on their
-        own. Volumes don&apos;t: redeploy the app, then restore the volume from its backups.
+        After moving to a new server, managed databases come back on their own, from their offsite
+        history if they have one and otherwise from their newest offsite backup. Volumes don&apos;t: redeploy the app, then restore the volume from its backups.
       </p>
 
       <p>

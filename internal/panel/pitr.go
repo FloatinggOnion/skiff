@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -24,6 +25,8 @@ const (
 	pitrKeepBases = 3
 	pitrReserve   = int64(1 << 30) // free disk kept on top of the usual reserve; below it, archiving stops
 	pitrLimit     = 15 * time.Minute
+	// recoveryCopyKind isn't the restore checks' label, because their cleanup would remove a recovery still in progress.
+	recoveryCopyKind = "recovery-copy"
 )
 
 // pitrMu keeps it to one base backup or recovery at a time.
@@ -74,13 +77,14 @@ func (p *Panel) inWALVolume(ctx context.Context, d dbRow, script string) error {
 }
 
 type pitrBase struct {
-	ID, DbID, File, WAL string
-	Size, Created       int64
+	ID, DbID, File, WAL, Gen string
+	Size, Created            int64
+	Offsite                  bool
 }
 
 // listPITRBases returns them oldest first.
 func listPITRBases(dbID string) []pitrBase {
-	rows, err := sqlDB.Query(`SELECT id,db_id,file,size,wal,created FROM pitr_bases WHERE db_id=? ORDER BY created, id`, dbID)
+	rows, err := sqlDB.Query(`SELECT id,db_id,file,size,wal,created,gen,offsite FROM pitr_bases WHERE db_id=? ORDER BY created, id`, dbID)
 	if err != nil {
 		return nil
 	}
@@ -88,7 +92,7 @@ func listPITRBases(dbID string) []pitrBase {
 	var out []pitrBase
 	for rows.Next() {
 		var b pitrBase
-		if rows.Scan(&b.ID, &b.DbID, &b.File, &b.Size, &b.WAL, &b.Created) == nil {
+		if rows.Scan(&b.ID, &b.DbID, &b.File, &b.Size, &b.WAL, &b.Created, &b.Gen, &b.Offsite) == nil {
 			out = append(out, b)
 		}
 	}
@@ -219,6 +223,7 @@ func (p *Panel) pausePITR(d dbRow, why error) {
 		deletePITRBase(b)
 	}
 	_ = p.eng.Exec(ctx, d.Container, []string{"sh", "-c", "rm -f " + pitrMount + "/*.gz " + pitrMount + "/*.tmp"}, nil, &bytes.Buffer{})
+	startHistoryGen(d.ID)
 	reason := "Paused because the server is low on disk space: " + why.Error()
 	_, _ = sqlDB.Exec(`UPDATE pitr SET paused=? WHERE db_id=?`, reason, d.ID)
 	go dispatchAlert(alertEvent{Team: d.Team, Kind: "database.recovery_paused", App: d.Name,
@@ -241,7 +246,7 @@ func (p *Panel) takePITRBase(d dbRow) error {
 	ctx, cancel := context.WithTimeout(context.Background(), pitrLimit)
 	defer cancel()
 	id := randToken()[:12]
-	b := pitrBase{ID: id, DbID: d.ID, File: "base-" + id + ".tar.gz"}
+	b := pitrBase{ID: id, DbID: d.ID, File: "base-" + id + ".tar.gz", Gen: pitrGen(d.ID)}
 	path := pitrBasePath(b)
 	f, err := os.Create(path)
 	if err != nil {
@@ -260,7 +265,7 @@ func (p *Panel) takePITRBase(d dbRow) error {
 	_ = p.eng.Exec(ctx, d.Container, []string{"sh", "-c", "ls -t " + pitrMount + "/*.backup.gz 2>/dev/null | head -1"}, nil, &out)
 	b.WAL = strings.TrimSuffix(filepath.Base(strings.TrimSpace(out.String())), ".gz")
 	b.Created = time.Now().Unix()
-	if _, err := sqlDB.Exec(`INSERT INTO pitr_bases(id,db_id,file,size,wal,created) VALUES(?,?,?,?,?,?)`, b.ID, b.DbID, b.File, b.Size, b.WAL, b.Created); err != nil {
+	if _, err := sqlDB.Exec(`INSERT INTO pitr_bases(id,db_id,file,size,wal,created,gen) VALUES(?,?,?,?,?,?,?)`, b.ID, b.DbID, b.File, b.Size, b.WAL, b.Created, b.Gen); err != nil {
 		_ = os.Remove(path)
 		return err
 	}
@@ -285,7 +290,7 @@ func (p *Panel) prunePITR(d dbRow) {
 }
 
 func (p *Panel) enablePITR(d dbRow) error {
-	if _, err := sqlDB.Exec(`INSERT OR IGNORE INTO pitr(db_id,enabled) VALUES(?,?)`, d.ID, time.Now().Unix()); err != nil {
+	if _, err := sqlDB.Exec(`INSERT OR IGNORE INTO pitr(db_id,enabled,gen) VALUES(?,?,?)`, d.ID, time.Now().Unix(), newHistoryGen()); err != nil {
 		return err
 	}
 	if err := p.rerunDatabase(d); err != nil {
@@ -313,6 +318,7 @@ func (p *Panel) disablePITR(d dbRow) error {
 		return err
 	}
 	p.removePITR(d)
+	go guard("removeHistoryCopies", func() { removeHistoryCopies(d) })
 	return nil
 }
 
@@ -338,6 +344,7 @@ func (p *Panel) resetPITR(d dbRow) {
 	if err := p.eng.Exec(ctx, d.Container, []string{"sh", "-c", "rm -f " + pitrMount + "/*"}, nil, &bytes.Buffer{}); err != nil {
 		log.Printf("skiff: resetting recovery of %s: %v", d.Name, err)
 	}
+	startHistoryGen(d.ID)
 }
 
 // rerunDatabase replaces the container with the same data, networks and public access.
@@ -367,47 +374,15 @@ func (p *Panel) recoverToTime(d dbRow, at int64) error {
 		return fmt.Errorf("couldn't archive the latest history: %w", err)
 	}
 
-	e := dbEngines[d.Engine]
-	suffix := randToken()[:8]
-	volume := d.Container + "-data-" + suffix
-	scratch := d
-	scratch.Container = "skiff-check-" + suffix
-	scratch.Volume = volume
+	volume := d.Container + "-data-" + randToken()[:8]
 	swapped := false
 	defer func() {
-		_ = p.eng.Remove(scratch.Container)
 		if !swapped {
 			_ = p.eng.RemoveVolume(volume)
 		}
 	}()
-	target := time.Unix(at, 0).UTC().Format("2006-01-02 15:04:05+00")
-	unpack := fmt.Sprintf(`set -e; cd %s; tar xzf -; chown -R postgres:postgres .; chmod 700 .; touch recovery.signal
-cat >> postgresql.auto.conf <<'EOF'
-restore_command = 'gunzip -c %s/%%f.gz > %%p'
-recovery_target_time = '%s'
-recovery_target_action = 'promote'
-EOF`, e.mountAt, pitrMount, target)
-	if err := p.eng.RunIO(ctx, d.image(), []docker.Mount{{Name: volume, Destination: e.mountAt}}, unpack, f, &bytes.Buffer{}); err != nil {
-		return fmt.Errorf("unpacking the base backup: %w", err)
-	}
-	env, cmd := e.container(d.Username, d.Password, d.DBName)
-	if d.Image != "" {
-		cmd = nil
-		_ = json.Unmarshal([]byte(d.Cmd), &cmd)
-	}
-	if _, err := p.eng.RunDatabase(docker.DBRunSpec{
-		Name: scratch.Container, Image: d.image(), Network: "none",
-		Volume: volume, MountAt: e.mountAt, Env: env, Cmd: cmd,
-		Binds:  []string{pitrVolume(d) + ":" + pitrMount + ":ro"},
-		Labels: map[string]string{"skiff.kind": "restore-check", "skiff.db": d.ID, "skiff.team": d.Team},
-	}); err != nil {
-		return fmt.Errorf("starting the recovered copy: %w", err)
-	}
-	if err := p.waitRecovered(ctx, scratch); err != nil {
+	if err := p.recoverIntoVolume(ctx, d, volume, f, time.Unix(at, 0).UTC().Format("2006-01-02 15:04:05+00")); err != nil {
 		return err
-	}
-	if err := p.eng.Stop(scratch.Container); err != nil {
-		return fmt.Errorf("stopping the recovered copy: %w", err)
 	}
 
 	// Writes after this backup would otherwise be lost for good.
@@ -437,9 +412,49 @@ EOF`, e.mountAt, pitrMount, target)
 	if err := p.clearHistory(ctx, d); err != nil {
 		log.Printf("skiff: clearing history of %s: %v", d.Name, err)
 	}
+	startHistoryGen(d.ID)
 	_, _ = sqlDB.Exec(`UPDATE pitr SET paused='' WHERE db_id=?`, d.ID)
 	if err := p.takePITRBase(d); err != nil {
 		log.Printf("skiff: base backup of %s after recovery failed: %v", d.Name, err)
+	}
+	return nil
+}
+
+// recoverIntoVolume unpacks a snapshot into a new volume and replays history over it, up to target or, when that's blank, as far as it goes. It returns once the copy has started and stopped cleanly. An earlier recovery leaves its settings in the snapshot, so they're replaced.
+func (p *Panel) recoverIntoVolume(ctx context.Context, d dbRow, volume string, base io.Reader, target string) error {
+	e := dbEngines[d.Engine]
+	scratch := d
+	scratch.Container = "skiff-check-" + randToken()[:8]
+	scratch.Volume = volume
+	defer func() { _ = p.eng.Remove(scratch.Container) }()
+	settings := "restore_command = 'gunzip -c " + pitrMount + "/%f.gz > %p'\n"
+	if target != "" {
+		settings += "recovery_target_time = '" + target + "'\nrecovery_target_action = 'promote'\n"
+	}
+	unpack := fmt.Sprintf(`set -e; cd %s; tar xzf -; chown -R postgres:postgres .; chmod 700 .; touch recovery.signal
+touch postgresql.auto.conf; sed -i -e '/^restore_command/d' -e '/^recovery_target/d' postgresql.auto.conf
+printf '%%b' %q >> postgresql.auto.conf; chown postgres:postgres postgresql.auto.conf`, e.mountAt, settings)
+	if err := p.eng.RunIO(ctx, d.image(), []docker.Mount{{Name: volume, Destination: e.mountAt}}, unpack, base, &bytes.Buffer{}); err != nil {
+		return fmt.Errorf("unpacking the base backup: %w", err)
+	}
+	env, cmd := e.container(d.Username, d.Password, d.DBName)
+	if d.Image != "" {
+		cmd = nil
+		_ = json.Unmarshal([]byte(d.Cmd), &cmd)
+	}
+	if _, err := p.eng.RunDatabase(docker.DBRunSpec{
+		Name: scratch.Container, Image: d.image(), Network: "none",
+		Volume: volume, MountAt: e.mountAt, Env: env, Cmd: cmd,
+		Binds:  []string{pitrVolume(d) + ":" + pitrMount + ":ro"},
+		Labels: map[string]string{"skiff.kind": recoveryCopyKind, "skiff.db": d.ID, "skiff.team": d.Team},
+	}); err != nil {
+		return fmt.Errorf("starting the recovered copy: %w", err)
+	}
+	if err := p.waitRecovered(ctx, scratch); err != nil {
+		return err
+	}
+	if err := p.eng.Stop(scratch.Container); err != nil {
+		return fmt.Errorf("stopping the recovered copy: %w", err)
 	}
 	return nil
 }
@@ -512,6 +527,10 @@ type pitrStatus struct {
 	Error       string `json:"error,omitempty"`
 	WindowStart int64  `json:"windowStart,omitempty"`
 	Size        int64  `json:"size,omitempty"`
+	// HasBucket says whether the team has somewhere to copy history to. OffsiteAt is when all of it was last known to be there.
+	HasBucket    bool   `json:"hasBucket"`
+	OffsiteAt    int64  `json:"offsiteAt,omitempty"`
+	OffsiteError string `json:"offsiteError,omitempty"`
 }
 
 // pitrSupported needs a named volume, because an adopted database without one can't be recreated safely.
@@ -520,8 +539,8 @@ func pitrSupported(d dbRow) bool {
 }
 
 func getPITRStatus(d dbRow) pitrStatus {
-	s := pitrStatus{Supported: pitrSupported(d), Enabled: pitrEnabled(d.ID), Paused: pitrPaused(d.ID)}
-	_ = sqlDB.QueryRow(`SELECT error FROM pitr WHERE db_id=?`, d.ID).Scan(&s.Error)
+	s := pitrStatus{Supported: pitrSupported(d), Enabled: pitrEnabled(d.ID), Paused: pitrPaused(d.ID), HasBucket: getOffsite(d.Team).configured()}
+	_ = sqlDB.QueryRow(`SELECT error,offsite_at,offsite_error FROM pitr WHERE db_id=?`, d.ID).Scan(&s.Error, &s.OffsiteAt, &s.OffsiteError)
 	bases := listPITRBases(d.ID)
 	if len(bases) > 0 {
 		s.WindowStart = bases[0].Created

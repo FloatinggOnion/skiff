@@ -100,6 +100,11 @@ var migrations = []string{
 	`ALTER TABLE backups ADD COLUMN check_items INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE backups ADD COLUMN check_at INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE pitr ADD COLUMN error TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE pitr ADD COLUMN gen TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE pitr ADD COLUMN offsite_at INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE pitr ADD COLUMN offsite_error TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE pitr_bases ADD COLUMN gen TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE pitr_bases ADD COLUMN offsite INTEGER NOT NULL DEFAULT 0`,
 }
 
 const schema = `
@@ -258,7 +263,16 @@ CREATE TABLE IF NOT EXISTS pitr (
   db_id   TEXT PRIMARY KEY,
   enabled INTEGER NOT NULL,
   paused  TEXT NOT NULL DEFAULT '',
-  error   TEXT NOT NULL DEFAULT ''
+  error   TEXT NOT NULL DEFAULT '',
+  gen     TEXT NOT NULL DEFAULT '',
+  offsite_at    INTEGER NOT NULL DEFAULT 0,
+  offsite_error TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS pitr_offsite (
+  db_id TEXT NOT NULL,
+  gen   TEXT NOT NULL,
+  name  TEXT NOT NULL,
+  PRIMARY KEY (db_id, gen, name)
 );
 CREATE TABLE IF NOT EXISTS pitr_bases (
   id      TEXT PRIMARY KEY,
@@ -266,7 +280,9 @@ CREATE TABLE IF NOT EXISTS pitr_bases (
   file    TEXT NOT NULL,
   size    INTEGER NOT NULL DEFAULT 0,
   wal     TEXT NOT NULL DEFAULT '',
-  created INTEGER NOT NULL
+  created INTEGER NOT NULL,
+  gen     TEXT NOT NULL DEFAULT '',
+  offsite INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS jobs (
   id       TEXT PRIMARY KEY,

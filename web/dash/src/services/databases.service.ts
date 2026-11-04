@@ -50,6 +50,9 @@ export type Database = {
 export type PitrStatus = {
   supported: boolean
   enabled: boolean
+  hasBucket: boolean
+  offsiteAt?: number
+  offsiteError?: string
   paused?: string
   error?: string
   windowStart?: number

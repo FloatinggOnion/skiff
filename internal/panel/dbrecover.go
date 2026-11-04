@@ -13,19 +13,34 @@ import (
 	"github.com/nuelScript/skiff/internal/docker"
 )
 
-// recoverDatabases brings back any managed database whose container is gone — after a restore onto a new server, or a manual removal. When its volume went too, the newest offsite backup is loaded into the fresh one; an existing volume still has the data, so it's never overwritten.
+// recoverDatabases brings back any managed database whose container is gone — after a restore onto a new server, or a manual removal. When its volume went too, it comes back from its offsite history, or else the newest offsite backup is loaded into the fresh one; an existing volume still has the data, so it's never overwritten.
 func (p *Panel) recoverDatabases() {
+	for _, name := range p.eng.ContainersLabelled("skiff.kind=" + recoveryCopyKind) {
+		_ = p.eng.Remove(name)
+	}
 	for _, d := range allDatabases() {
 		if p.eng.State(d.Container) != "missing" {
 			continue
 		}
 		freshVolume := !p.eng.VolumeExists(d.volume())
+		fromHistory := false
+		if freshVolume {
+			var err error
+			if fromHistory, err = p.recoverFromHistory(d); err != nil {
+				log.Printf("skiff: recovering %s from its offsite history, trying its backup instead: %v", d.Name, err)
+			}
+		}
 		if err := p.recreateDatabase(d); err != nil {
 			log.Printf("skiff: recreating database %s: %v", d.Name, err)
 			continue
 		}
 		log.Printf("skiff: recreated missing database %s", d.Name)
 		if !freshVolume {
+			continue
+		}
+		if fromHistory {
+			log.Printf("skiff: recovered %s from its offsite history", d.Name)
+			recordAudit(d.Team, AuditEntry{Actor: "skiff", Action: "backup.restore", Target: d.Name, Detail: "recovered from offsite history"})
 			continue
 		}
 		p.resetPITR(d) // its history belongs to the data that's gone

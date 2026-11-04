@@ -186,9 +186,13 @@ func (p *Panel) handleOffsite(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		was := getOffsite(team)
 		if err := setOffsite(team, t); err != nil {
 			http.Error(w, "couldn't save", http.StatusInternalServerError)
 			return
+		}
+		if was.Endpoint != t.Endpoint || was.Bucket != t.Bucket || was.Prefix != t.Prefix {
+			forgetHistoryCopies(team)
 		}
 		p.audit(r, "backups.offsite", t.Bucket, "")
 		syncLatestOffsite(team)

@@ -585,7 +585,10 @@ function PitrSection({ db, onRecovered }: { db: Db; onRecovered: () => void }) {
   const { data: status } = useQuery<PitrStatus>({
     queryKey: queryKeys.pitr(db.id),
     queryFn: () => databasesService.pitrStatus(db.id),
-    refetchInterval: (q) => (q.state.data?.enabled && !q.state.data.windowStart ? 3000 : false),
+    refetchInterval: (q) => {
+      if (!q.state.data?.enabled) return false
+      return q.state.data.windowStart ? 60000 : 3000
+    },
   })
   if (!status?.supported) return null
   const reload = () => qc.invalidateQueries({ queryKey: queryKeys.pitr(db.id) })
@@ -610,7 +613,7 @@ function PitrSection({ db, onRecovered }: { db: Db; onRecovered: () => void }) {
         ? {
             title: `Turn on point-in-time recovery for ${db.name}?`,
             description:
-              'The database restarts, which takes a few seconds, so your apps will reconnect. It also uses more disk, because Skiff keeps a few days of its history on this server.',
+              'The database restarts, which takes a few seconds, so your apps will reconnect. It also uses more disk, because Skiff keeps a few days of its history on this server, and in your offsite bucket if you have one.',
             confirmText: 'Turn on',
           }
         : {
@@ -668,6 +671,21 @@ function PitrSection({ db, onRecovered }: { db: Db; onRecovered: () => void }) {
           <p className="text-muted-foreground text-[11px]">
             You can return to any time since {fmtDate(status.windowStart)}.
           </p>
+          {!status.hasBucket ? (
+            <p className="text-muted-foreground mt-1 text-[11px]">
+              This history is only on this server. Add an offsite bucket in Settings so it survives
+              losing the server.
+            </p>
+          ) : status.offsiteError ? (
+            <p className="mt-1 text-[11px] text-danger">
+              Couldn't copy history to your offsite bucket, and Skiff will keep trying:{' '}
+              {status.offsiteError}
+            </p>
+          ) : status.offsiteAt ? (
+            <p className="text-muted-foreground mt-1 text-[11px]">
+              Copied to your offsite bucket, last at {fmtDate(status.offsiteAt)}.
+            </p>
+          ) : null}
           <div className="mt-2 flex items-center gap-2">
             <Input
               type="datetime-local"
