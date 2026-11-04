@@ -10,7 +10,7 @@ Skiff's own server updates itself from `main`, so a release isn't how changes re
 
 ## How to release
 
-1. Check `main` has been running on production, and that CI passes.
+1. Check `main` has been running on production, and that CI passes, including the upgrade test from every earlier minor.
 2. Write the notes for someone upgrading: what changed, why it matters to them, and anything they must do, such as restarting the router.
 3. Tag `main` and push the tag:
 

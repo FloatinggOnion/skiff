@@ -138,3 +138,12 @@ func TestDockerignoreKeepsConfigOut(t *testing.T) {
 		t.Fatalf("the app's own file should come back unchanged: %q", b)
 	}
 }
+
+func TestSortDeployTagsNewestFirst(t *testing.T) {
+	tags := []string{"1793773891-a", "1793784138-b", "1793773895-c", "custom", "1793784154-d"}
+	sortDeployTags(tags)
+	want := []string{"1793784154-d", "1793784138-b", "1793773895-c", "1793773891-a", "custom"}
+	if strings.Join(tags, ",") != strings.Join(want, ",") {
+		t.Fatalf("got %v", tags)
+	}
+}

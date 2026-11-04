@@ -1,6 +1,10 @@
 package docker
 
-import "strconv"
+import (
+	"sort"
+	"strconv"
+	"strings"
+)
 
 func (e *Engine) Stop(container string) error {
 	defer invalidateStates()
@@ -51,7 +55,18 @@ func (e *Engine) AppImageTags(app string) []string {
 		}
 		tags = append(tags, t)
 	}
+	sortDeployTags(tags)
 	return tags
+}
+
+// sortDeployTags puts the newest deploy first. Deploy ids start with their time. Docker's own order can't be used, because it's arbitrary among tags of one image, which is every redeploy of unchanged code.
+func sortDeployTags(tags []string) {
+	started := func(tag string) int64 {
+		head, _, _ := strings.Cut(tag, "-")
+		n, _ := strconv.ParseInt(head, 10, 64)
+		return n
+	}
+	sort.SliceStable(tags, func(i, j int) bool { return started(tags[i]) > started(tags[j]) })
 }
 
 func (e *Engine) ImageExists(tag string) bool {

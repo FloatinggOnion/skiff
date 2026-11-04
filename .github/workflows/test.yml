@@ -56,4 +56,20 @@ jobs:
           cache: true
 
       - name: deploy, redeploy, rollback and teardown through the real binary
-        run: go test -tags e2e -count=1 -timeout 25m -v -skip '^TestDrill' ./e2e/...
+        run: go test -tags e2e -count=1 -timeout 25m -v -skip '^(TestDrill|TestUpgrade)' ./e2e/...
+
+  upgrade:
+    name: upgrades from every released minor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: run each minor with real state, then swap in this build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: go test -tags e2e -count=1 -timeout 25m -v -run '^TestUpgrade$' ./e2e/...
