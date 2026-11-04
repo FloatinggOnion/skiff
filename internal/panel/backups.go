@@ -124,19 +124,33 @@ func removeUnlistedBackups(now time.Time) {
 		}
 		rows.Close()
 	}
+	dirs := []string{}
 	for _, d := range allDatabases() {
-		dir := filepath.Join(backupsDir(), d.ID)
-		entries, err := os.ReadDir(dir)
+		dirs = append(dirs, d.ID)
+	}
+	if rows, err := sqlDB.Query(`SELECT DISTINCT app,volume,file FROM volume_backups`); err == nil {
+		for rows.Next() {
+			var app, volume, file string
+			if rows.Scan(&app, &volume, &file) == nil {
+				dir := volumeBackupDirName(app, volume)
+				dirs = append(dirs, dir)
+				known[dir+"/"+file] = true
+			}
+		}
+		rows.Close()
+	}
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(filepath.Join(backupsDir(), dir))
 		if err != nil {
 			continue
 		}
 		for _, f := range entries {
-			if f.IsDir() || known[d.ID+"/"+f.Name()] {
+			if f.IsDir() || known[dir+"/"+f.Name()] {
 				continue
 			}
 			if info, err := f.Info(); err == nil && now.Sub(info.ModTime()) > unlistedBackupAge {
-				log.Printf("skiff: removing %s, left by an interrupted backup of %s", f.Name(), d.Name)
-				_ = os.Remove(filepath.Join(dir, f.Name()))
+				log.Printf("skiff: removing %s from %s, left by an interrupted backup", f.Name(), dir)
+				_ = os.Remove(filepath.Join(backupsDir(), dir, f.Name()))
 			}
 		}
 	}

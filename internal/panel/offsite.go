@@ -19,6 +19,8 @@ import (
 const (
 	offsiteRetention  = 30
 	offsiteRetryEvery = 5 * time.Minute
+	// offsiteUploadLimit stops a stalled bucket from holding a copy open forever.
+	offsiteUploadLimit = 2 * time.Hour
 )
 
 type OffsiteTarget struct {
@@ -109,7 +111,9 @@ func uploadOffsite(d dbRow, b backupRow) error {
 	}
 	key := offsiteKey(t.Prefix, d, b)
 	c := t.client()
-	if err := c.Put(context.Background(), key, f, info.Size()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), offsiteUploadLimit)
+	defer cancel()
+	if err := c.Put(ctx, key, f, info.Size()); err != nil {
 		setBackupOffsite(b.ID, "failed")
 		return err
 	}

@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	pitrOffsiteEvery = 30 * time.Second
-	pitrOffsiteGrace = int64(10 * 60) // a bucket that fails for less than this isn't worth an alert
+	pitrOffsiteEvery    = 30 * time.Second
+	pitrOffsiteGrace    = int64(10 * 60) // a bucket that fails for less than this isn't worth an alert
+	pitrSegmentPutLimit = 2 * time.Minute
 )
 
 // pitrCopying keeps it to one pass of each kind per database, so a slow snapshot upload doesn't hold up the segments.
@@ -150,7 +151,11 @@ func (p *Panel) uploadSegments(d dbRow, t OffsiteTarget, gen string) error {
 		if err := p.eng.Exec(ctx, d.Container, []string{"cat", pitrMount + "/" + name}, nil, &body); err != nil {
 			return err
 		}
-		if err := c.Put(ctx, root+name, bytes.NewReader(body.Bytes()), int64(body.Len())); err != nil {
+		// One stalled request can't be allowed to hold up every copy behind it. A segment is small, so this is plenty.
+		putCtx, putDone := context.WithTimeout(ctx, pitrSegmentPutLimit)
+		err := c.Put(putCtx, root+name, bytes.NewReader(body.Bytes()), int64(body.Len()))
+		putDone()
+		if err != nil {
 			return err
 		}
 		if _, err := sqlDB.Exec(`INSERT OR IGNORE INTO pitr_offsite(db_id,gen,name) VALUES(?,?,?)`, d.ID, gen, name); err != nil {

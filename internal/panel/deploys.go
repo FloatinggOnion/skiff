@@ -218,6 +218,10 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	// Drain the remainder (e.g. a line past the scanner's 1 MB cap stops Scan early) so the child can't block on a full pipe and wedge the build.
 	_, _ = io.Copy(io.Discard, pr)
 	if e := <-errc; e != nil {
+		if hasRoomFor(p.buildsDir, 0) != nil {
+			finish("✗ deploy failed, and the server is almost out of disk space, which is the likely cause. Your current version is still running. Free some space and deploy again.")
+			return
+		}
 		finish("✗ deploy failed")
 		return
 	}

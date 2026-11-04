@@ -696,7 +696,7 @@ func TestDrillPowerCut(t *testing.T) {
 	b.stopPanel()
 	b.stopRouter()
 	pids := shell(t, "docker ps -q | xargs docker inspect -f '{{.State.Pid}}' | tr '\\n' ' '")
-	shell(t, "sudo systemctl kill -s SIGKILL docker.service containerd.service; sudo pkill -9 -f containerd-shim; sudo kill -9 "+pids+" ; true")
+	shell(t, "sudo systemctl kill -s SIGKILL docker.service containerd.service; sudo pkill -9 -f '[c]ontainerd-shim'; sudo kill -9 "+pids+" ; true")
 	before := d.ackedCount()
 	shell(t, "sudo systemctl reset-failed docker.service containerd.service; sudo systemctl start containerd.service docker.service")
 	began := time.Now()
@@ -718,45 +718,58 @@ func TestDrillPowerCut(t *testing.T) {
 	expectServed(t, b.routerAddr, "v2")
 }
 
-// TestDrillFullDisk leaves no free bytes on the disk that holds Docker and Skiff's own files, checks what still works, then frees the space and checks nothing stayed broken.
+// TestDrillFullDisk leaves no free bytes on the disk that holds Docker and Skiff's own files, pushes the app's database and a backup into it, then frees the space and checks nothing stayed broken.
 func TestDrillFullDisk(t *testing.T) {
 	machineDrill(t)
 	b := newDrillBox(t)
 	b.deployFirst()
 	d := b.database("orders")
+	if out, err := d.sql("create table big as select i, md5(i::text) || md5((i*2)::text) as v from generate_series(1, 1500000) i"); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
 	d.write()
 	eventually(t, 30*time.Second, func() bool { return d.ackedCount() > 20 })
-	post(t, b.c, b.url("/api/backups?db="+d.id), "")
-	var list []struct{ ID string }
-	eventually(t, time.Minute, func() bool {
+	type backup struct{ ID string }
+	backups := func() []backup {
+		var list []backup
 		getJSON(t, b.c, b.url("/api/backups?db="+d.id), &list)
-		return len(list) > 0
-	})
-	count := len(list)
+		return list
+	}
+	post(t, b.c, b.url("/api/backups?db="+d.id), "")
+	eventually(t, 2*time.Minute, func() bool { return len(backups()) > 0 })
+	count := len(backups())
 
-	ballast := filepath.Join("/var/tmp", "skiff-drill-ballast")
-	release := func() { _ = exec.Command("sudo", "sh", "-c", "rm -f "+ballast+"*").Run() }
+	ballast := "/var/tmp/skiff-drill-ballast"
+	release := func() {
+		_ = exec.Command("sudo", "sh", "-c", "rm -f "+ballast+"*").Run()
+		_ = exec.Command("docker", "exec", d.ctr, "rm", "-f", "/tmp/fill").Run()
+	}
 	t.Cleanup(release)
 	shell(t, `sudo fallocate -l $(( $(df --output=avail -B1 /var/tmp | tail -1) - 4096 )) `+ballast+` ; i=0; for size in 64M 8M 1M 64K 4K; do while sudo fallocate -l $size `+ballast+`.$i 2>/dev/null; do i=$((i+1)); done; done; true`)
+	// What fallocate can't reach still fills up with real writes, from each side that writes.
+	userFill, _ := exec.Command("sh", "-c", "dd if=/dev/zero of="+ballast+".user bs=64k 2>&1 | tail -1").CombinedOutput()
+	t.Logf("written as the panel's user before it failed: %s", strings.TrimSpace(string(userFill)))
+	dbFill, _ := exec.Command("sh", "-c", "docker exec "+d.ctr+" dd if=/dev/zero of=/tmp/fill bs=64k 2>&1 | tail -1").CombinedOutput()
+	t.Logf("written inside a container before it failed: %s", strings.TrimSpace(string(dbFill)))
 	t.Logf("disk: %s", shell(t, "df -h /var/tmp | tail -1"))
 
 	finish := b.steady()
-	time.Sleep(30 * time.Second)
-	total, failed, first := finish()
-	t.Logf("the app with a full disk: %d requests, %d failed", total, failed)
-	if failed > 0 {
-		t.Errorf("%d of %d requests failed, first: %s", failed, total, first)
-	}
+	time.Sleep(20 * time.Second)
 
-	resp, err := b.c.Get(b.url("/api/databases"))
-	if err != nil {
-		t.Fatalf("the panel stopped answering: %v", err)
-	}
-	resp.Body.Close()
-	t.Logf("panel reads: %d", resp.StatusCode)
-
-	resp, err = b.c.Post(b.url("/api/backups?db="+d.id), "application/json", nil)
+	out, err := d.sql("create table bulk as select i from generate_series(1, 2000000) i")
+	t.Logf("a large write to the database: err=%v %s", err, out)
 	if err == nil {
+		t.Errorf("a large write claimed to work with no disk left")
+	}
+	if resp, err := b.c.Get(b.url("/api/databases")); err != nil {
+		t.Errorf("the panel stopped answering: %v", err)
+	} else {
+		resp.Body.Close()
+		t.Logf("panel reads: %d", resp.StatusCode)
+	}
+	if resp, err := b.c.Post(b.url("/api/backups?db="+d.id), "application/json", nil); err != nil {
+		t.Errorf("taking a backup: %v", err)
+	} else {
 		msg, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		t.Logf("taking a backup: %d %s", resp.StatusCode, msg)
@@ -766,13 +779,14 @@ func TestDrillFullDisk(t *testing.T) {
 	if ok {
 		t.Error("a deploy claimed to work with no disk left")
 	}
-	if code, body := b.get("/"); code != 200 || !strings.Contains(body, "site v1") {
-		t.Errorf("after the failed deploy: %d %q", code, body)
+	if !strings.Contains(log, "disk space") {
+		t.Error("the failed deploy didn't mention the disk")
 	}
-	t.Logf("database with a full disk: %s", func() string {
-		out, err := d.sql("insert into t values (-1)")
-		return fmt.Sprintf("%v %s", err, out)
-	}())
+	total, failed, first := finish()
+	t.Logf("the app with a full disk: %d requests, %d failed", total, failed)
+	if failed > 0 {
+		t.Errorf("%d of %d requests failed, first: %s", failed, total, first)
+	}
 
 	release()
 	t.Logf("disk: %s", shell(t, "df -h /var/tmp | tail -1"))
@@ -782,12 +796,16 @@ func TestDrillFullDisk(t *testing.T) {
 	t.Logf("the database was writing %s after space came back", time.Since(began).Round(time.Second))
 	d.expectEveryConfirmedRow()
 
+	// Nothing listed may be a backup cut short by the full disk.
+	for _, row := range backups() {
+		got := checkBackup(t, b.c, b.panelAddr, d.id, row.ID)
+		t.Logf("backup %s: %s %s", row.ID, got.CheckStatus, got.CheckDetail)
+		if got.CheckStatus != "passed" {
+			t.Errorf("a listed backup doesn't restore: %+v", got)
+		}
+	}
 	post(t, b.c, b.url("/api/backups?db="+d.id), "")
-	eventually(t, 2*time.Minute, func() bool {
-		var now []struct{ ID string }
-		getJSON(t, b.c, b.url("/api/backups?db="+d.id), &now)
-		return len(now) > count
-	})
+	eventually(t, 2*time.Minute, func() bool { return len(backups()) > count })
 	b.push("v2")
 	stream(t, b.c, b.url("/api/redeploy?app="+app))
 	expectServed(t, b.routerAddr, "v2")
