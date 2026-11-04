@@ -178,7 +178,11 @@ func isBlockedDialIP(ip net.IP) bool {
 
 func postJSON(url string, payload any) error {
 	body, _ := json.Marshal(payload)
-	resp, err := alertHTTPClient.Post(url, "application/json", bytes.NewReader(body))
+	cl := alertHTTPClient
+	if drainsAllowPrivate() {
+		cl = &http.Client{Timeout: 8 * time.Second}
+	}
+	resp, err := cl.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

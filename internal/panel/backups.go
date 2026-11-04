@@ -102,6 +102,60 @@ func pruneBackups(dbID string, keep int) {
 	}
 }
 
+// unlistedBackupAge is how long a file has gone unwritten before it counts as left behind. A backup still being written keeps its file newer than this, even during a blue-green swap.
+const unlistedBackupAge = 6 * time.Hour
+
+// removeUnlistedBackups deletes what an interrupted backup or restore left: unencrypted partial copies that nothing lists and nothing else would ever remove.
+func removeUnlistedBackups(now time.Time) {
+	known := map[string]bool{}
+	for _, q := range []string{
+		`SELECT db_id || '/' || file FROM backups`,
+		`SELECT db_id || '/' || file FROM pitr_bases`,
+	} {
+		rows, err := sqlDB.Query(q)
+		if err != nil {
+			return
+		}
+		for rows.Next() {
+			var k string
+			if rows.Scan(&k) == nil {
+				known[k] = true
+			}
+		}
+		rows.Close()
+	}
+	dirs := []string{}
+	for _, d := range allDatabases() {
+		dirs = append(dirs, d.ID)
+	}
+	if rows, err := sqlDB.Query(`SELECT DISTINCT app,volume,file FROM volume_backups`); err == nil {
+		for rows.Next() {
+			var app, volume, file string
+			if rows.Scan(&app, &volume, &file) == nil {
+				dir := volumeBackupDirName(app, volume)
+				dirs = append(dirs, dir)
+				known[dir+"/"+file] = true
+			}
+		}
+		rows.Close()
+	}
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(filepath.Join(backupsDir(), dir))
+		if err != nil {
+			continue
+		}
+		for _, f := range entries {
+			if f.IsDir() || known[dir+"/"+f.Name()] {
+				continue
+			}
+			if info, err := f.Info(); err == nil && now.Sub(info.ModTime()) > unlistedBackupAge {
+				log.Printf("skiff: removing %s from %s, left by an interrupted backup", f.Name(), dir)
+				_ = os.Remove(filepath.Join(backupsDir(), dir, f.Name()))
+			}
+		}
+	}
+}
+
 func lastBackupAt(dbID string) int64 {
 	var t int64
 	_ = sqlDB.QueryRow(`SELECT COALESCE(MAX(created), 0) FROM backups WHERE db_id=?`, dbID).Scan(&t)

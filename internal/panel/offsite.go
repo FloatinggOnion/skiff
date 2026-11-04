@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/s3"
@@ -15,7 +16,10 @@ import (
 	"github.com/nuelScript/skiff/internal/seal"
 )
 
-const offsiteRetention = 30
+const (
+	offsiteRetention  = 30
+	offsiteRetryEvery = 5 * time.Minute
+)
 
 type OffsiteTarget struct {
 	Endpoint  string `json:"endpoint"`
@@ -137,10 +141,67 @@ func pruneOffsite(c *s3.Client, dbID string, keep int) {
 
 func uploadOffsiteAsync(d dbRow, b backupRow) {
 	go guard("uploadOffsite", func() {
-		if err := uploadOffsite(d, b); err != nil {
+		err := uploadOffsite(d, b)
+		noteOffsiteCopy(d.Team, d.Name, err)
+		if err != nil {
 			log.Printf("skiff: offsite copy of %s backup %s failed: %v", d.Name, b.ID, err)
 		}
 	})
+}
+
+var (
+	offsiteFailingMu sync.Mutex
+	offsiteFailing   = map[string]bool{}
+)
+
+// noteOffsiteCopy alerts once when a team's copies start failing and once when they work again, however many backups fail in between.
+func noteOffsiteCopy(team, name string, err error) {
+	offsiteFailingMu.Lock()
+	was := offsiteFailing[team]
+	offsiteFailing[team] = err != nil
+	offsiteFailingMu.Unlock()
+	if err != nil && !was {
+		go dispatchAlert(alertEvent{Team: team, Kind: "backup.offsite_failed", App: name,
+			Title:  "Backups aren't reaching your bucket",
+			Detail: "They're still on your server. Skiff keeps trying. " + err.Error()})
+	} else if err == nil && was {
+		go dispatchAlert(alertEvent{Team: team, Kind: "backup.offsite_recovered", App: name,
+			Title:  "Backups are reaching your bucket again",
+			Detail: "Copies that failed have been retried."})
+	}
+}
+
+// offsiteRetryLoop retries the newest copy of each database and volume that failed, so a bucket outage ends without waiting for the next daily backup. That newest copy is the one a recovery would use.
+func (p *Panel) offsiteRetryLoop() {
+	for {
+		time.Sleep(offsiteRetryEvery)
+		guard("offsiteRetry", retryFailedOffsite)
+	}
+}
+
+func retryFailedOffsite() {
+	for _, d := range allDatabases() {
+		rows := listBackupRows(d.ID)
+		if len(rows) > 0 && rows[0].Offsite == "failed" {
+			err := uploadOffsite(d, rows[0])
+			noteOffsiteCopy(d.Team, d.Name, err)
+		}
+	}
+	rows, err := sqlDB.Query(`SELECT ` + volumeBackupCols + ` FROM volume_backups v WHERE offsite='failed' AND created=(SELECT MAX(created) FROM volume_backups o WHERE o.app=v.app AND o.volume=v.volume)`)
+	if err != nil {
+		return
+	}
+	var failed []volumeBackupRow
+	for rows.Next() {
+		if b, ok := scanVolumeBackup(rows); ok {
+			failed = append(failed, b)
+		}
+	}
+	rows.Close()
+	for _, b := range failed {
+		err := uploadVolumeOffsite(b)
+		noteOffsiteCopy(b.Team, b.App+"/"+b.Volume, err)
+	}
 }
 
 // syncLatestOffsite copies each of a team's databases' newest backup that hasn't reached the bucket yet, so turning offsite on protects existing data straight away.

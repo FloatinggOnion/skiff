@@ -215,7 +215,9 @@ func (p *Panel) runVolumeBackup(src Source, volume, trigger string) (volumeBacku
 		b.Offsite = "pending"
 		setVolumeBackupOffsite(b.ID, b.Offsite, "")
 		go guard("uploadVolumeOffsite", func() {
-			if err := uploadVolumeOffsite(b); err != nil {
+			err := uploadVolumeOffsite(b)
+			noteOffsiteCopy(b.Team, b.App+"/"+b.Volume, err)
+			if err != nil {
 				log.Printf("skiff: offsite copy of %s/%s backup %s failed: %v", b.App, b.Volume, b.ID, err)
 			}
 		})

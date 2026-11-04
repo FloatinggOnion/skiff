@@ -291,7 +291,7 @@ func teamDeploys(team string, before int64, beforeID string, limit int) []Deploy
 // only past the cutoff so an in-flight blue-green build isn't disturbed.
 func reconcileStuckDeploys() {
 	cutoff := time.Now().Unix() - 15*60
-	_, _ = sqlDB.Exec(`UPDATE deploys SET status='canceled' WHERE status='building' AND started < ?`, cutoff)
+	_, _ = sqlDB.Exec(`UPDATE deploys SET status='canceled' WHERE status='building' AND panel_pid=0 AND started < ?`, cutoff)
 }
 
 func deployStatus(app, id string) string {

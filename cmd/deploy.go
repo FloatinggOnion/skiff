@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/builder"
@@ -104,6 +105,10 @@ func runDeploy(configPath, buildContext string, timeout, buildTimeout time.Durat
 	start := time.Now()
 	image := fmt.Sprintf("skiff-%s:latest", cfg.Name)
 
+	// A panel that dies takes our output with it; the deploy should still finish rather than die partway through a release.
+	if os.Getenv("SKIFF_DEPLOY_ID") != "" {
+		signal.Ignore(syscall.SIGPIPE)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	if buildTimeout > 0 {

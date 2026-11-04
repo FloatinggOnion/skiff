@@ -1,6 +1,8 @@
 package panel
 
 import (
+	"context"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,6 +170,34 @@ func TestRemoveStaleDeployConfigs(t *testing.T) {
 	for f, want := range map[string]bool{old: false, nested: false, fresh: true, other: true} {
 		if _, err := os.Stat(f); (err == nil) != want {
 			t.Errorf("%s exists = %v, want %v", f, err == nil, want)
+		}
+	}
+}
+
+func TestTailLogAlwaysEnds(t *testing.T) {
+	openTestDB(t)
+	t.Setenv("HOME", t.TempDir())
+	was := tailNoDeployAfter
+	tailNoDeployAfter = 100 * time.Millisecond
+	t.Cleanup(func() { tailNoDeployAfter = was })
+	p := &Panel{}
+	for status, want := range map[string]string{
+		"":         "[done] error",
+		"failed":   "[done] error",
+		"canceled": "[done] error",
+		"live":     "[done] ok",
+	} {
+		id := "id-" + status
+		if status != "" {
+			addDeploy(Deploy{ID: id, App: "a", Status: status, Started: 1})
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		rec := httptest.NewRecorder()
+		p.tailLog(rec, httptest.NewRequest("GET", "/", nil).WithContext(ctx), "a", id)
+		timedOut := ctx.Err() != nil
+		cancel()
+		if timedOut || !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("status %q: timed out=%v, body %q", status, timedOut, rec.Body.String())
 		}
 	}
 }

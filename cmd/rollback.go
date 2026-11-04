@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/config"
@@ -31,6 +33,9 @@ func newRollbackCmd() *cobra.Command {
 }
 
 func runRollback(configPath, image string, timeout time.Duration) error {
+	if os.Getenv("SKIFF_DEPLOY_ID") != "" {
+		signal.Ignore(syscall.SIGPIPE)
+	}
 	if image == "" {
 		return fmt.Errorf("--image is required")
 	}
