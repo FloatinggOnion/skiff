@@ -10,7 +10,6 @@ on:
     paths:
       - "e2e/drill_test.go"
       - ".github/workflows/drills.yml"
-      - "internal/panel/orphandeploys.go"
 
 jobs:
   drills:

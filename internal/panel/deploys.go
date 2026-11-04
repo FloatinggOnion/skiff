@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"io/fs"
 	"net/http"
 	"os"
@@ -105,12 +106,9 @@ func beginBuild(app, id string) (context.Context, func() bool, func()) {
 
 // runDeploy clones, builds, and releases a source (manual deploys and webhooks both use it). authURL overrides the clone URL when set (e.g. a pasted token); otherwise repo sources use a GitHub-App token.
 func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id string) {
-	logp := logPath(src.App, id)
-	if err := os.MkdirAll(filepath.Dir(logp), 0o755); err != nil {
-		return
-	}
-	f, err := os.Create(logp)
+	f, err := createDeployLog(src.App, id)
 	if err != nil {
+		p.failUnstartedDeploy(src, id, commit, message, trigger, err)
 		return
 	}
 	defer f.Close()
@@ -337,12 +335,9 @@ func (p *Panel) imageWorkDir(src Source) string {
 }
 
 func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
-	logp := logPath(src.App, id)
-	if err := os.MkdirAll(filepath.Dir(logp), 0o755); err != nil {
-		return
-	}
-	f, err := os.Create(logp)
+	f, err := createDeployLog(src.App, id)
 	if err != nil {
+		p.failUnstartedDeploy(src, id, commit, message, "rollback", err)
 		return
 	}
 	defer f.Close()
@@ -414,6 +409,28 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 	p.pruneVolumes(src)
 }
 
+func createDeployLog(app, id string) (*os.File, error) {
+	logp := logPath(app, id)
+	if err := os.MkdirAll(filepath.Dir(logp), 0o755); err != nil {
+		return nil, err
+	}
+	return os.Create(logp)
+}
+
+// failUnstartedDeploy records a deploy that couldn't even write its log, which is what a full disk looks like, so it fails where people can see it.
+func (p *Panel) failUnstartedDeploy(src Source, id, commit, message, trigger string, cause error) {
+	log.Printf("skiff: deploy %s of %s couldn't start: %v", id, src.App, cause)
+	addDeploy(Deploy{ID: id, App: src.App, Commit: shortCommit(commit), Message: message, Trigger: trigger, Status: "failed", Started: time.Now().Unix()})
+	detail := "It couldn't start: " + cause.Error()
+	if hasRoomFor(p.buildsDir, 0) != nil {
+		detail = "The server is almost out of disk space, so it couldn't start. Your current version is still running."
+	}
+	go dispatchAlert(alertEvent{Team: src.Team, Kind: "deploy.failed", App: src.App, Title: "Deploy failed: " + src.App, Detail: detail})
+}
+
+// tailNoDeployAfter is how long a log waits for its deploy to be recorded. It's only missing when the record couldn't be written.
+var tailNoDeployAfter = 30 * time.Second
+
 func (p *Panel) tailLog(w http.ResponseWriter, r *http.Request, app, id string) {
 	fl, ok := w.(http.Flusher)
 	if !ok {
@@ -432,17 +449,25 @@ func (p *Panel) tailLog(w http.ResponseWriter, r *http.Request, app, id string) 
 		}
 		fl.Flush()
 	}
+	began := time.Now()
 	for {
 		flush()
-		switch deployStatus(app, id) {
-		case "live":
+		switch status := deployStatus(app, id); {
+		case status == "live":
 			flush()
 			fmt.Fprint(w, "data: [done] ok\n\n")
 			fl.Flush()
 			return
-		case "failed":
+		case status == "failed", status == "canceled":
 			flush()
+			if status == "failed" && sent == 0 {
+				fmt.Fprint(w, "data: ✗ this deploy couldn't start, and the server may be out of disk space\n\n")
+			}
 			fmt.Fprint(w, "data: [done] error\n\n")
+			fl.Flush()
+			return
+		case status == "" && time.Since(began) > tailNoDeployAfter:
+			fmt.Fprint(w, "data: ✗ this deploy couldn't start, and the server may be out of disk space\n\ndata: [done] error\n\n")
 			fl.Flush()
 			return
 		}

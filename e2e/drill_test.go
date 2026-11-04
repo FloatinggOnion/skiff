@@ -745,6 +745,9 @@ func TestDrillFullDisk(t *testing.T) {
 		_ = exec.Command("sudo", "sh", "-c", "rm -f "+ballast+"*").Run()
 	}
 	t.Cleanup(release)
+	// A test timeout skips cleanups, and a machine with no disk can't even report why it stopped.
+	watchdog := time.AfterFunc(5*time.Minute, release)
+	defer watchdog.Stop()
 	// Called again later, because whatever fails on a full disk cleans up after itself and frees a little.
 	round := 0
 	fill := func() {
@@ -780,7 +783,9 @@ func TestDrillFullDisk(t *testing.T) {
 		t.Logf("taking a backup: %d %s", resp.StatusCode, msg)
 	}
 	fill()
-	ok, log := streamResult(t, b.c, b.url("/api/redeploy?app="+app))
+	limited := *b.c
+	limited.Timeout = 2 * time.Minute
+	ok, log := streamResult(t, &limited, b.url("/api/redeploy?app="+app))
 	t.Logf("deploying: ok=%v\n%s", ok, log)
 	if ok {
 		t.Error("a deploy claimed to work with no disk left")
