@@ -105,6 +105,8 @@ var migrations = []string{
 	`ALTER TABLE pitr ADD COLUMN offsite_error TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE pitr_bases ADD COLUMN gen TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE pitr_bases ADD COLUMN offsite INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE deploys ADD COLUMN panel_pid INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE deploys ADD COLUMN child_pid INTEGER NOT NULL DEFAULT 0`,
 }
 
 const schema = `

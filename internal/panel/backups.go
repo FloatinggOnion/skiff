@@ -102,6 +102,46 @@ func pruneBackups(dbID string, keep int) {
 	}
 }
 
+// unlistedBackupAge is how long a file has gone unwritten before it counts as left behind. A backup still being written keeps its file newer than this, even during a blue-green swap.
+const unlistedBackupAge = 6 * time.Hour
+
+// removeUnlistedBackups deletes what an interrupted backup or restore left: unencrypted partial copies that nothing lists and nothing else would ever remove.
+func removeUnlistedBackups(now time.Time) {
+	known := map[string]bool{}
+	for _, q := range []string{
+		`SELECT db_id || '/' || file FROM backups`,
+		`SELECT db_id || '/' || file FROM pitr_bases`,
+	} {
+		rows, err := sqlDB.Query(q)
+		if err != nil {
+			return
+		}
+		for rows.Next() {
+			var k string
+			if rows.Scan(&k) == nil {
+				known[k] = true
+			}
+		}
+		rows.Close()
+	}
+	for _, d := range allDatabases() {
+		dir := filepath.Join(backupsDir(), d.ID)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, f := range entries {
+			if f.IsDir() || known[d.ID+"/"+f.Name()] {
+				continue
+			}
+			if info, err := f.Info(); err == nil && now.Sub(info.ModTime()) > unlistedBackupAge {
+				log.Printf("skiff: removing %s, left by an interrupted backup of %s", f.Name(), d.Name)
+				_ = os.Remove(filepath.Join(dir, f.Name()))
+			}
+		}
+	}
+}
+
 func lastBackupAt(dbID string) int64 {
 	var t int64
 	_ = sqlDB.QueryRow(`SELECT COALESCE(MAX(created), 0) FROM backups WHERE db_id=?`, dbID).Scan(&t)

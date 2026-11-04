@@ -124,6 +124,8 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 		Trigger: trigger, Status: "building", Started: time.Now().Unix(),
 	})
 
+	setDeployOwner(id)
+	stopOrphanDeploys(src.App, id)
 	ctx, superseded, done := beginBuild(src.App, id)
 	defer done()
 	go p.commentOnPR(src, shortCommit(commit), "building")
@@ -200,8 +202,14 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	cmd.Env = append(append(os.Environ(), "SKIFF_DEPLOY_ID="+id), childEnv...) // retain this build for rollback
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
+	if err := cmd.Start(); err != nil {
+		_ = pw.Close()
+		finish("✗ deploy failed")
+		return
+	}
+	setDeployChild(id, cmd.Process.Pid)
 	errc := make(chan error, 1)
-	go func() { errc <- cmd.Run(); _ = pw.Close() }()
+	go func() { errc <- cmd.Wait(); _ = pw.Close() }()
 	sc := bufio.NewScanner(pr)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	for sc.Scan() {
@@ -340,6 +348,8 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 		ID: id, App: src.App, Commit: commit, Message: message,
 		Trigger: "rollback", Status: "building", Started: time.Now().Unix(),
 	})
+	setDeployOwner(id)
+	stopOrphanDeploys(src.App, id)
 
 	ctx, superseded, done := beginBuild(src.App, id)
 	defer done()
@@ -368,8 +378,15 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 	cmd.WaitDelay = 10 * time.Second
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
+	if err := cmd.Start(); err != nil {
+		_ = pw.Close()
+		logln("✗ rollback failed: " + err.Error())
+		setDeployStatus(src.App, id, "failed")
+		return
+	}
+	setDeployChild(id, cmd.Process.Pid)
 	errc := make(chan error, 1)
-	go func() { errc <- cmd.Run(); _ = pw.Close() }()
+	go func() { errc <- cmd.Wait(); _ = pw.Close() }()
 	sc := bufio.NewScanner(pr)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	for sc.Scan() {

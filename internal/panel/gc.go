@@ -89,6 +89,7 @@ func (p *Panel) gcLoop() {
 	for {
 		guard("gcLoop", func() {
 			recordDiskSample(time.Now())
+			removeUnlistedBackups(time.Now())
 			d := diskUsage()
 			pressure := d.Total > 0 && float64(d.Used)/float64(d.Total) >= gcDiskPressure
 			if time.Since(last) < gcInterval && !pressure {
