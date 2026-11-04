@@ -719,9 +719,27 @@ func TestDrillPowerCut(t *testing.T) {
 	expectServed(t, b.routerAddr, "v2")
 }
 
+// drillDisk puts Docker and everything Skiff writes on a small filesystem of its own, because a CI runner dies if its own disk fills. It's a real filesystem, so it fails the way a real one does.
+func drillDisk(t *testing.T) string {
+	t.Helper()
+	const mount = "/mnt/skiff-drill"
+	shell(t, `sudo truncate -s 12G /var/tmp/skiff-drill.img && sudo mkfs.ext4 -q -F /var/tmp/skiff-drill.img && sudo mkdir -p `+mount+` && sudo mount -o loop /var/tmp/skiff-drill.img `+mount+` && sudo chmod 1777 `+mount)
+	shell(t, `sudo systemctl stop docker.service docker.socket && echo '{"data-root":"`+mount+`/docker"}' | sudo tee /etc/docker/daemon.json && sudo systemctl start docker.service`)
+	t.Cleanup(func() {
+		_ = exec.Command("sh", "-c", `sudo systemctl stop docker.service docker.socket; sudo rm -f /etc/docker/daemon.json; sudo umount -l `+mount+`; sudo rm -f /var/tmp/skiff-drill.img; sudo systemctl start docker.service`).Run()
+	})
+	tmp := mount + "/tmp"
+	if err := os.MkdirAll(tmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", tmp)
+	return mount
+}
+
 // TestDrillFullDisk leaves no free bytes on the disk that holds Docker and Skiff's own files, pushes the app's database and a backup into it, then frees the space and checks nothing stayed broken.
 func TestDrillFullDisk(t *testing.T) {
 	machineDrill(t)
+	disk := drillDisk(t)
 	b := newDrillBox(t)
 	b.deployFirst()
 	d := b.database("orders")
@@ -740,7 +758,7 @@ func TestDrillFullDisk(t *testing.T) {
 	eventually(t, 2*time.Minute, func() bool { return len(backups()) > 0 })
 	count := len(backups())
 
-	ballast := "/var/tmp/skiff-drill-ballast"
+	ballast := disk + "/ballast"
 	release := func() {
 		_ = exec.Command("sudo", "sh", "-c", "rm -f "+ballast+"*").Run()
 	}
@@ -754,10 +772,10 @@ func TestDrillFullDisk(t *testing.T) {
 		t.Helper()
 		round++
 		name := fmt.Sprintf("%s-%d", ballast, round)
-		shell(t, `sudo fallocate -l $(( $(df --output=avail -B1 /var/tmp | tail -1) - 4096 )) `+name+` ; i=0; for size in 64M 8M 1M 64K 4K; do while sudo fallocate -l $size `+name+`.$i 2>/dev/null; do i=$((i+1)); done; done; true`)
+		shell(t, `sudo fallocate -l $(( $(df --output=avail -B1 `+disk+` | tail -1) - 4096 )) `+name+` ; i=0; for size in 64M 8M 1M 64K 4K; do while sudo fallocate -l $size `+name+`.$i 2>/dev/null; do i=$((i+1)); done; done; true`)
 		out, _ := exec.Command("sh", "-c", "dd if=/dev/zero of="+name+".user bs=64k 2>&1 | tail -1").CombinedOutput()
 		t.Logf("written as the panel's user before it failed: %s", strings.TrimSpace(string(out)))
-		t.Logf("disk: %s", shell(t, "df -h /var/tmp | tail -1"))
+		t.Logf("disk: %s", shell(t, "df -h "+disk+" | tail -1"))
 	}
 	fill()
 
@@ -800,7 +818,7 @@ func TestDrillFullDisk(t *testing.T) {
 	}
 
 	release()
-	t.Logf("disk: %s", shell(t, "df -h /var/tmp | tail -1"))
+	t.Logf("disk: %s", shell(t, "df -h "+disk+" | tail -1"))
 	began := time.Now()
 	before := d.ackedCount()
 	eventually(t, 3*time.Minute, func() bool { return d.ackedCount() > before+5 })
