@@ -20,7 +20,6 @@ export const DOCS_NAV: DocSection[] = [
       { href: "/docs/volumes", label: "Persistent volumes" },
       { href: "/docs/debugging", label: "Debugging" },
       { href: "/docs/backups", label: "Backups and encryption" },
-      { href: "/docs/leaving", label: "Leaving Skiff" },
       { href: "/docs/log-drains", label: "Log drains" },
       { href: "/docs/status-pages", label: "Status pages" },
       { href: "/docs/email-forwarding", label: "Email forwarding" },

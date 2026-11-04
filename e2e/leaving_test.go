@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// TestLeaving follows the leaving guide: takes everything out of Skiff, removes Skiff and its containers, and runs the app and its data on plain Docker.
+// TestLeaving takes everything out of Skiff, removes Skiff and its containers, and runs the app and its data on plain Docker.
 func TestLeaving(t *testing.T) {
 	b := newDrillBox(t)
 	t.Cleanup(func() {
