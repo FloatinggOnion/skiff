@@ -430,6 +430,7 @@ func (p *Panel) handleVolumeBackups(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		deleteVolumeBackup(b)
+		p.audit(r, "volume.backup-delete", b.App, b.Volume)
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
@@ -501,6 +502,7 @@ func (p *Panel) handleVolumeBackupDownload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer f.Close()
+	p.audit(r, "volume.download", b.App, b.Volume)
 	w.Header().Set("Content-Type", "application/gzip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-%s-%d.tar.gz"`, b.App, b.Volume, b.Created))
 	if b.Size > 0 {

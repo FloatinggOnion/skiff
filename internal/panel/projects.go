@@ -573,6 +573,9 @@ func (p *Panel) handleEnv(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
+		if s, ok := p.session(r); ok && firstInAWhile("env\x00"+s.userID+"\x00"+app) {
+			p.audit(r, "env.read", app, "")
+		}
 		_ = json.NewEncoder(w).Encode(get(app))
 	case http.MethodPut:
 		var body struct {

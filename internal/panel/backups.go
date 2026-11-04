@@ -269,6 +269,7 @@ func (p *Panel) handleBackups(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		p.audit(r, "backup.create", d.Name, "")
 		writeJSON(w, toBackup(b))
 
 	case http.MethodDelete:
@@ -277,11 +278,13 @@ func (p *Panel) handleBackups(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		if _, ok := p.canAccessDB(r, b.DbID); !ok {
+		d, ok := p.canAccessDB(r, b.DbID)
+		if !ok {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 		deleteBackup(b)
+		p.audit(r, "backup.delete", d.Name, "")
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
@@ -351,6 +354,7 @@ func (p *Panel) handleBackupDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	p.audit(r, "backup.download", d.Name, "")
 	name := fmt.Sprintf("%s-%d%s", d.Name, b.Created, dbEngines[d.Engine].backupExt)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)

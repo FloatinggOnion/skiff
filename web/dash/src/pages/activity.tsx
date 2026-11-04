@@ -38,14 +38,45 @@ const KINDS: Record<string, Kind> = {
     tone: 'text-muted-foreground',
   },
   'env.update': { icon: KeyRound, verb: 'changed environment for', tone: 'text-chart-violet' },
+  'env.read': { icon: KeyRound, verb: 'read environment for', tone: 'text-muted-foreground' },
+  'backup.create': { icon: Database, verb: 'backed up database', tone: 'text-muted-foreground' },
+  'backup.delete': { icon: Trash2, verb: 'deleted a backup of', tone: 'text-danger' },
+  'backup.download': { icon: Database, verb: 'downloaded a backup of', tone: 'text-warning' },
+  'volume.backup-delete': { icon: Trash2, verb: 'deleted a volume backup of', tone: 'text-danger' },
+  'volume.download': {
+    icon: Database,
+    verb: 'downloaded a volume backup of',
+    tone: 'text-warning',
+  },
+  'database.attach': { icon: Database, verb: 'attached database', tone: 'text-muted-foreground' },
+  'database.detach': { icon: Database, verb: 'detached database', tone: 'text-muted-foreground' },
+  'database.connect': {
+    icon: Terminal,
+    verb: 'connected through a tunnel to',
+    tone: 'text-warning',
+  },
+  'bucket.detach': { icon: Database, verb: 'detached bucket', tone: 'text-muted-foreground' },
+  'bucket.download': {
+    icon: Database,
+    verb: 'downloaded a file from bucket',
+    tone: 'text-warning',
+  },
   'project.delete': { icon: Trash2, verb: 'deleted project', tone: 'text-danger' },
   'database.create': { icon: Database, verb: 'created database', tone: 'text-success' },
   'database.delete': { icon: Database, verb: 'deleted database', tone: 'text-danger' },
   'database.shell': { icon: Terminal, verb: 'opened a shell in database', tone: 'text-warning' },
   'database.public': { icon: Database, verb: 'made public database', tone: 'text-warning' },
-  'database.private': { icon: Database, verb: 'made private database', tone: 'text-muted-foreground' },
+  'database.private': {
+    icon: Database,
+    verb: 'made private database',
+    tone: 'text-muted-foreground',
+  },
   'stack.preview': { icon: GitBranch, verb: 'started a preview,', tone: 'text-success' },
-  'stack.preview-data': { icon: Settings, verb: 'changed previews for', tone: 'text-muted-foreground' },
+  'stack.preview-data': {
+    icon: Settings,
+    verb: 'changed previews for',
+    tone: 'text-muted-foreground',
+  },
   'console.open': { icon: Terminal, verb: 'opened a console in', tone: 'text-warning' },
   'backup.restore': { icon: Undo2, verb: 'restored a backup of', tone: 'text-warning' },
   'domain.add': { icon: Globe, verb: 'added domain', tone: 'text-success' },
@@ -96,13 +127,13 @@ export default function ActivityPage() {
       ) : isError && entries.length === 0 ? (
         <ErrorState message="Couldn't load activity — retrying…" />
       ) : entries.length === 0 ? (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-20 text-sm">
+        <div className="text-muted-foreground border-foreground/8 flex flex-col items-center gap-2 rounded-xl border py-20 text-sm">
           <History className="h-6 w-6 opacity-40" />
           <span>No activity yet — actions across the team will show up here.</span>
         </div>
       ) : (
         <>
-          <ol className="overflow-hidden rounded-xl border border-foreground/8">
+          <ol className="border-foreground/8 overflow-hidden rounded-xl border">
             {entries.map((e, i) => (
               <Row key={e.id} e={e} last={i === entries.length - 1} />
             ))}
@@ -133,10 +164,12 @@ function Row({ e, last }: { e: AuditEntry; last: boolean }) {
   }
   const Icon = k.icon
   return (
-    <li className={'flex items-start gap-3 px-4 py-3 ' + (last ? '' : 'border-b border-foreground/6')}>
+    <li
+      className={'flex items-start gap-3 px-4 py-3 ' + (last ? '' : 'border-foreground/6 border-b')}
+    >
       <span
         className={
-          'mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-foreground/5 ' + k.tone
+          'bg-foreground/5 mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full ' + k.tone
         }
       >
         <Icon className="h-3.5 w-3.5" />
@@ -159,7 +192,7 @@ function Actor({ actor }: { actor: string }) {
   // System actors ("push", "token:<name>") render as a chip; users as a name.
   if (actor === 'push' || actor.startsWith('token:')) {
     return (
-      <span className="text-muted-foreground rounded bg-foreground/8 px-1.5 py-0.5 font-mono text-[11px]">
+      <span className="text-muted-foreground bg-foreground/8 rounded px-1.5 py-0.5 font-mono text-[11px]">
         {actor.startsWith('token:') ? actor.slice('token:'.length) + ' (token)' : actor}
       </span>
     )

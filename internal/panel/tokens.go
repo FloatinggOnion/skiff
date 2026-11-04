@@ -131,8 +131,11 @@ func (p *Panel) handleTokens(w http.ResponseWriter, r *http.Request) {
 		p.audit(r, "token.create", name, "")
 		writeJSON(w, t) // includes the plaintext token, this one time
 	case http.MethodDelete:
-		revokeToken(team, r.URL.Query().Get("id"))
-		p.audit(r, "token.revoke", "", "")
+		id := r.URL.Query().Get("id")
+		var revoked string
+		_ = sqlDB.QueryRow(`SELECT name FROM api_tokens WHERE team=? AND id=?`, team, id).Scan(&revoked)
+		revokeToken(team, id)
+		p.audit(r, "token.revoke", revoked, "")
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

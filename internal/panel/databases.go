@@ -537,6 +537,8 @@ func (p *Panel) handleDatabaseAttach(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = attachDB(id, app, e.envVar)
+		p.audit(r, "database.attach", d.Name, app)
+		p.audit(r, "database.detach", d.Name, app)
 		writeJSON(w, p.toDatabase(d))
 	case http.MethodDelete:
 		if v, ok := detachDB(id, app); ok {

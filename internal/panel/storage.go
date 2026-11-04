@@ -354,6 +354,7 @@ func (p *Panel) handleStorageAttach(w http.ResponseWriter, r *http.Request) {
 		if src, ok := getSource(app); ok {
 			p.unlinkResource(b.Container, teamNetwork(b.Team), appNetwork(src), bucketAttachments(id))
 		}
+		p.audit(r, "bucket.detach", b.Name, app)
 		w.WriteHeader(http.StatusNoContent)
 
 	default:

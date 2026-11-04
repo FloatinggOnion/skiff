@@ -143,6 +143,7 @@ func (p *Panel) handleBucketObject(w http.ResponseWriter, r *http.Request) {
 		if size >= 0 {
 			w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 		}
+		p.audit(r, "bucket.download", b.Name, key)
 		_, _ = io.Copy(w, body)
 
 	case http.MethodPut:

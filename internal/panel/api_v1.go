@@ -250,6 +250,9 @@ func (p *Panel) apiEnv(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
+		if firstInAWhile("env\x00" + apiActor(r) + "\x00" + name) {
+			recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "env.read", Target: name, Detail: "via api"})
+		}
 		apiJSON(w, http.StatusOK, getEnv(name))
 	case http.MethodPut:
 		var body struct {

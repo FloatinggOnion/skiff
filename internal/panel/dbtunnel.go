@@ -54,22 +54,26 @@ func databaseToken(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// auditTunnel records a token reaching a database. Clients open many connections, so repeats inside tunnelAuditEvery are left out.
-func auditTunnel(team, actor string, d dbRow) {
-	key := team + "\x00" + actor + "\x00" + d.ID
+// firstInAWhile reports whether key hasn't been seen for tunnelAuditEvery, so repeated reads make one Activity entry.
+func firstInAWhile(key string) bool {
 	now := time.Now()
 	tunnelAuditsMu.Lock()
+	defer tunnelAuditsMu.Unlock()
 	for k, at := range tunnelAudits {
 		if now.Sub(at) >= tunnelAuditEvery {
 			delete(tunnelAudits, k)
 		}
 	}
-	_, recent := tunnelAudits[key]
-	if !recent {
-		tunnelAudits[key] = now
+	if _, recent := tunnelAudits[key]; recent {
+		return false
 	}
-	tunnelAuditsMu.Unlock()
-	if !recent {
+	tunnelAudits[key] = now
+	return true
+}
+
+// auditTunnel records a token reaching a database. Clients open many connections, so repeats are left out.
+func auditTunnel(team, actor string, d dbRow) {
+	if firstInAWhile("tunnel\x00" + team + "\x00" + actor + "\x00" + d.ID) {
 		recordAudit(team, AuditEntry{Actor: actor, Action: "database.connect", Target: d.Name, Detail: d.Engine})
 	}
 }
