@@ -16,6 +16,7 @@ import (
 	"github.com/nuelScript/skiff/internal/builder"
 	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/drain"
 	"github.com/nuelScript/skiff/internal/health"
 	"github.com/nuelScript/skiff/internal/proxy"
 	"github.com/nuelScript/skiff/internal/registry"
@@ -310,6 +311,14 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 
 	// Bring the whole new set up healthy before touching the old; if any replica fails, roll back everything started — the old version keeps serving.
 	var reps []registry.Replica
+	var held []string
+	release := func() {
+		for _, c := range held {
+			_ = drain.Remove(c)
+		}
+		held = nil
+	}
+	defer release()
 	rollback := func() {
 		for _, rp := range reps {
 			_ = eng.Remove(rp.Container)
@@ -317,6 +326,12 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	}
 	for range replicas {
 		container := fmt.Sprintf("%s-%s", cfg.Name, shortID())
+		if !eng.IsRemote() {
+			now := time.Now().Unix()
+			if drain.Add(drain.Entry{App: cfg.Name, Container: container, Since: now, Until: now + int64(timeout/time.Second) + startingMargin, Starting: true}) == nil {
+				held = append(held, container)
+			}
+		}
 		hostPort, err := eng.Run(docker.RunSpec{
 			Name:          container,
 			App:           cfg.Name,
@@ -392,15 +407,11 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	for _, rp := range reps {
 		newSet[rp.Container] = true
 	}
-	retired := 0
-	for _, name := range eng.AppContainers(cfg.Name) {
-		if !newSet[name] {
-			_ = eng.Stop(name)
-			_ = eng.Remove(name)
-			retired++
-		}
-	}
-	if retired > 0 {
+	release()
+	retired, draining := retireOld(eng, cfg, newSet)
+	if draining > 0 {
+		ui.Done(fmt.Sprintf("Previous version is finishing open requests, for up to %s", time.Duration(cfg.Deploy.DrainSeconds())*time.Second))
+	} else if retired > 0 {
 		ui.Done("Retired the previous version")
 	}
 
@@ -412,6 +423,42 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 		ui.Field("direct", fmt.Sprintf("http://localhost:%d", reps[0].HostPort))
 	}
 	return nil
+}
+
+// startingMargin is added to the health timeout for pulling and starting the container.
+const startingMargin = 120
+
+// retireOld removes the app's other containers, or leaves the running ones to the router so open requests can finish. That needs a router here that says it's up, because nothing else would stop them or keep new traffic away.
+func retireOld(eng *docker.Engine, cfg *config.Config, keep map[string]bool) (retired, draining int) {
+	seconds := cfg.Deploy.DrainSeconds()
+	ports := map[string]int{}
+	if seconds > 0 && !eng.IsRemote() && drain.RouterAlive() {
+		if routes, err := eng.Routes(); err == nil {
+			for _, r := range routes {
+				if r.App == cfg.Name {
+					ports[r.Container] = r.HostPort
+				}
+			}
+		}
+	}
+	now := time.Now()
+	finishing := drain.Active(now)
+	for _, name := range eng.AppContainers(cfg.Name) {
+		if keep[name] || finishing[name] {
+			continue
+		}
+		if port := ports[name]; port > 0 {
+			err := drain.Add(drain.Entry{App: cfg.Name, Container: name, HostPort: port, Since: now.Unix(), Until: now.Unix() + int64(seconds)})
+			if err == nil {
+				draining++
+				continue
+			}
+		}
+		_ = eng.Stop(name)
+		_ = eng.Remove(name)
+		retired++
+	}
+	return retired, draining
 }
 
 // retainImages is how many past builds to keep as instant-rollback points, per app.

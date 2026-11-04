@@ -122,7 +122,7 @@ func (e *Engine) Routes() ([]Route, error) {
 		if err != nil {
 			continue
 		}
-		routes = append(routes, Route{App: f[0], HostPort: hp})
+		routes = append(routes, Route{App: f[0], Container: f[2], HostPort: hp})
 	}
 	return routes, nil
 }

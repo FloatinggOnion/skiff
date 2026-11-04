@@ -159,6 +159,9 @@ func (t *tcpProxy) forward(app string, c net.Conn) {
 		return
 	}
 	defer up.Close()
+	if addr, ok := up.RemoteAddr().(*net.TCPAddr); ok {
+		defer t.rt.trackOpen(addr.Port)()
+	}
 	done := make(chan struct{}, 2)
 	pipe := func(dst, src net.Conn) {
 		_, _ = io.Copy(dst, src)

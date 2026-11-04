@@ -1,8 +1,20 @@
 package docker
 
+import "strconv"
+
 func (e *Engine) Stop(container string) error {
 	defer invalidateStates()
 	out, err := e.command("stop", container).CombinedOutput()
+	if err != nil {
+		return cmdErr(out, err)
+	}
+	return nil
+}
+
+// StopWithin asks a container to exit and gives it this many seconds before killing it.
+func (e *Engine) StopWithin(container string, seconds int) error {
+	defer invalidateStates()
+	out, err := e.command("stop", "-t", strconv.Itoa(seconds), container).CombinedOutput()
 	if err != nil {
 		return cmdErr(out, err)
 	}

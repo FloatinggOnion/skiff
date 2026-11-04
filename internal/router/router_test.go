@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/drain"
 )
 
 func TestSubFor(t *testing.T) {
@@ -405,5 +406,39 @@ func TestIsGRPC(t *testing.T) {
 	r.Header.Set("Content-Type", "application/grpc")
 	if isGRPC(r) {
 		t.Error("gRPC can't arrive over HTTP/1")
+	}
+}
+
+func TestDrainFinished(t *testing.T) {
+	now := time.Unix(1000, 0)
+	e := drain.Entry{Since: 1000, Until: 1300}
+	cases := []struct {
+		name string
+		open int
+		at   time.Time
+		want bool
+	}{
+		{"routes may still list it", 0, now.Add(5 * time.Second), false},
+		{"idle after the routes moved on", 0, now.Add(drainMinimum), true},
+		{"still has open requests", 1, now.Add(time.Minute), false},
+		{"out of time", 3, now.Add(300 * time.Second), true},
+	}
+	for _, c := range cases {
+		if got := drainFinished(e, c.open, c.at); got != c.want {
+			t.Errorf("%s: got %v", c.name, got)
+		}
+	}
+}
+
+func TestTrackOpen(t *testing.T) {
+	rt := &Router{}
+	first, second := rt.trackOpen(9000), rt.trackOpen(9000)
+	if rt.openOn(9000) != 2 {
+		t.Fatalf("open: %d", rt.openOn(9000))
+	}
+	first()
+	second()
+	if rt.openOn(9000) != 0 {
+		t.Fatalf("open after finishing: %d", rt.openOn(9000))
 	}
 }

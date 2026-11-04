@@ -57,7 +57,7 @@ func parseVolumeSizes(out []byte) map[string]int64 {
 
 // RunningUsing names the running containers that mount a volume.
 func (e *Engine) RunningUsing(volume string) []string {
-	out, err := e.command("ps", "-q", "--filter", "volume="+volume, "--filter", "status=running").Output()
+	out, err := e.command("ps", "--format", "{{.Names}}", "--filter", "volume="+volume, "--filter", "status=running").Output()
 	if err != nil {
 		return nil
 	}

@@ -97,7 +97,11 @@ export default function Backends() {
         </li>
         <li>
           <strong>Real-time:</strong> WebSockets and server-sent events work. When a new version goes
-          live, the old one is stopped, so clients should reconnect.
+          live, new requests go to it, and the old version keeps running until its open requests
+          finish, for up to 5 minutes. Set <code>drain_timeout</code> under <code>[deploy]</code> in{" "}
+          <code>skiff.toml</code> to change that (in seconds, up to 3600, or 0 to stop it straight
+          away). After that, the app gets a stop signal and 30 seconds to exit, so clients holding a
+          connection open longer still need to reconnect.
         </li>
       </ul>
 

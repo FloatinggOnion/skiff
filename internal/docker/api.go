@@ -128,7 +128,11 @@ func routesFromList(list []apiContainer) []Route {
 		}
 		for _, p := range c.Ports {
 			if p.PrivatePort == cport && p.PublicPort > 0 && (p.Type == "" || p.Type == "tcp") {
-				routes = append(routes, Route{App: app, HostPort: p.PublicPort})
+				name := ""
+				if len(c.Names) > 0 {
+					name = strings.TrimPrefix(c.Names[0], "/")
+				}
+				routes = append(routes, Route{App: app, Container: name, HostPort: p.PublicPort})
 				break
 			}
 		}

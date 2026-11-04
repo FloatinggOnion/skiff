@@ -18,6 +18,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/drain"
 	"github.com/nuelScript/skiff/internal/edge"
 	"github.com/nuelScript/skiff/internal/mail"
 	"github.com/nuelScript/skiff/internal/sleep"
@@ -51,6 +52,9 @@ type Router struct {
 	edgeMu       sync.RWMutex
 	cachedEdge   edge.Rules
 	cachedEdgeAt time.Time
+
+	openMu sync.Mutex
+	open   map[int]int
 
 	metrics       *Metrics
 	reqlog        *ReqLog
@@ -264,8 +268,12 @@ func (rt *Router) fetchRoutes() (map[string][]int, error) {
 	if err != nil {
 		return nil, err
 	}
+	draining := drain.Active(time.Now())
 	table := make(map[string][]int, len(routes))
 	for _, r := range routes {
+		if draining[r.Container] {
+			continue
+		}
 		table[r.App] = append(table[r.App], r.HostPort)
 	}
 	return table, nil
@@ -336,6 +344,7 @@ func (rt *Router) proxyToApp(w http.ResponseWriter, r *http.Request, app string)
 	port := ports[rt.rr[app]%uint64(len(ports))]
 	rt.rr[app]++
 	rt.rrMu.Unlock()
+	defer rt.trackOpen(port)()
 	proxyTo(w, r, fmt.Sprintf("127.0.0.1:%d", port))
 	return true
 }
@@ -456,6 +465,7 @@ func edgeServer(addr string, h http.Handler) *http.Server {
 func (rt *Router) ServeHTTPOnly(addr string) error {
 	rt.startMetrics()
 	rt.startTCP()
+	rt.startDrain()
 	rt.startMail(nil)
 	// Plain-text HTTP/2 too, since this mode has no TLS to negotiate it over.
 	s := edgeServer(addr, rt)
@@ -469,6 +479,7 @@ func (rt *Router) ServeHTTPOnly(addr string) error {
 func (rt *Router) ServeTLS(cacheDir string) error {
 	rt.startMetrics()
 	rt.startTCP()
+	rt.startDrain()
 	m := &autocert.Manager{
 		Prompt: autocert.AcceptTOS,
 		Cache:  autocert.DirCache(cacheDir),

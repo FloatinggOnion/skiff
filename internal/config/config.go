@@ -95,6 +95,8 @@ type Deploy struct {
 	Network       string `toml:"network"`
 	HealthPath    string `toml:"health_path"`    // must answer 2xx/3xx before traffic moves; empty = any reply at /
 	HealthTimeout int    `toml:"health_timeout"` // seconds; 0 = the default
+	// DrainTimeout is how many seconds a replaced version may keep finishing open requests; unset means the default, 0 stops it straight away.
+	DrainTimeout *int `toml:"drain_timeout"`
 	// HealthMode is "tcp" to accept any open port, or "none" for a service with no port to check; empty means HTTP.
 	HealthMode string   `toml:"health_mode"`
 	Aliases    []string `toml:"aliases"` // extra names on the network
@@ -117,6 +119,22 @@ func ValidateHealth(path string, timeout int) error {
 		return fmt.Errorf("health check timeout must be 5-600 seconds")
 	}
 	return nil
+}
+
+const (
+	DefaultDrainTimeout = 300
+	MaxDrainTimeout     = 3600
+)
+
+// DrainSeconds is how long a replaced version gets to finish open requests. A service with no port takes none through the router, so it has nothing to finish.
+func (d Deploy) DrainSeconds() int {
+	switch {
+	case d.HealthMode == "none":
+		return 0
+	case d.DrainTimeout != nil:
+		return *d.DrainTimeout
+	}
+	return DefaultDrainTimeout
 }
 
 // DefaultPort is the port an app is assumed to listen on when nothing says otherwise.
@@ -224,6 +242,9 @@ func (c *Config) validate() error {
 		if err := ValidateImage(c.Build.Image); err != nil {
 			return err
 		}
+	}
+	if d := c.Deploy.DrainTimeout; d != nil && (*d < 0 || *d > MaxDrainTimeout) {
+		return fmt.Errorf("drain_timeout must be 0-%d seconds", MaxDrainTimeout)
 	}
 	if err := ValidateHealth(c.Deploy.HealthPath, c.Deploy.HealthTimeout); err != nil {
 		return err

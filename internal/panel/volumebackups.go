@@ -18,6 +18,7 @@ import (
 
 	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/drain"
 )
 
 const (
@@ -346,6 +347,7 @@ func (p *Panel) restoreVolume(ctx context.Context, b volumeBackupRow, archive *o
 		return err
 	}
 	running := p.eng.RunningUsing(name)
+	replaced := drain.Active(time.Now())
 	for _, c := range running {
 		if err := p.eng.Stop(c); err != nil {
 			log.Printf("skiff: stopping %s for a restore: %v", c, err)
@@ -353,6 +355,9 @@ func (p *Panel) restoreVolume(ctx context.Context, b volumeBackupRow, archive *o
 	}
 	swapErr := p.eng.RunIO(ctx, volumeToolImage, mount, volumeSwapScript, nil, io.Discard)
 	for _, c := range running {
+		if replaced[c] {
+			continue // on its way out, and the router will remove it
+		}
 		if err := p.eng.Start(c); err != nil && swapErr == nil {
 			swapErr = fmt.Errorf("starting %s again: %w", c, err)
 		}

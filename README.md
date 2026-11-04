@@ -186,6 +186,7 @@ cpu    = "0.5"
 release        = "npm run migrate"  # runs once before each new version goes live
 health_path    = "/healthz"         # must answer 2xx/3xx before traffic moves
 health_timeout = 60                 # seconds (default 30)
+drain_timeout  = 300                # seconds the old version may finish open requests (default 300, 0 = stop at once)
 
 [[volumes]]              # kept across deploys; repeat for more (up to 5)
 name = "data"
@@ -199,7 +200,7 @@ A `.env` file next to `skiff.toml` is loaded too.
 
 ## Zero-downtime
 
-Every deploy builds the new version, health-checks it, atomically cuts traffic over, then drains and retires the old one. If the new version never becomes healthy, it rolls back and the old one keeps serving. By default any HTTP response counts as healthy; set a `health_path` (or **Health check path** in project settings) to require a 2xx or 3xx from a real check instead.
+Every deploy builds the new version, health-checks it, atomically cuts traffic over, then retires the old one once its open requests finish or `drain_timeout` runs out, so streams and WebSockets aren't cut by a deploy on a server running the router. A deploy over SSH from your laptop stops the old version straight away. If the new version never becomes healthy, it rolls back and the old one keeps serving. By default any HTTP response counts as healthy; set a `health_path` (or **Health check path** in project settings) to require a 2xx or 3xx from a real check instead.
 
 ## Run it on your own server
 

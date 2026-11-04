@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/docker"
+	"github.com/nuelScript/skiff/internal/drain"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -99,7 +100,7 @@ func Reap(eng *docker.Engine, cutoff time.Time) (Result, error) {
 			apps[name] = a
 		}
 	}
-	plan := PlanReap(apps, eng.SkiffContainers(), cutoff)
+	plan := PlanReap(apps, withoutDraining(eng.SkiffContainers(), drain.Active(time.Now())), cutoff)
 
 	var res Result
 	for _, c := range plan.Remove {
@@ -153,6 +154,17 @@ func Reap(eng *docker.Engine, cutoff time.Time) (Result, error) {
 		}
 	}
 	return res, nil
+}
+
+// withoutDraining leaves replaced containers to the router while they finish their open requests. One past its time counts again, in case the router isn't running to retire it.
+func withoutDraining(cs []docker.ContainerInfo, draining map[string]bool) []docker.ContainerInfo {
+	out := make([]docker.ContainerInfo, 0, len(cs))
+	for _, c := range cs {
+		if !draining[c.Name] {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func containersOf(a registry.App) []string {

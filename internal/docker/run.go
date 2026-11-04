@@ -25,8 +25,9 @@ type RunSpec struct {
 }
 
 type Route struct {
-	App      string
-	HostPort int
+	App       string
+	Container string
+	HostPort  int
 }
 
 // SafetyCapPercent is how much of the server's memory an app with no limit of its own may use: enough for nearly anything, while leaving room for the other apps and for Skiff to keep running if one runs away.
