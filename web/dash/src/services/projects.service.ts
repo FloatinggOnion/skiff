@@ -15,9 +15,11 @@ export type App = {
   image?: string
   domain?: string
   private?: boolean
+  previews?: number
 }
 
 export type ProjectDetail = {
+  parent?: string
   name: string
   state: string
   url: string

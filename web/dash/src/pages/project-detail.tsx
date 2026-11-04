@@ -7,7 +7,7 @@ import {
   Terminal,
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ConsoleDrawer } from '@/components/console-drawer'
 import { DeployLogPanel } from '@/components/deploy-log-panel'
 import { Drawer } from '@/components/drawer'
@@ -35,6 +35,7 @@ import { runningPill, deployDot } from './project/status'
 
 export default function ProjectDetailPage() {
   const { name = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { project, isPending, reload } = useProject(name)
   const term = useConsole(reload)
@@ -81,6 +82,7 @@ export default function ProjectDetailPage() {
   const latest = project.deploys[0]
   const live = project.deploys.find((d) => d.status === 'live')
   const cli = project.origin === 'cli'
+  const tab = searchParams.get('tab') ?? 'overview'
   const fromImage = !!project.image
   const skiffHost = project.url.replace(/^https?:\/\//, '')
   const primary = project.domains[0]
@@ -94,6 +96,14 @@ export default function ProjectDetailPage() {
           Projects
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
+        {project.parent && (
+          <>
+            <Link to={'/projects/' + project.parent + '?tab=previews'} className="hover:text-foreground transition-colors">
+              {project.parent}
+            </Link>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </>
+        )}
         <span className="text-foreground font-medium">{project.name}</span>
       </div>
 
@@ -154,13 +164,23 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      <Tabs defaultValue="overview" className="flex min-w-0 flex-1 flex-col">
+      <Tabs defaultValue={tab} key={project.name} className="flex min-w-0 flex-1 flex-col">
         <TabsList
           variant="line"
           className="mb-6 w-full justify-start gap-6 overflow-x-auto border-b border-foreground/8 *:flex-none"
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
+          {!cli && !fromImage && !project.parent && (
+            <TabsTrigger value="previews">
+              Previews
+              {project.previews.length > 0 && (
+                <span className="text-muted-foreground ml-1.5 font-mono text-[11px]">
+                  {project.previews.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
           <TabsTrigger value="processes">Jobs &amp; workers</TabsTrigger>
           <TabsTrigger value="environment">Environment</TabsTrigger>
@@ -397,10 +417,11 @@ export default function ProjectDetailPage() {
               </Button>
             </div>
           )}
-          {!cli && !fromImage && (
-            <section className="mt-10">
-              <h2 className="mb-3 text-sm font-semibold">Preview environments</h2>
-              <PreviewsPanel
+        </TabsContent>
+
+        {!cli && !fromImage && !project.parent && (
+          <TabsContent value="previews" className="pb-[46vh]">
+            <PreviewsPanel
               project={project.name}
               previews={project.previews}
               passwordProtected={project.previewProtected}
@@ -411,9 +432,8 @@ export default function ProjectDetailPage() {
                 reload()
               }}
             />
-            </section>
-          )}
-        </TabsContent>
+          </TabsContent>
+        )}
 
         <TabsContent value="metrics" className="pb-[46vh]">
           <ObservabilityPanel app={project.name} />

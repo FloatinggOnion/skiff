@@ -9,6 +9,9 @@ export function useProject(name: string) {
     queryKey: queryKeys.project(name),
     queryFn: () => projectsService.detail(name),
     enabled: !!name,
+    // A preview can start from a push at any time, so keep watching while one is building.
+    refetchInterval: (query) =>
+      query.state.data?.previews?.some((pv) => pv.status === 'building') ? 5000 : 30000,
   })
 
   const reload = useCallback(

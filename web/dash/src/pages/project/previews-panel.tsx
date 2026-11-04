@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router'
 import { ExternalLink, GitBranch, Globe, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/providers/confirm-provider'
 import { useDomains } from '@/hooks/use-domains'
 import { errText } from '@/lib/errors'
+import { relTime } from '@/lib/format'
 import { type Preview } from '@/services/api.service'
 import { deployDot } from './status'
 import { PreviewData } from './preview-data'
@@ -35,6 +37,24 @@ export function PreviewsPanel({
   }
   return (
     <div className="space-y-4">
+      {previews.length === 0 ? (
+        <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-12 text-sm">
+          <GitBranch className="h-5 w-5 opacity-40" />
+          <span>No preview environments yet.</span>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-foreground/8">
+          {previews.map((pv) => (
+            <PreviewRow
+              key={pv.name}
+              pv={pv}
+              onAddDomain={(host) => addDomain(project, host, pv.branch)}
+              onTeardown={() => onTeardown(pv.name)}
+            />
+          ))}
+        </div>
+      )}
+
       <form
         onSubmit={create}
         className="rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/3 to-transparent p-4"
@@ -63,24 +83,6 @@ export function PreviewsPanel({
 
       <PreviewData app={project} />
       <PreviewPassword project={project} enabled={passwordProtected} onChanged={onPasswordChange} />
-
-      {previews.length === 0 ? (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-12 text-sm">
-          <GitBranch className="h-5 w-5 opacity-40" />
-          <span>No preview environments yet.</span>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-foreground/8">
-          {previews.map((pv) => (
-            <PreviewRow
-              key={pv.name}
-              pv={pv}
-              onAddDomain={(host) => addDomain(project, host, pv.branch)}
-              onTeardown={() => onTeardown(pv.name)}
-            />
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -96,7 +98,8 @@ function PreviewRow({
 }) {
   const confirm = useConfirm()
   const host = pv.url.replace(/^https?:\/\//, '')
-  const label = pv.state === 'running' ? 'Ready' : pv.status || pv.state
+  const label =
+    pv.status === 'building' ? 'Building' : pv.state === 'running' ? 'Ready' : pv.status || pv.state
   const [adding, setAdding] = useState(false)
   const [domain, setDomain] = useState('')
   const [busy, setBusy] = useState(false)
@@ -135,9 +138,17 @@ function PreviewRow({
           </a>
           <p className="text-muted-foreground mt-0.5 flex items-center gap-1 truncate text-xs">
             <GitBranch className="h-3 w-3 shrink-0" /> {pv.branch}
+            {pv.updated > 0 && <span className="text-foreground/40">· {relTime(pv.updated)}</span>}
           </p>
         </div>
         <span className="text-muted-foreground shrink-0 text-[11px] capitalize">{label}</span>
+        <Link
+          to={'/projects/' + pv.name}
+          className="text-muted-foreground hover:text-foreground shrink-0 text-[11px] underline-offset-2 hover:underline"
+        >
+          <span className="sm:hidden">Logs</span>
+          <span className="hidden sm:inline">Deploys &amp; logs</span>
+        </Link>
         <button
           onClick={() => setAdding((a) => !a)}
           title="Add a custom domain for this branch"

@@ -102,6 +102,14 @@ export function AppCard({
                 {host}
               </a>
             )}
+            {!!app.previews && (
+              <Link
+                to={'/projects/' + app.name + '?tab=previews'}
+                className="text-muted-foreground hover:text-foreground mt-0.5 block font-mono text-[11px] transition-colors"
+              >
+                {app.previews} {app.previews === 1 ? 'preview' : 'previews'}
+              </Link>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">

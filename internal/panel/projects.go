@@ -39,6 +39,8 @@ type appView struct {
 	// Domain is the project's main custom domain, shown in place of its Skiff address.
 	Domain  string `json:"domain,omitempty"`
 	Private bool   `json:"private,omitempty"`
+	// Previews counts its preview environments, which aren't listed as projects themselves.
+	Previews int `json:"previews,omitempty"`
 }
 
 // displayState reports a sleeping app as asleep rather than as a stopped container.
@@ -90,6 +92,7 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 			av.Domain = hosts[0]
 		}
 		av.Private = src.Private
+		av.Previews = len(previewSources(a.Name))
 		if ds := appDeploys(a.Name); len(ds) > 0 {
 			av.Commit = ds[0].Commit
 			av.Message = ds[0].Message
@@ -102,7 +105,9 @@ func (p *Panel) handleApps(w http.ResponseWriter, r *http.Request) {
 }
 
 type projectView struct {
-	Name        string        `json:"name"`
+	Name string `json:"name"`
+	// Parent is the project this one is a preview of.
+	Parent      string        `json:"parent,omitempty"`
 	State       string        `json:"state"`
 	URL         string        `json:"url"`
 	Repo        string        `json:"repo"`
@@ -173,7 +178,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			Repo: src.Repo, Branch: src.Branch, RootDir: src.RootDir, Port: src.Port,
 			Auto: src.Auto, PreviewAuto: src.PreviewAuto, Replicas: src.Replicas, Running: running,
 			Release: src.Release, Autoscale: src.Autoscale, ScaleMin: src.ScaleMin, ScaleMax: src.ScaleMax, ScaleCPU: src.ScaleCPU,
-			Deploys: deploys, Previews: p.buildPreviews(app), Origin: src.Origin,
+			Deploys: deploys, Previews: p.buildPreviews(app), Origin: src.Origin, Parent: src.Parent,
 			SleepAfter: src.SleepAfter, Sleeping: isSleeping(app),
 			HealthPath: src.HealthPath, HealthTimeout: src.HealthTimeout,
 			PreviewProtected: previewPasswordHash(app) != "",
