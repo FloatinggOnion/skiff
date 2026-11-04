@@ -194,7 +194,7 @@ func (p *Panel) apiCLIDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	if deployStatus(name, id) == "" {
 		addDeploy(Deploy{ID: id, App: name, Commit: shortCommit(body.Commit), Message: body.Message,
-			Trigger: originCLI, Status: "live", Started: time.Now().Unix()})
+			Trigger: originCLI, Status: "live", Started: time.Now().Unix(), Actor: strings.TrimPrefix(apiActor(r), "token:")})
 		writeCLIDeployLog(name, id, time.Now())
 	}
 	recordAudit(team, AuditEntry{Actor: apiActor(r), Action: "deploy", Target: name, Detail: "from the CLI"})

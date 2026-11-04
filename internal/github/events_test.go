@@ -39,3 +39,10 @@ func TestParsePullRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePushNamesThePusher(t *testing.T) {
+	p, ok := ParsePush([]byte(`{"ref":"refs/heads/main","after":"abc","repository":{"full_name":"acme/shop"},"pusher":{"name":"dev"},"head_commit":{"message":"x"}}`))
+	if !ok || p.Pusher != "dev" {
+		t.Fatalf("got %+v, %v", p, ok)
+	}
+}

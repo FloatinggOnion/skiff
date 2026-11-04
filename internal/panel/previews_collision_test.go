@@ -12,7 +12,7 @@ func TestPreviewCannotTakeOverAnotherTeamsApp(t *testing.T) {
 	if err := putSource(parent); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok := p.createPreview(parent, "api", "", ""); ok {
+	if _, _, ok := p.createPreview(parent, "api", "", "", ""); ok {
 		t.Fatal("a preview named after another team's app must be refused")
 	}
 	got, _ := getSource("shop-api")
@@ -25,7 +25,7 @@ func TestPreviewCannotTakeOverAnotherTeamsApp(t *testing.T) {
 	if err := putSource(mine); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, ok := p.createPreview(parent, "web", "", ""); ok {
+	if _, _, ok := p.createPreview(parent, "web", "", "", ""); ok {
 		t.Fatal("a preview must not overwrite an app that isn't one of its own")
 	}
 }

@@ -360,6 +360,7 @@ func (p *Panel) handleRedeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	id := newDeployID()
 	p.audit(r, "deploy", app, "redeploy")
+	src.actor = p.deployActor(r)
 	go p.runDeploy(src, "", "", "", "redeploy", id)
 	p.tailLog(w, r, app, id)
 }
@@ -369,14 +370,9 @@ func (p *Panel) markRollbackable(app string, deploys []Deploy) {
 	for _, t := range p.eng.AppImageTags(app) {
 		retained[t] = true
 	}
-	current := ""
-	for _, d := range deploys {
-		if d.Status == "live" {
-			current = d.ID
-			break
-		}
-	}
+	current := currentDeploy(app)
 	for i := range deploys {
+		deploys[i].Current = deploys[i].ID == current
 		deploys[i].Rollbackable = deploys[i].ID != current && retained[deploys[i].ID]
 	}
 }
@@ -406,6 +402,7 @@ func (p *Panel) handleRollback(w http.ResponseWriter, r *http.Request) {
 		detail = "to " + commit
 	}
 	p.audit(r, "rollback", app, detail)
+	src.actor = p.deployActor(r)
 	go p.runRollback(src, target, commit, message, id)
 	p.tailLog(w, r, app, id)
 }
@@ -475,6 +472,7 @@ func (p *Panel) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	id := newDeployID()
 	p.audit(r, "deploy", name, "new app from git")
+	src.actor = p.deployActor(r)
 	go p.runDeploy(src, auth, "", "", "manual", id)
 	p.tailLog(w, r, name, id)
 }

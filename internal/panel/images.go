@@ -94,6 +94,7 @@ func (p *Panel) handleImageProject(w http.ResponseWriter, r *http.Request) {
 	}
 	id := newDeployID()
 	p.audit(r, "deploy", name, "new app from image")
+	src.actor = p.deployActor(r)
 	go p.runDeploy(src, "", "", "", "manual", id)
 	writeJSON(w, map[string]string{"app": name, "id": id})
 }

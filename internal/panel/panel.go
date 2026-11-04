@@ -221,6 +221,8 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/env", p.protected(p.handleEnv))
 	mux.HandleFunc("/api/deploys", p.protected(p.handleDeploys))
 	mux.HandleFunc("/api/deploys/log", p.protected(p.handleDeployLog))
+	mux.HandleFunc("/api/deploys/one", p.protected(p.handleDeployOne))
+	mux.HandleFunc("/api/deploys/branches", p.protected(p.handleDeployBranches))
 	mux.HandleFunc("/api/github/status", p.protected(p.handleGithubStatus))
 	mux.HandleFunc("/api/github/create", p.protected(p.handleGithubCreate))
 	mux.HandleFunc("/api/github/created", p.protectedCallback(p.handleGithubCreated))

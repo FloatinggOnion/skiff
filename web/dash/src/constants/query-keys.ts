@@ -43,7 +43,9 @@ export const queryKeys = {
   backups: (dbId: string) => ['backups', dbId] as const,
   pitr: (dbId: string) => ['pitr', dbId] as const,
   deploys: (app: string | null) => ['deploys', app] as const,
-  deploysPaged: (app: string) => ['deploys', app, 'page'] as const,
+  deploysProject: (app: string, filters: object) => ['deploys', app, 'project', filters] as const,
+  deployOne: (app: string, id: string) => ['deploys', app, 'one', id] as const,
+  deployBranches: (app: string) => ['deploys', app, 'branches'] as const,
   deploysAll: ['deploys', 'all'] as const,
   github: {
     status: ['github', 'status'] as const,

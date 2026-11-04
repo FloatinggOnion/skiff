@@ -7,6 +7,7 @@ import AcceptInvite from '@/components/accept-invite'
 import Shell from '@/components/shell'
 import ProjectsPage from '@/pages/projects'
 import ProjectDetailPage from '@/pages/project-detail'
+import DeploymentDetailPage from '@/pages/deployment-detail'
 import DeploymentsPage from '@/pages/deployments'
 import ActivityPage from '@/pages/activity'
 import LogsPage from '@/pages/logs'
@@ -49,6 +50,7 @@ export default function App() {
             <Route element={<Shell />}>
               <Route index element={<ProjectsPage />} />
               <Route path="projects/:name" element={<ProjectDetailPage />} />
+              <Route path="projects/:name/deployments/:id" element={<DeploymentDetailPage />} />
               <Route path="deployments" element={<DeploymentsPage />} />
               <Route path="activity" element={<ActivityPage />} />
               <Route path="logs" element={<LogsPage />} />

@@ -14,6 +14,8 @@ import (
 )
 
 type Source struct {
+	// actor is who started the deploy being run; never stored with the source.
+	actor       string
 	App         string `json:"app"`
 	Team        string `json:"team"`
 	Repo        string `json:"repo"`
@@ -68,6 +70,22 @@ type Deploy struct {
 	Status       string `json:"status"`
 	Started      int64  `json:"started"`
 	Rollbackable bool   `json:"rollbackable,omitempty"`
+	Finished     int64  `json:"finished,omitempty"`
+	Branch       string `json:"branch,omitempty"`
+	// Actor is who started it, where that's known.
+	Actor string `json:"actor,omitempty"`
+	// Current marks the deploy its app is serving now.
+	Current bool `json:"current,omitempty"`
+	// Parent is the project, when this deploy belongs to one of its previews.
+	Parent string `json:"parent,omitempty"`
+}
+
+const deployCols = `id,app,commit_sha,message,trigger,status,started,finished,branch,actor`
+
+func scanDeploy(row interface{ Scan(...any) error }) (Deploy, error) {
+	var d Deploy
+	err := row.Scan(&d.ID, &d.App, &d.Commit, &d.Message, &d.Trigger, &d.Status, &d.Started, &d.Finished, &d.Branch, &d.Actor)
+	return d, err
 }
 
 type EnvVar struct {
@@ -222,9 +240,12 @@ func sourcesForRepo(repo, branch string) []Source {
 }
 
 func addDeploy(d Deploy) {
+	if d.Status != "building" && d.Finished == 0 {
+		d.Finished = d.Started
+	}
 	_, _ = sqlDB.Exec(
-		`INSERT INTO deploys(id,app,commit_sha,message,trigger,status,started) VALUES(?,?,?,?,?,?,?)`,
-		d.ID, d.App, d.Commit, d.Message, d.Trigger, d.Status, d.Started)
+		`INSERT INTO deploys(id,app,commit_sha,message,trigger,status,started,finished,branch,actor) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		d.ID, d.App, d.Commit, d.Message, d.Trigger, d.Status, d.Started, d.Finished, d.Branch, d.Actor)
 }
 
 // setDeployCommit records what a deploy built when it wasn't known at the start, as with a manual or API deploy of a branch's newest commit.
@@ -233,13 +254,14 @@ func setDeployCommit(app, id, commit string) {
 }
 
 func setDeployStatus(app, id, status string) {
-	_, _ = sqlDB.Exec(`UPDATE deploys SET status=? WHERE id=? AND app=?`, status, id, app)
+	_, _ = sqlDB.Exec(`UPDATE deploys SET status=?, finished=CASE WHEN finished=0 AND ?<>'building' THEN ? ELSE finished END WHERE id=? AND app=?`,
+		status, status, time.Now().Unix(), id, app)
 }
 
 func appDeploys(app string) []Deploy { return appDeploysPage(app, 0, "", 20) }
 
 func appDeploysPage(app string, before int64, beforeID string, limit int) []Deploy {
-	q := `SELECT id,app,commit_sha,message,trigger,status,started FROM deploys WHERE app=?`
+	q := `SELECT ` + deployCols + ` FROM deploys WHERE app=?`
 	args := []any{app}
 	if before > 0 {
 		q += ` AND (started < ? OR (started = ? AND id < ?))`
@@ -254,8 +276,7 @@ func appDeploysPage(app string, before int64, beforeID string, limit int) []Depl
 	defer rows.Close()
 	out := []Deploy{}
 	for rows.Next() {
-		var d Deploy
-		if rows.Scan(&d.ID, &d.App, &d.Commit, &d.Message, &d.Trigger, &d.Status, &d.Started) == nil {
+		if d, err := scanDeploy(rows); err == nil {
 			out = append(out, d)
 		}
 	}
@@ -269,7 +290,7 @@ func appDeploysPage(app string, before int64, beforeID string, limit int) []Depl
 // keyset-paginated on (started, id). Team-scoping the LIMIT in SQL keeps every
 // page full no matter how the team's builds interleave with others'.
 func teamDeploys(team string, before int64, beforeID string, limit int) []Deploy {
-	q := `SELECT d.id, d.app, d.commit_sha, d.message, d.trigger, d.status, d.started
+	q := `SELECT d.id, d.app, d.commit_sha, d.message, d.trigger, d.status, d.started, d.finished, d.branch, d.actor
 	      FROM deploys d
 	      LEFT JOIN sources s ON s.app = d.app
 	      WHERE (d.app = ? OR s.team = ?)`
@@ -288,8 +309,7 @@ func teamDeploys(team string, before int64, beforeID string, limit int) []Deploy
 	defer rows.Close()
 	out := []Deploy{}
 	for rows.Next() {
-		var d Deploy
-		if rows.Scan(&d.ID, &d.App, &d.Commit, &d.Message, &d.Trigger, &d.Status, &d.Started) == nil {
+		if d, err := scanDeploy(rows); err == nil {
 			out = append(out, d)
 		}
 	}
@@ -303,7 +323,7 @@ func teamDeploys(team string, before int64, beforeID string, limit int) []Deploy
 // only past the cutoff so an in-flight blue-green build isn't disturbed.
 func reconcileStuckDeploys() {
 	cutoff := time.Now().Unix() - 15*60
-	_, _ = sqlDB.Exec(`UPDATE deploys SET status='canceled' WHERE status='building' AND panel_pid=0 AND started < ?`, cutoff)
+	_, _ = sqlDB.Exec(`UPDATE deploys SET status='canceled', finished=? WHERE status='building' AND panel_pid=0 AND started < ?`, time.Now().Unix(), cutoff)
 }
 
 func deployStatus(app, id string) string {

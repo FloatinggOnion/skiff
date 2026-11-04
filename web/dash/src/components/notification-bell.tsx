@@ -59,18 +59,18 @@ export default function NotificationBell() {
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Activity"
-          className="text-muted-foreground hover:text-foreground relative grid h-8 w-8 place-items-center rounded-md transition-colors hover:bg-foreground/5"
+          className="text-muted-foreground hover:text-foreground hover:bg-foreground/5 relative grid h-8 w-8 place-items-center rounded-md transition-colors"
         >
           <Bell className="h-4 w-4" />
           {unread > 0 && (
-            <span className="ring-background absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-success ring-2" />
+            <span className="ring-background bg-success absolute top-1.5 right-1.5 h-2 w-2 rounded-full ring-2" />
           )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between gap-2 border-b border-foreground/8 px-3 py-2">
+        <div className="border-foreground/8 flex items-center justify-between gap-2 border-b px-3 py-2">
           <span className="text-xs font-medium">Activity</span>
-          <div className="flex items-center gap-0.5 rounded-[6px] border border-foreground/10 p-0.5">
+          <div className="border-foreground/10 flex items-center gap-0.5 rounded-[6px] border p-0.5">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -99,8 +99,14 @@ export default function NotificationBell() {
             {recent.map((d) => (
               <button
                 key={d.app + d.id}
-                onClick={() => navigate('/projects/' + d.app)}
-                className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-foreground/5"
+                onClick={() =>
+                  navigate(
+                    d.app === 'panel'
+                      ? '/projects/' + d.app
+                      : `/projects/${d.app}/deployments/${d.id}`,
+                  )
+                }
+                className="hover:bg-foreground/5 flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors"
               >
                 <span className={'h-1.5 w-1.5 shrink-0 rounded-full ' + dot(d.status)} />
                 <div className="min-w-0 flex-1">

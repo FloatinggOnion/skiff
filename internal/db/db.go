@@ -109,6 +109,9 @@ var migrations = []string{
 	`ALTER TABLE deploys ADD COLUMN panel_pid INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE deploys ADD COLUMN child_pid INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE api_tokens ADD COLUMN reach_databases INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE deploys ADD COLUMN finished INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE deploys ADD COLUMN branch TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE deploys ADD COLUMN actor TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `

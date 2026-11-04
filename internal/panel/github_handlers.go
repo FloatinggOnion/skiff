@@ -167,6 +167,7 @@ func (p *Panel) handleGithubDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	envStage.release(name)
 	id := newDeployID()
+	src.actor = p.deployActor(r)
 	go p.runDeploy(src, "", "", "", "manual", id)
 	p.tailLog(w, r, name, id)
 }
@@ -190,10 +191,11 @@ func (p *Panel) onPush(push github.Push) {
 		}
 		id := newDeployID()
 		recordAudit(src.Team, AuditEntry{Actor: "push", Action: "deploy", Target: src.App, Detail: shortCommit(push.Commit)})
+		src.actor = push.Pusher
 		go p.runDeploy(src, "", push.Commit, push.Message, "push", id)
 	}
 	for _, app := range previewsToCreate(push) {
-		p.createPreview(app, push.Branch, push.Commit, push.Message)
+		p.createPreview(app, push.Branch, push.Commit, push.Message, push.Pusher)
 	}
 	toSelfBranch := p.selfRepo != "" && push.Repo == p.selfRepo && push.Branch == p.selfBranch
 	if toSelfBranch && p.pushTouchesSelf(push.Paths) {

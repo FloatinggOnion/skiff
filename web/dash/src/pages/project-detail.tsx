@@ -1,12 +1,5 @@
-import {
-  ChevronRight,
-  ExternalLink,
-  RotateCcw,
-  RotateCw,
-  ScrollText,
-  Terminal,
-} from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { ChevronRight, ExternalLink, RotateCw, ScrollText, Terminal } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ConsoleDrawer } from '@/components/console-drawer'
 import { DeployLogPanel } from '@/components/deploy-log-panel'
@@ -19,10 +12,8 @@ import { ErrorState } from '@/components/error-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useConsole } from '@/hooks/use-console'
 import { useProject } from '@/hooks/use-project'
-import { useAppDeploys } from '@/hooks/use-app-deploys'
 import { relTime } from '@/lib/format'
-import { useConfirm } from '@/providers/confirm-provider'
-import { projectsService, type Deploy } from '@/services/api.service'
+import { projectsService } from '@/services/api.service'
 import { JobsPanel } from './project/jobs-panel'
 import { WorkersPanel } from './project/workers-panel'
 import { TCPPortSection } from './project/tcp-port-section'
@@ -30,8 +21,10 @@ import { VolumesPanel } from './project/volumes-panel'
 import { RegistryPanel } from './project/registry-panel'
 import { DangerZone, SettingsForm } from './project/settings-form'
 import { PreviewsPanel } from './project/previews-panel'
+import { DeploymentsPanel } from './project/deployments-panel'
+import { Fact } from './project/fact'
 import { ObservabilityPanel } from './project/observability-panel'
-import { runningPill, deployDot } from './project/status'
+import { runningPill } from './project/status'
 
 export default function ProjectDetailPage() {
   const { name = '' } = useParams()
@@ -39,21 +32,7 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate()
   const { project, isPending, reload } = useProject(name)
   const term = useConsole(reload)
-  const confirm = useConfirm()
   const [consoleOpen, setConsoleOpen] = useState(false)
-
-  const deployPages = useAppDeploys(name)
-  const appDeploys = useMemo(() => {
-    const seen = new Set<string>()
-    const out: Deploy[] = []
-    for (const d of deployPages.data?.pages.flat() ?? []) {
-      if (!seen.has(d.id)) {
-        seen.add(d.id)
-        out.push(d)
-      }
-    }
-    return out
-  }, [deployPages.data])
 
   if (isPending) {
     return (
@@ -98,7 +77,10 @@ export default function ProjectDetailPage() {
         <ChevronRight className="h-3.5 w-3.5" />
         {project.parent && (
           <>
-            <Link to={'/projects/' + project.parent + '?tab=previews'} className="hover:text-foreground transition-colors">
+            <Link
+              to={'/projects/' + project.parent + '?tab=previews'}
+              className="hover:text-foreground transition-colors"
+            >
               {project.parent}
             </Link>
             <ChevronRight className="h-3.5 w-3.5" />
@@ -141,7 +123,11 @@ export default function ProjectDetailPage() {
             size="sm"
             variant="outline"
             disabled={project.state !== 'running'}
-            title={project.state === 'running' ? 'Open a shell inside the running app' : "The app isn't running"}
+            title={
+              project.state === 'running'
+                ? 'Open a shell inside the running app'
+                : "The app isn't running"
+            }
             onClick={() => setConsoleOpen(true)}
           >
             <Terminal />
@@ -167,7 +153,7 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue={tab} key={project.name} className="flex min-w-0 flex-1 flex-col">
         <TabsList
           variant="line"
-          className="mb-6 w-full justify-start gap-6 overflow-x-auto border-b border-foreground/8 *:flex-none"
+          className="border-foreground/8 mb-6 w-full justify-start gap-6 overflow-x-auto border-b *:flex-none"
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
@@ -311,8 +297,8 @@ export default function ProjectDetailPage() {
           {latest?.status === 'failed' && (
             <p className="text-danger pb-5 text-sm">
               {live && project.state === 'running'
-                ? "The last deploy failed, so the previous version is still serving. The log below says why."
-                : "The last deploy failed and nothing is serving. The log below says why."}
+                ? 'The last deploy failed, so the previous version is still serving. The log below says why.'
+                : 'The last deploy failed and nothing is serving. The log below says why.'}
             </p>
           )}
           <section className="dark bg-well text-foreground border-seam -mx-4 min-h-[40vh] flex-1 border-t-2 px-4 py-5 sm:-mx-8 sm:px-8">
@@ -321,8 +307,8 @@ export default function ProjectDetailPage() {
             </h2>
             {cli ? (
               <p className="text-foreground/60 text-sm">
-                This app builds on the machine that runs <span className="font-mono">skiff deploy</span>,
-                so its log stays there.
+                This app builds on the machine that runs{' '}
+                <span className="font-mono">skiff deploy</span>, so its log stays there.
               </p>
             ) : latest ? (
               <DeployLogPanel app={project.name} id={latest.id} />
@@ -341,82 +327,13 @@ export default function ProjectDetailPage() {
           </section>
         </TabsContent>
 
-        {/* Deployments */}
         <TabsContent value="deployments" className="pb-[46vh]">
-          <div className="overflow-hidden rounded-xl border border-foreground/8">
-            {appDeploys.length === 0 ? (
-              <p className="text-muted-foreground p-8 text-center text-sm">No deployments yet.</p>
-            ) : (
-              appDeploys.map((d) => (
-                <div
-                  key={d.id}
-                  className="group flex items-center gap-2 border-b border-foreground/5 pr-3 transition-colors last:border-0 hover:bg-foreground/[0.03]"
-                >
-                  <button
-                    onClick={() => term.showBuildLog(project.name, d.id)}
-                    className="flex min-w-0 flex-1 items-center gap-4 px-5 py-3.5 text-left"
-                  >
-                    <span className={'h-2 w-2 shrink-0 rounded-full ' + deployDot(d.status)} />
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {d.message || d.commit || d.status}
-                    </span>
-                    {d.commit && (
-                      <span className="text-muted-foreground shrink-0 font-mono text-xs">
-                        {d.commit}
-                      </span>
-                    )}
-                    <span className="text-muted-foreground w-16 shrink-0 font-mono text-[11px]">
-                      {d.trigger}
-                    </span>
-                    <span className="text-muted-foreground w-16 shrink-0 text-right font-mono text-[11px]">
-                      {relTime(d.started)}
-                    </span>
-                  </button>
-                  {d.status === 'live' && (
-                    <Link
-                      to={`/logs?app=${encodeURIComponent(project.name)}&since=${d.started}&until=${d.started + 1800}`}
-                      title="Runtime logs from the 30 minutes after this deploy"
-                      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 hover:border-foreground/20"
-                    >
-                      <ScrollText className="h-3 w-3" />
-                      Logs
-                    </Link>
-                  )}
-                  {d.rollbackable && (
-                    <button
-                      onClick={async () => {
-                        if (
-                          await confirm({
-                            title: `Roll back ${project.name}?`,
-                            description: 'It re-runs this build instantly — no rebuild.',
-                            confirmText: 'Roll back',
-                          })
-                        )
-                          term.rollback(project.name, d.id)
-                      }}
-                      title="Instant rollback to this build"
-                      className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 px-2 py-1 text-[11px] opacity-0 transition group-hover:opacity-100 hover:border-foreground/20"
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                      Rollback
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-          {deployPages.hasNextPage && (
-            <div className="mt-4 flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                loading={deployPages.isFetchingNextPage}
-                onClick={() => deployPages.fetchNextPage()}
-              >
-                Load more
-              </Button>
-            </div>
-          )}
+          <DeploymentsPanel
+            project={project.name}
+            canRedeploy={!cli}
+            onRollback={term.rollback}
+            onRedeploy={term.redeploy}
+          />
         </TabsContent>
 
         {!cli && !fromImage && !project.parent && (
@@ -450,7 +367,7 @@ export default function ProjectDetailPage() {
           )}
           <EnvEditor app={project.name} />
           {!cli && !fromImage && (
-            <section className="mt-10 border-t border-foreground/8 pt-6">
+            <section className="border-foreground/8 mt-10 border-t pt-6">
               <h2 className="mb-3 text-sm font-semibold">Preview overrides</h2>
               <EnvEditor app={project.name} scope="preview" />
             </section>
@@ -532,17 +449,6 @@ function SetupNote({ app, note }: { app: string; note: string }) {
       >
         Done
       </button>
-    </div>
-  )
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground mb-1 font-mono text-[10px] tracking-wider uppercase">
-        {label}
-      </dt>
-      <dd className="break-words">{children}</dd>
     </div>
   )
 }

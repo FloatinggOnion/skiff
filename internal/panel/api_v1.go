@@ -163,6 +163,7 @@ func (p *Panel) apiDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	id := newDeployID()
 	recordAudit(apiTeam(r), AuditEntry{Actor: apiActor(r), Action: "deploy", Target: name, Detail: "via api"})
+	src.actor = strings.TrimPrefix(apiActor(r), "token:")
 	go p.runDeploy(src, "", "", "", "api", id)
 	apiJSON(w, http.StatusAccepted, map[string]string{"id": id, "app": name, "status": "building", "url": p.apiAppURL(src)})
 }
@@ -201,7 +202,7 @@ func (p *Panel) apiCreatePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	branch := strings.TrimSpace(body.Branch)
-	name, id, ok := p.createPreview(src, branch, "", "preview of "+branch)
+	name, id, ok := p.createPreview(src, branch, "", "preview of "+branch, strings.TrimPrefix(apiActor(r), "token:"))
 	if !ok {
 		apiErr(w, http.StatusBadRequest, "couldn't make a preview name from that branch: it's empty or clashes with another app")
 		return

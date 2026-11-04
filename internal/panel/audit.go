@@ -24,6 +24,22 @@ func recordAudit(team string, e AuditEntry) {
 		team, e.Actor, e.Action, e.Target, e.Detail, time.Now().Unix())
 }
 
+// deployActor names whoever started a deploy from the dashboard.
+func (p *Panel) deployActor(r *http.Request) string {
+	s, ok := p.session(r)
+	if !ok {
+		return ""
+	}
+	u, ok := p.auth.User(s.userID)
+	if !ok {
+		return ""
+	}
+	if u.Name != "" {
+		return u.Name
+	}
+	return u.Email
+}
+
 func (p *Panel) audit(r *http.Request, action, target, detail string) {
 	s, ok := p.session(r)
 	if !ok {

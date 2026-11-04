@@ -118,7 +118,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	}
 	addDeploy(Deploy{
 		ID: id, App: src.App, Commit: shortCommit(commit), Message: message,
-		Trigger: trigger, Status: "building", Started: time.Now().Unix(),
+		Trigger: trigger, Status: "building", Started: time.Now().Unix(), Branch: src.Branch, Actor: src.actor,
 	})
 
 	setDeployOwner(id)
@@ -352,7 +352,7 @@ func (p *Panel) runRollback(src Source, targetID, commit, message, id string) {
 
 	addDeploy(Deploy{
 		ID: id, App: src.App, Commit: commit, Message: message,
-		Trigger: "rollback", Status: "building", Started: time.Now().Unix(),
+		Trigger: "rollback", Status: "building", Started: time.Now().Unix(), Branch: src.Branch, Actor: src.actor,
 	})
 	setDeployOwner(id)
 	stopOrphanDeploys(src.App, id)
@@ -427,7 +427,7 @@ func createDeployLog(app, id string) (*os.File, error) {
 // failUnstartedDeploy records a deploy that couldn't even write its log, which is what a full disk looks like, so it fails where people can see it.
 func (p *Panel) failUnstartedDeploy(src Source, id, commit, message, trigger string, cause error) {
 	log.Printf("skiff: deploy %s of %s couldn't start: %v", id, src.App, cause)
-	addDeploy(Deploy{ID: id, App: src.App, Commit: shortCommit(commit), Message: message, Trigger: trigger, Status: "failed", Started: time.Now().Unix()})
+	addDeploy(Deploy{ID: id, App: src.App, Commit: shortCommit(commit), Message: message, Trigger: trigger, Status: "failed", Started: time.Now().Unix(), Branch: src.Branch, Actor: src.actor})
 	detail := "It couldn't start: " + cause.Error()
 	if hasRoomFor(p.buildsDir, 0) != nil {
 		detail = "The server is almost out of disk space, so it couldn't start. Your current version is still running."
@@ -514,6 +514,26 @@ func (p *Panel) handleDeploys(w http.ResponseWriter, r *http.Request) {
 	}
 	if !p.canViewDeploys(r, app) {
 		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	q := r.URL.Query()
+	if q.Get("previews") == "1" {
+		deploys := projectDeploys(app, deployFilter{env: q.Get("env"), status: q.Get("status"), branch: q.Get("branch"), search: strings.TrimSpace(q.Get("q"))}, before, beforeID, limit)
+		byApp := map[string][]int{}
+		for i, d := range deploys {
+			byApp[d.App] = append(byApp[d.App], i)
+		}
+		for name, idx := range byApp {
+			own := make([]Deploy, len(idx))
+			for j, i := range idx {
+				own[j] = deploys[i]
+			}
+			p.markRollbackable(name, own)
+			for j, i := range idx {
+				deploys[i] = own[j]
+			}
+		}
+		_ = json.NewEncoder(w).Encode(deploys)
 		return
 	}
 	deploys := appDeploysPage(app, before, beforeID, limit)

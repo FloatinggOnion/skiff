@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { GitCommitHorizontal, Search, Square } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 import { Drawer } from '@/components/drawer'
@@ -12,6 +12,10 @@ import { useAllDeploys } from '@/hooks/use-all-deploys'
 import { useConsole } from '@/hooks/use-console'
 import { relTime } from '@/lib/format'
 import { deploysService, type Deploy } from '@/services/api.service'
+import { deploymentPath } from './project/deployments-panel'
+import { statusLabel } from './project/status'
+
+const CONTROL_PLANE = 'panel'
 
 const deployDot = (status: string): string =>
   status === 'live'
@@ -21,9 +25,6 @@ const deployDot = (status: string): string =>
       : status === 'canceled'
         ? 'bg-foreground/25'
         : 'bg-warning pulse-dot'
-
-const statusLabel = (status: string): string =>
-  status === 'live' ? 'Ready' : status.charAt(0).toUpperCase() + status.slice(1)
 
 type Filter = 'all' | 'live' | 'building' | 'failed'
 
@@ -40,7 +41,8 @@ export default function DeploymentsPage() {
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useAllDeploys()
   const qc = useQueryClient()
-  const term = useConsole(() => { })
+  const navigate = useNavigate()
+  const term = useConsole(() => {})
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
 
@@ -93,10 +95,10 @@ export default function DeploymentsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search project, commit, message…"
-            className="h-9 w-full rounded-[6px] border border-foreground/12 bg-foreground/2 pr-3 pl-8.5 text-sm outline-none placeholder:text-foreground/30 focus-visible:border-foreground/25"
+            className="border-foreground/12 bg-foreground/2 placeholder:text-foreground/30 focus-visible:border-foreground/25 h-9 w-full rounded-[6px] border pr-3 pl-8.5 text-sm outline-none"
           />
         </div>
-        <div className="flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 bg-foreground/2 p-0.5">
+        <div className="border-foreground/10 bg-foreground/2 flex shrink-0 items-center gap-1 rounded-[6px] border p-0.5">
           {FILTERS.map((f) => (
             <button
               key={f.key}
@@ -121,7 +123,7 @@ export default function DeploymentsPage() {
         <ErrorState message="Couldn't load deployments — retrying…" />
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-foreground/8">
+          <div className="border-foreground/8 overflow-hidden rounded-xl border">
             {rows.length === 0 ? (
               <p className="text-muted-foreground p-10 text-center text-sm">
                 {deploys.length === 0
@@ -132,16 +134,20 @@ export default function DeploymentsPage() {
               rows.map((d) => (
                 <div
                   key={d.app + d.id}
-                  className="group flex items-center border-b border-foreground/5 pr-3 transition-colors last:border-0 hover:bg-foreground/3"
+                  className="group border-foreground/5 hover:bg-foreground/3 flex items-center border-b pr-3 transition-colors last:border-0"
                 >
                   <button
-                    onClick={() => term.showBuildLog(d.app, d.id)}
+                    onClick={() =>
+                      d.app === CONTROL_PLANE
+                        ? term.showBuildLog(d.app, d.id)
+                        : navigate(deploymentPath(d))
+                    }
                     className="flex min-w-0 flex-1 items-center gap-3.5 px-5 py-3.5 text-left"
                   >
                     <span className={'h-2 w-2 shrink-0 rounded-full ' + deployDot(d.status)} />
 
                     {/* project avatar */}
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-foreground/10 bg-linear-to-br from-foreground/12 to-foreground/2 font-mono text-xs font-semibold text-foreground/80">
+                    <span className="border-foreground/10 from-foreground/12 to-foreground/2 text-foreground/80 grid h-7 w-7 shrink-0 place-items-center rounded-md border bg-linear-to-br font-mono text-xs font-semibold">
                       {d.app.charAt(0).toUpperCase()}
                     </span>
 
@@ -181,7 +187,7 @@ export default function DeploymentsPage() {
                     <button
                       onClick={() => cancel(d.app, d.id)}
                       title="Stop this build"
-                      className="ml-1 flex shrink-0 items-center gap-1 rounded-[6px] border border-foreground/10 px-2 py-1 text-[11px] text-danger transition hover:border-danger/30 hover:bg-danger/10"
+                      className="border-foreground/10 text-danger hover:border-danger/30 hover:bg-danger/10 ml-1 flex shrink-0 items-center gap-1 rounded-[6px] border px-2 py-1 text-[11px] transition"
                     >
                       <Square className="h-3 w-3 fill-current" />
                       Stop

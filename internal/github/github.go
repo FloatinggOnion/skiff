@@ -284,6 +284,7 @@ type Push struct {
 	Branch  string
 	Commit  string
 	Message string   // head commit message (first line shown in the UI)
+	Pusher  string   // who pushed it
 	Paths   []string // changed files (best-effort; GitHub truncates very large pushes)
 	Deleted bool     // the branch was deleted; only Repo and Branch are set
 }
@@ -303,6 +304,9 @@ func ParsePush(body []byte) (Push, bool) {
 		Repository struct {
 			FullName string `json:"full_name"`
 		} `json:"repository"`
+		Pusher struct {
+			Name string `json:"name"`
+		} `json:"pusher"`
 		HeadCommit *commitFiles  `json:"head_commit"`
 		Commits    []commitFiles `json:"commits"`
 	}
@@ -343,6 +347,7 @@ func ParsePush(body []byte) (Push, bool) {
 	}
 	return Push{
 		Repo:    p.Repository.FullName,
+		Pusher:  p.Pusher.Name,
 		Branch:  branch,
 		Commit:  p.After,
 		Message: msg,

@@ -148,7 +148,7 @@ func (p *Panel) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "a branch is required", http.StatusBadRequest)
 		return
 	}
-	name, id, ok := p.createPreview(src, branch, "", fmt.Sprintf("preview of %s", branch))
+	name, id, ok := p.createPreview(src, branch, "", fmt.Sprintf("preview of %s", branch), p.deployActor(r))
 	if !ok {
 		http.Error(w, "couldn't make a preview name from that branch: it's empty or clashes with another app", http.StatusBadRequest)
 		return
@@ -156,7 +156,7 @@ func (p *Panel) handleCreatePreview(w http.ResponseWriter, r *http.Request) {
 	p.tailLog(w, r, name, id)
 }
 
-func (p *Panel) createPreview(parent Source, branch, commit, message string) (name, id string, ok bool) {
+func (p *Panel) createPreview(parent Source, branch, commit, message, actor string) (name, id string, ok bool) {
 	name = previewName(parent.App, branch)
 	if name == "" || name == parent.App {
 		return "", "", false
@@ -181,6 +181,7 @@ func (p *Panel) createPreview(parent Source, branch, commit, message string) (na
 		writeDomainsFile()
 	}
 	id = newDeployID()
+	pv.actor = actor
 	go p.runDeploy(pv, "", commit, message, "preview", id)
 	return name, id, true
 }
