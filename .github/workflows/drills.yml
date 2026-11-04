@@ -1,6 +1,6 @@
 name: failure drills
 
-# Breaks a real panel, router, app and database, then checks what came back. Results are published at /docs/failure-drills.
+# Breaks a real panel, router, app and database, then checks what came back.
 
 on:
   schedule:
