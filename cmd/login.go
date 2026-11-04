@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -41,16 +42,16 @@ func loadCredentials() (credentials, bool) {
 
 func newLoginCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "login <dashboard-url>",
+		Use:   "login [dashboard-url]",
 		Short: "Sign the CLI in to your Skiff dashboard",
 		Long: `Opens your dashboard to approve this machine. Once signed in, deploys to
 that server show up under your team with who shipped them, and pick up the
 env vars set in the dashboard (skiff.toml still wins when both set a key).`,
-		Args: cobra.ExactArgs(1),
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base := strings.TrimSuffix(strings.TrimSpace(args[0]), "/")
-			if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
-				base = "https://" + base
+			base, err := loginBase(args)
+			if err != nil {
+				return err
 			}
 			if strings.HasPrefix(base, "http://") && !isLocalURL(base) {
 				ui.Note("warning: " + base + " is plain http, so the sign-in and the token it returns travel unencrypted. Use https:// unless this is a network you trust.")
@@ -124,6 +125,24 @@ func isLocalURL(raw string) bool {
 		return true
 	}
 	return false
+}
+
+// loginBase is the dashboard to sign in to: the one named, or else the one this machine last used.
+func loginBase(args []string) (string, error) {
+	raw := ""
+	if len(args) > 0 {
+		raw = args[0]
+	} else if c, ok := loadCredentials(); ok {
+		raw = c.URL
+	}
+	base := strings.TrimSuffix(strings.TrimSpace(raw), "/")
+	if base == "" {
+		return "", errors.New("name your dashboard the first time: skiff login https://dash.example.com")
+	}
+	if !strings.HasPrefix(base, "http://") && !strings.HasPrefix(base, "https://") {
+		base = "https://" + base
+	}
+	return base, nil
 }
 
 func newLogoutCmd() *cobra.Command {

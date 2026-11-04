@@ -1,6 +1,9 @@
 package cmd
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSameMachine(t *testing.T) {
 	if !sameMachine("127.0.0.1", "localhost") {
@@ -43,5 +46,24 @@ func TestIsLocalURL(t *testing.T) {
 		if isLocalURL(u) != want {
 			t.Errorf("isLocalURL(%q) != %v", u, want)
 		}
+	}
+}
+
+func TestLoginBase(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if _, err := loginBase(nil); err == nil || !strings.Contains(err.Error(), "skiff login https://") {
+		t.Errorf("with no sign-in yet, it should say how to name a dashboard: %v", err)
+	}
+	if got, err := loginBase([]string{" dash.example.com/ "}); err != nil || got != "https://dash.example.com" {
+		t.Errorf("named dashboard: %q %v", got, err)
+	}
+	if err := saveCredentials(credentials{URL: "https://dash.saved.dev", Token: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := loginBase(nil); err != nil || got != "https://dash.saved.dev" {
+		t.Errorf("should reuse the saved dashboard: %q %v", got, err)
+	}
+	if got, err := loginBase([]string{"http://other.dev"}); err != nil || got != "http://other.dev" {
+		t.Errorf("a named dashboard wins over the saved one: %q %v", got, err)
 	}
 }
