@@ -194,9 +194,10 @@ func TestTailLogAlwaysEnds(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		rec := httptest.NewRecorder()
 		p.tailLog(rec, httptest.NewRequest("GET", "/", nil).WithContext(ctx), "a", id)
+		timedOut := ctx.Err() != nil
 		cancel()
-		if ctx.Err() != nil || !strings.Contains(rec.Body.String(), want) {
-			t.Errorf("status %q: timed out=%v, body %q", status, ctx.Err() != nil, rec.Body.String())
+		if timedOut || !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("status %q: timed out=%v, body %q", status, timedOut, rec.Body.String())
 		}
 	}
 }
