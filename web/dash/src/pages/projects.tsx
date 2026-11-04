@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAuthContext } from '@/context/auth-context'
 import { useApps } from '@/hooks/use-apps'
+import { useUrlState } from '@/hooks/use-url-state'
 import { useConsole } from '@/hooks/use-console'
 import { useDeploys } from '@/hooks/use-deploys'
 import { useSystem } from '@/hooks/use-system'
@@ -30,7 +31,7 @@ export default function ProjectsPage() {
   const { data: overview } = useOverview()
   const [open, setOpen] = useState(false)
   const [envApp, setEnvApp] = useState<string | null>(null)
-  const [q, setQ] = useState('')
+  const [q, setQ] = useUrlState('q')
 
   const teamName = me?.teams?.find((t) => t.id === me?.team)?.name ?? 'this team'
 
@@ -108,7 +109,7 @@ export default function ProjectsPage() {
             ))}
 
             {apps.length === 0 && !q.trim() && (
-              <div className="col-span-full flex flex-col items-center gap-4 rounded-xl border border-dashed border-foreground/10 py-16 text-center">
+              <div className="border-foreground/10 col-span-full flex flex-col items-center gap-4 rounded-xl border border-dashed py-16 text-center">
                 <LogoMark className="h-9 w-9 opacity-30" />
                 <div className="space-y-1">
                   <p className="text-sm font-medium">No projects yet</p>

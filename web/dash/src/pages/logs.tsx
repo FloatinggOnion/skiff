@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { Trash2, ScrollText } from 'lucide-react'
 import { LogHistory } from '@/components/log-history'
 import { useApps } from '@/hooks/use-apps'
 import { useLogStream } from '@/hooks/use-log-stream'
+import { useUrlState } from '@/hooks/use-url-state'
 import { useAutoScroll } from '@/hooks/use-auto-scroll'
 
 const runningDot = (state: string): string =>
@@ -16,19 +17,21 @@ const runningDot = (state: string): string =>
 export default function LogsPage() {
   const { apps } = useApps()
   const [params] = useSearchParams()
-  const [selected, setSelected] = useState<string | null>(params.get('app'))
+  const [appParam, setSelected] = useUrlState('app')
+  const selected = appParam || null
   const window = useMemo(() => {
     const since = Number(params.get('since')),
       until = Number(params.get('until'))
     return since > 0 && until > since ? { since, until } : undefined
   }, [params])
-  const [mode, setMode] = useState<'live' | 'history'>(window ? 'history' : 'live')
+  const [modeParam, setMode] = useUrlState('mode', window ? 'history' : 'live')
+  const mode = modeParam === 'history' ? 'history' : 'live'
 
   // Default to the first app once they load; keep the selection valid.
   useEffect(() => {
     if (apps.length === 0) return
-    setSelected((cur) => (cur && apps.some((a) => a.name === cur) ? cur : apps[0].name))
-  }, [apps])
+    if (!apps.some((a) => a.name === appParam)) setSelected(apps[0].name)
+  }, [apps, appParam, setSelected])
 
   const { lines, live, clear } = useLogStream(mode === 'live' ? selected : null)
   const scrollRef = useAutoScroll<HTMLDivElement>(lines.length)
@@ -72,17 +75,17 @@ export default function LogsPage() {
         </aside>
 
         {/* terminal */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl dark bg-well text-foreground">
-          <div className="flex h-10 shrink-0 items-center gap-3 border-b border-foreground/6 px-4">
+        <div className="dark bg-well text-foreground flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl">
+          <div className="border-foreground/6 flex h-10 shrink-0 items-center gap-3 border-b px-4">
             <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full border border-foreground/15" />
-              <span className="h-2.5 w-2.5 rounded-full border border-foreground/15" />
-              <span className="h-2.5 w-2.5 rounded-full border border-foreground/15" />
+              <span className="border-foreground/15 h-2.5 w-2.5 rounded-full border" />
+              <span className="border-foreground/15 h-2.5 w-2.5 rounded-full border" />
+              <span className="border-foreground/15 h-2.5 w-2.5 rounded-full border" />
             </div>
             <span className="text-muted-foreground font-mono text-xs">
               {selected ? selected : 'no app selected'}
             </span>
-            <div className="flex rounded-[5px] border border-foreground/10 p-0.5">
+            <div className="border-foreground/10 flex rounded-[5px] border p-0.5">
               {(['live', 'history'] as const).map((m) => (
                 <button
                   key={m}
@@ -139,7 +142,7 @@ export default function LogsPage() {
               <p className="text-muted-foreground">Waiting for output…</p>
             ) : (
               lines.map((line, i) => (
-                <div key={i} className="wrap-break-word whitespace-pre-wrap text-foreground/70">
+                <div key={i} className="text-foreground/70 wrap-break-word whitespace-pre-wrap">
                   {line || ' '}
                 </div>
               ))

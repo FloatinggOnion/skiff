@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   GitBranch,
@@ -27,6 +27,7 @@ import {
 import { ErrorState } from '@/components/error-state'
 import { FeedSkeleton } from '@/components/skeletons'
 import { useDeployBranches, useProjectDeploys } from '@/hooks/use-project-deploys'
+import { useUrlState } from '@/hooks/use-url-state'
 import { errText } from '@/lib/errors'
 import { relTime } from '@/lib/format'
 import { useConfirm } from '@/providers/confirm-provider'
@@ -65,15 +66,16 @@ export function DeploymentsPanel({
   onRollback: (app: string, id: string) => void
   onRedeploy: (app: string) => void
 }) {
-  const [env, setEnv] = useState(ALL)
-  const [status, setStatus] = useState(ALL)
-  const [branch, setBranch] = useState(ALL)
-  const [input, setInput] = useState('')
-  const [q, setQ] = useState('')
+  const [params, setParams] = useSearchParams()
+  const [env, setEnv] = useUrlState('env', ALL)
+  const [status, setStatus] = useUrlState('status', ALL)
+  const [branch, setBranch] = useUrlState('branch', ALL)
+  const [q, setQ] = useUrlState('q')
+  const [input, setInput] = useState(q)
   useEffect(() => {
     const t = setTimeout(() => setQ(input.trim()), 300)
     return () => clearTimeout(t)
-  }, [input])
+  }, [input, setQ])
 
   const filters = useMemo<DeployFilters>(
     () => ({
@@ -98,11 +100,10 @@ export function DeploymentsPanel({
   }, [pages.data])
 
   const clear = () => {
-    setEnv(ALL)
-    setStatus(ALL)
-    setBranch(ALL)
+    const next = new URLSearchParams(params)
+    for (const key of ['env', 'status', 'branch', 'q']) next.delete(key)
+    setParams(next, { replace: true })
     setInput('')
-    setQ('')
   }
 
   return (

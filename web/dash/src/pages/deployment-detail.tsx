@@ -54,7 +54,7 @@ export default function DeploymentDetailPage() {
 function Deployment({ deploy: d }: { deploy: DeployDetail }) {
   const qc = useQueryClient()
   const confirm = useConfirm()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const [error, setError] = useState('')
   const reload = () => void qc.invalidateQueries({ queryKey: ['deploys', d.app] })
   const term = useConsole(reload)
@@ -188,7 +188,8 @@ function Deployment({ deploy: d }: { deploy: DeployDetail }) {
       </dl>
 
       <Tabs
-        defaultValue={params.get('tab') === 'runtime' ? 'runtime' : 'build'}
+        value={params.get('tab') === 'runtime' && d.status === 'live' ? 'runtime' : 'build'}
+        onValueChange={(v) => setParams({ tab: v }, { replace: true })}
         className="min-w-0"
       >
         <TabsList

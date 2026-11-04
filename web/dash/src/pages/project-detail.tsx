@@ -26,9 +26,19 @@ import { Fact } from './project/fact'
 import { ObservabilityPanel } from './project/observability-panel'
 import { runningPill } from './project/status'
 
+const TABS = [
+  'overview',
+  'deployments',
+  'previews',
+  'metrics',
+  'processes',
+  'environment',
+  'settings',
+]
+
 export default function ProjectDetailPage() {
   const { name = '' } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { project, isPending, reload } = useProject(name)
   const term = useConsole(reload)
@@ -61,8 +71,14 @@ export default function ProjectDetailPage() {
   const latest = project.deploys[0]
   const live = project.deploys.find((d) => d.status === 'live')
   const cli = project.origin === 'cli'
-  const tab = searchParams.get('tab') ?? 'overview'
   const fromImage = !!project.image
+  const hasPreviews = !cli && !fromImage && !project.parent
+  const requestedTab = searchParams.get('tab') ?? 'overview'
+  // A link can name a tab this project doesn't have, such as previews on an image project.
+  const tab =
+    TABS.includes(requestedTab) && (requestedTab !== 'previews' || hasPreviews)
+      ? requestedTab
+      : 'overview'
   const skiffHost = project.url.replace(/^https?:\/\//, '')
   const primary = project.domains[0]
   const visitUrl = primary ? 'https://' + primary : project.url
@@ -150,14 +166,18 @@ export default function ProjectDetailPage() {
         </div>
       </header>
 
-      <Tabs defaultValue={tab} key={project.name} className="flex min-w-0 flex-1 flex-col">
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}
+        className="flex min-w-0 flex-1 flex-col"
+      >
         <TabsList
           variant="line"
           className="border-foreground/8 mb-6 w-full justify-start gap-6 overflow-x-auto border-b *:flex-none"
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="deployments">Deployments</TabsTrigger>
-          {!cli && !fromImage && !project.parent && (
+          {hasPreviews && (
             <TabsTrigger value="previews">
               Previews
               {project.previews.length > 0 && (
@@ -336,7 +356,7 @@ export default function ProjectDetailPage() {
           />
         </TabsContent>
 
-        {!cli && !fromImage && !project.parent && (
+        {hasPreviews && (
           <TabsContent value="previews" className="pb-[46vh]">
             <PreviewsPanel
               project={project.name}

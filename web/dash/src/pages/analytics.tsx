@@ -1,5 +1,4 @@
 import { fmtBytes } from '@/lib/format'
-import { useState } from 'react'
 import { Activity, Cpu } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -15,6 +14,7 @@ import {
 import { useApps } from '@/hooks/use-apps'
 import { useAnalytics } from '@/hooks/use-analytics'
 import { useResources } from '@/hooks/use-resources'
+import { useUrlState } from '@/hooks/use-url-state'
 import {
   Select,
   SelectContent,
@@ -49,8 +49,9 @@ const RANGES = [
 
 export default function AnalyticsPage() {
   const { apps } = useApps()
-  const [range, setRange] = useState(60)
-  const [app, setApp] = useState('')
+  const [rangeParam, setRange] = useUrlState('range', '60')
+  const range = RANGES.some((r) => String(r.v) === rangeParam) ? Number(rangeParam) : 60
+  const [app, setApp] = useUrlState('app')
   const { data: a, isPending: aPending } = useAnalytics(range, app)
   const { data: r, isPending: rPending } = useResources(range, app)
   const rangeLabel = RANGES.find((r) => r.v === range)?.label ?? 'Last hour'
@@ -67,7 +68,7 @@ export default function AnalyticsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Select value={app || 'all'} onValueChange={(v) => setApp(v === 'all' ? '' : v)}>
-            <SelectTrigger size="sm" className="w-40 bg-foreground/2">
+            <SelectTrigger size="sm" className="bg-foreground/2 w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -79,8 +80,8 @@ export default function AnalyticsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={String(range)} onValueChange={(v) => setRange(Number(v))}>
-            <SelectTrigger size="sm" className="w-40 bg-foreground/2">
+          <Select value={String(range)} onValueChange={setRange}>
+            <SelectTrigger size="sm" className="bg-foreground/2 w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -147,7 +148,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function EmptyState({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-20 text-sm">
+    <div className="text-muted-foreground border-foreground/8 flex flex-col items-center gap-2 rounded-xl border py-20 text-sm">
       {icon}
       <span>{label}</span>
     </div>
@@ -326,7 +327,9 @@ function Latency({ a }: { a: Analytics }) {
               <ChartTip
                 build={(row) => ({
                   title: timeRange(row.t, a.bucketSecs),
-                  rows: [{ label: 'Avg latency', color: 'var(--chart-violet)', value: row.lat + 'ms' }],
+                  rows: [
+                    { label: 'Avg latency', color: 'var(--chart-violet)', value: row.lat + 'ms' },
+                  ],
                 })}
               />
             }
@@ -373,9 +376,9 @@ function TopApps({ a }: { a: Analytics }) {
                     {app.avgLatMs}ms
                   </span>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-foreground/5">
+                <div className="bg-foreground/5 h-1.5 overflow-hidden rounded-full">
                   <div
-                    className="h-full rounded-full bg-success/60"
+                    className="bg-success/60 h-full rounded-full"
                     style={{ width: (app.req / max) * 100 + '%' }}
                   />
                 </div>
@@ -406,10 +409,13 @@ function ComputeApps({ r }: { r: Resources }) {
                     {fmtPct(app.cpu)} CPU
                   </span>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-foreground/5">
+                <div className="bg-foreground/5 h-1.5 overflow-hidden rounded-full">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: (app.mem / max) * 100 + '%', background: `color-mix(in oklch, ${MEM_COLOR} 60%, transparent)` }}
+                    style={{
+                      width: (app.mem / max) * 100 + '%',
+                      background: `color-mix(in oklch, ${MEM_COLOR} 60%, transparent)`,
+                    }}
                   />
                 </div>
               </div>

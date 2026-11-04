@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Activity } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -17,6 +16,7 @@ import { useCost } from '@/hooks/use-cost'
 import { UptimeStrip } from './uptime-strip'
 import { useInsights } from '@/hooks/use-insights'
 import { useResources } from '@/hooks/use-resources'
+import { useUrlState } from '@/hooks/use-url-state'
 import { ChartGridSkeleton } from '@/components/skeletons'
 import { ErrorState } from '@/components/error-state'
 import { axisTick, gridStroke, Panel, ChartTip, CpuChart, MemoryChart } from '@/components/charts'
@@ -56,7 +56,8 @@ const fmtMs = (ms: number) => (ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 
 const pct = (n: number, of: number) => (of ? (n / of) * 100 : 0)
 
 export function ObservabilityPanel({ app }: { app: string }) {
-  const [range, setRange] = useState<InsightRange>('24h')
+  const [rangeParam, setRange] = useUrlState('range', '24h')
+  const range = RANGES.find((r) => r.v === rangeParam)?.v ?? '24h'
   const mins = RANGES.find((r) => r.v === range)!.mins
   const { data: a, isPending, isError } = useInsights(app, range)
   const { data: res } = useResources(mins, app)
@@ -71,7 +72,7 @@ export function ObservabilityPanel({ app }: { app: string }) {
         <p className="text-muted-foreground text-xs">
           Every request the edge served for this project, plus its containers' CPU and memory.
         </p>
-        <div className="flex shrink-0 rounded-[7px] border border-foreground/10 p-0.5">
+        <div className="border-foreground/10 flex shrink-0 rounded-[7px] border p-0.5">
           {RANGES.map((r) => (
             <button
               key={r.v}
@@ -99,7 +100,7 @@ export function ObservabilityPanel({ app }: { app: string }) {
         <>
           <Stats a={a} monthly={monthly} />
           {a.requests === 0 ? (
-            <div className="text-muted-foreground flex flex-col items-center gap-2 rounded-xl border border-foreground/8 py-14 text-sm">
+            <div className="text-muted-foreground border-foreground/8 flex flex-col items-center gap-2 rounded-xl border py-14 text-sm">
               <Activity className="h-5 w-5" />
               No requests in this range yet — traffic shows up here within seconds.
             </div>
@@ -183,7 +184,7 @@ function Stats({ a, monthly }: { a: Insights; monthly: string | null }) {
       {tiles.map((t) => (
         <div
           key={t.label}
-          className="rounded-xl border border-foreground/8 bg-linear-to-b from-foreground/2 to-transparent px-4 py-3.5"
+          className="border-foreground/8 from-foreground/2 rounded-xl border bg-linear-to-b to-transparent px-4 py-3.5"
         >
           <p className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">
             {t.label}
@@ -211,7 +212,7 @@ function DeployLegend({ a }: { a: Insights }) {
   if (a.deploys.length === 0) return null
   return (
     <span className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
-      <span className="h-3 w-px bg-foreground/40" />
+      <span className="bg-foreground/40 h-3 w-px" />
       {a.deploys.length} deploy{a.deploys.length === 1 ? '' : 's'}
     </span>
   )

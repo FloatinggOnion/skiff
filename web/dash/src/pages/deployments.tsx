@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { GitCommitHorizontal, Search, Square } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { FeedSkeleton } from '@/components/skeletons'
 import { queryKeys } from '@/constants/query-keys'
 import { useAllDeploys } from '@/hooks/use-all-deploys'
 import { useConsole } from '@/hooks/use-console'
+import { useUrlState } from '@/hooks/use-url-state'
 import { relTime } from '@/lib/format'
 import { deploysService, type Deploy } from '@/services/api.service'
 import { deploymentPath } from './project/deployments-panel'
@@ -43,8 +44,11 @@ export default function DeploymentsPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const term = useConsole(() => {})
-  const [q, setQ] = useState('')
-  const [filter, setFilter] = useState<Filter>('all')
+  const [q, setQ] = useUrlState('q')
+  const [filterParam, setFilter] = useUrlState('status', 'all')
+  const filter: Filter = FILTERS.some((f) => f.key === filterParam)
+    ? (filterParam as Filter)
+    : 'all'
 
   const deploys = useMemo(() => {
     const seen = new Set<string>()

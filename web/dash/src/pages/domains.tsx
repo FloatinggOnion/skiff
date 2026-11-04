@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useApps } from '@/hooks/use-apps'
 import { useDomains } from '@/hooks/use-domains'
+import { useUrlState } from '@/hooks/use-url-state'
 import { useConfirm } from '@/providers/confirm-provider'
 import { Button } from '@/components/ui/button'
 import { Copyable } from '@/components/copyable'
@@ -45,7 +46,7 @@ export default function DomainsPage() {
   const { domains, serverIp, isPending, isError, add, remove } = useDomains()
   const confirm = useConfirm()
 
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useUrlState('q')
   const [adding, setAdding] = useState(false)
   const [app, setApp] = useState('')
   const [host, setHost] = useState('')
@@ -130,7 +131,7 @@ export default function DomainsPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search domains…"
-                className="h-9 w-full rounded-[6px] border border-foreground/12 bg-foreground/2 pr-3 pl-8.5 text-sm outline-none placeholder:text-foreground/30 focus-visible:border-foreground/25"
+                className="border-foreground/12 bg-foreground/2 placeholder:text-foreground/30 focus-visible:border-foreground/25 h-9 w-full rounded-[6px] border pr-3 pl-8.5 text-sm outline-none"
               />
             </div>
             <span className="text-muted-foreground shrink-0 font-mono text-[11px] tabular-nums">
@@ -138,7 +139,7 @@ export default function DomainsPage() {
             </span>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-foreground/8">
+          <div className="border-foreground/8 overflow-hidden rounded-xl border">
             {filtered.length === 0 ? (
               <p className="text-muted-foreground p-8 text-center text-sm">
                 No domains match “{query}”.
@@ -190,16 +191,16 @@ function DomainRow({
 
   return (
     <div
-      className="animate-rise border-b border-foreground/5 last:border-0"
+      className="animate-rise border-foreground/5 border-b last:border-0"
       style={{ animationDelay: delay + 'ms' }}
     >
       {/* header (click to expand) */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="group flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-foreground/2"
+        className="group hover:bg-foreground/2 flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors"
       >
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-foreground/10 bg-linear-to-br from-foreground/[0.07] to-transparent">
-          <Globe className="h-4 w-4 text-foreground/55" />
+        <span className="border-foreground/10 from-foreground/[0.07] grid h-9 w-9 shrink-0 place-items-center rounded-md border bg-linear-to-br to-transparent">
+          <Globe className="text-foreground/55 h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate font-mono text-sm font-medium">{domain.host}</p>
@@ -217,13 +218,13 @@ function DomainRow({
           </p>
         </div>
         {domain.pointsHere ? (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success">
+          <span className="border-success/20 bg-success/10 text-success flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium">
             <ShieldCheck className="h-3.5 w-3.5" />
             Active
           </span>
         ) : (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-warning/20 bg-warning/10 px-2.5 py-1 text-[11px] font-medium text-warning">
-            <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-warning" />
+          <span className="border-warning/20 bg-warning/10 text-warning flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium">
+            <span className="pulse-dot bg-warning h-1.5 w-1.5 rounded-full" />
             Pending DNS
           </span>
         )}
@@ -237,14 +238,14 @@ function DomainRow({
 
       {/* expanded detail */}
       {open && (
-        <div className="animate-rise space-y-4 border-t border-foreground/5 bg-inset px-4 py-4 pl-13.5">
+        <div className="animate-rise border-foreground/5 bg-inset space-y-4 border-t px-4 py-4 pl-13.5">
           {/* DNS record */}
           <section>
             <h3 className="text-muted-foreground mb-2 font-mono text-[10px] tracking-wider uppercase">
               DNS record
             </h3>
-            <div className="overflow-hidden rounded-lg border border-foreground/8">
-              <div className="text-muted-foreground grid grid-cols-[4rem_1fr_1.6fr] gap-2 border-b border-foreground/8 bg-foreground/2 px-3 py-1.5 font-mono text-[10px] tracking-wider uppercase">
+            <div className="border-foreground/8 overflow-hidden rounded-lg border">
+              <div className="text-muted-foreground border-foreground/8 bg-foreground/2 grid grid-cols-[4rem_1fr_1.6fr] gap-2 border-b px-3 py-1.5 font-mono text-[10px] tracking-wider uppercase">
                 <span>Type</span>
                 <span>Name</span>
                 <span>Value</span>
@@ -284,7 +285,7 @@ function DomainRow({
             <Detail label="Certificate">
               <span className="flex items-center gap-1.5">
                 {domain.pointsHere ? (
-                  <ShieldCheck className="h-3.5 w-3.5 text-success" />
+                  <ShieldCheck className="text-success h-3.5 w-3.5" />
                 ) : (
                   <ShieldCheck className="text-muted-foreground h-3.5 w-3.5" />
                 )}
@@ -299,14 +300,14 @@ function DomainRow({
               href={'https://' + domain.host}
               target="_blank"
               rel="noreferrer"
-              className="hover:text-foreground text-muted-foreground flex items-center gap-1.5 rounded-[6px] border border-foreground/12 px-2.5 py-1 text-xs transition hover:border-foreground/25"
+              className="hover:text-foreground text-muted-foreground border-foreground/12 hover:border-foreground/25 flex items-center gap-1.5 rounded-[6px] border px-2.5 py-1 text-xs transition"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Visit
             </a>
             <button
               onClick={onRemove}
-              className="text-muted-foreground flex items-center gap-1.5 rounded-[6px] border border-foreground/12 px-2.5 py-1 text-xs transition hover:border-danger/30 hover:text-danger"
+              className="text-muted-foreground border-foreground/12 hover:border-danger/30 hover:text-danger flex items-center gap-1.5 rounded-[6px] border px-2.5 py-1 text-xs transition"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Remove
@@ -353,7 +354,7 @@ function AddComposer({
   return (
     <form
       onSubmit={onSubmit}
-      className="animate-rise rounded-xl border border-foreground/10 bg-linear-to-b from-foreground/3 to-transparent p-4"
+      className="animate-rise border-foreground/10 from-foreground/3 rounded-xl border bg-linear-to-b to-transparent p-4"
     >
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium">Add a domain</h2>
@@ -373,11 +374,11 @@ function AddComposer({
           onChange={(e) => onHost(e.target.value)}
           autoFocus
           placeholder="www.yourdomain.com"
-          className="h-9 min-w-0 flex-1 rounded-[6px] border border-foreground/12 bg-inset px-3 font-mono text-sm outline-none placeholder:text-foreground/25 focus-visible:border-foreground/30"
+          className="border-foreground/12 bg-inset placeholder:text-foreground/25 focus-visible:border-foreground/30 h-9 min-w-0 flex-1 rounded-[6px] border px-3 font-mono text-sm outline-none"
         />
         <span className="text-muted-foreground hidden shrink-0 text-xs sm:block">→</span>
         <Select value={chosenApp} onValueChange={onApp} disabled={apps.length === 0}>
-          <SelectTrigger className="shrink-0 cursor-pointer bg-inset sm:w-44">
+          <SelectTrigger className="bg-inset shrink-0 cursor-pointer sm:w-44">
             <SelectValue placeholder="Select app" />
           </SelectTrigger>
           <SelectContent>
@@ -399,7 +400,7 @@ function AddComposer({
         </Button>
       </div>
       {error ? (
-        <p className="mt-2 text-xs text-danger">{error}</p>
+        <p className="text-danger mt-2 text-xs">{error}</p>
       ) : (
         <p className="text-muted-foreground mt-2 text-xs">
           You'll point DNS at your server; the HTTPS certificate is issued automatically.
