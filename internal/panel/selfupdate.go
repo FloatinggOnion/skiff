@@ -114,6 +114,7 @@ func SelfUpdate(opts SelfUpdateOpts) error {
 	active := activePort()
 	next := otherPort(active)
 	log("→ installing new binary (live :%s → :%s)", active, next)
+	waitForDeploys(selfUpdateWait, 5*time.Second, log)
 	_, _ = run("cp", bin, bin+".prev") // rollback point
 	if e := installBinary(newBin, bin); e != nil {
 		return fail("could not install binary: %v", e)
@@ -283,4 +284,27 @@ func tailLine(b []byte) string {
 		}
 	}
 	return last
+}
+
+// selfUpdateWait bounds how long a finished panel build holds back for app deploys; a merge often starts both, and restarting would cut the app's build short.
+const selfUpdateWait = 15 * time.Minute
+
+func waitForDeploys(limit, every time.Duration, log func(string, ...any)) {
+	deadline := time.Now().Add(limit)
+	logged := false
+	for {
+		running := buildingDeploys()
+		if len(running) == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			log("→ restarting with %d deploy(s) still running", len(running))
+			return
+		}
+		if !logged {
+			log("→ waiting for %d running deploy(s) to finish", len(running))
+			logged = true
+		}
+		time.Sleep(every)
+	}
 }
