@@ -99,6 +99,7 @@ var migrations = []string{
 	`ALTER TABLE backups ADD COLUMN check_detail TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE backups ADD COLUMN check_items INTEGER NOT NULL DEFAULT 0`,
 	`ALTER TABLE backups ADD COLUMN check_at INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE pitr ADD COLUMN error TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -256,7 +257,8 @@ CREATE INDEX IF NOT EXISTS idx_backups_db ON backups(db_id, created DESC);
 CREATE TABLE IF NOT EXISTS pitr (
   db_id   TEXT PRIMARY KEY,
   enabled INTEGER NOT NULL,
-  paused  TEXT NOT NULL DEFAULT ''
+  paused  TEXT NOT NULL DEFAULT '',
+  error   TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS pitr_bases (
   id      TEXT PRIMARY KEY,

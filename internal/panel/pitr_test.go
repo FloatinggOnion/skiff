@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -48,12 +49,30 @@ func TestPITRSupported(t *testing.T) {
 		{dbRow{Engine: "postgres"}, true},
 		{dbRow{Engine: "postgres", Stack: "shop"}, true},
 		{dbRow{Engine: "mysql"}, false},
-		{dbRow{Engine: "postgres", Image: "pgvector/pgvector:pg16"}, false},
+		{dbRow{Engine: "postgres", Image: "postgres:16-alpine", Volume: "data"}, true},
+		{dbRow{Engine: "postgres", Image: "postgres:16-alpine"}, false},
 		{dbRow{Engine: "postgres", PreviewApp: "api-feat"}, false},
 	} {
 		openTestDB(t)
 		if got := pitrSupported(c.d); got != c.want {
 			t.Errorf("%+v: got %v", c.d, got)
 		}
+	}
+}
+
+func TestPITRErrorShows(t *testing.T) {
+	openTestDB(t)
+	d := dbRow{ID: "db", Team: "t", Name: "shop", Engine: "postgres"}
+	if _, err := sqlDB.Exec(`INSERT INTO pitr(db_id,enabled) VALUES('db',1)`); err != nil {
+		t.Fatal(err)
+	}
+	p := &Panel{}
+	p.notePITRError(d, errors.New("FATAL: the database system is starting up"))
+	if got := getPITRStatus(d).Error; got != "" {
+		t.Fatalf("a restart counted as a failure: %q", got)
+	}
+	p.notePITRError(d, errors.New("no pg_hba.conf entry for replication"))
+	if got := getPITRStatus(d).Error; !strings.Contains(got, "pg_hba") {
+		t.Fatalf("the failure doesn't show: %q", got)
 	}
 }

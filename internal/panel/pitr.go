@@ -177,9 +177,27 @@ func (p *Panel) tendPITR(d dbRow) {
 	if len(bases) == 0 || time.Now().Unix()-bases[len(bases)-1].Created >= pitrBaseEvery {
 		if err := p.takePITRBase(d); err != nil {
 			log.Printf("skiff: base backup of %s failed: %v", d.Name, err)
+			p.notePITRError(d, err)
 			return
 		}
+		_, _ = sqlDB.Exec(`UPDATE pitr SET error='' WHERE db_id=?`, d.ID)
 		p.prunePITR(d)
+	}
+}
+
+// notePITRError shows a failing snapshot on the database and tells the team once, because it's retried every minute. A database that's still starting isn't a failure.
+func (p *Panel) notePITRError(d dbRow, err error) {
+	msg := err.Error()
+	if strings.Contains(msg, "starting up") || strings.Contains(msg, "shutting down") {
+		return
+	}
+	var was string
+	_ = sqlDB.QueryRow(`SELECT error FROM pitr WHERE db_id=?`, d.ID).Scan(&was)
+	_, _ = sqlDB.Exec(`UPDATE pitr SET error=? WHERE db_id=?`, trimCheckDetail(msg), d.ID)
+	if was == "" {
+		go dispatchAlert(alertEvent{Team: d.Team, Kind: "database.recovery_failed", App: d.Name,
+			Title:  "Point-in-time recovery can't take a snapshot of " + d.Name,
+			Detail: "Skiff will keep trying. Open Backups on it in the dashboard to see why. Daily backups still run."})
 	}
 }
 
@@ -372,10 +390,14 @@ EOF`, e.mountAt, pitrMount, target)
 	if err := p.eng.RunIO(ctx, d.image(), []docker.Mount{{Name: volume, Destination: e.mountAt}}, unpack, f, &bytes.Buffer{}); err != nil {
 		return fmt.Errorf("unpacking the base backup: %w", err)
 	}
-	env, _ := e.container(d.Username, d.Password, d.DBName)
+	env, cmd := e.container(d.Username, d.Password, d.DBName)
+	if d.Image != "" {
+		cmd = nil
+		_ = json.Unmarshal([]byte(d.Cmd), &cmd)
+	}
 	if _, err := p.eng.RunDatabase(docker.DBRunSpec{
 		Name: scratch.Container, Image: d.image(), Network: "none",
-		Volume: volume, MountAt: e.mountAt, Env: env,
+		Volume: volume, MountAt: e.mountAt, Env: env, Cmd: cmd,
 		Binds:  []string{pitrVolume(d) + ":" + pitrMount + ":ro"},
 		Labels: map[string]string{"skiff.kind": "restore-check", "skiff.db": d.ID, "skiff.team": d.Team},
 	}); err != nil {
@@ -487,16 +509,19 @@ type pitrStatus struct {
 	Supported   bool   `json:"supported"`
 	Enabled     bool   `json:"enabled"`
 	Paused      string `json:"paused,omitempty"`
+	Error       string `json:"error,omitempty"`
 	WindowStart int64  `json:"windowStart,omitempty"`
 	Size        int64  `json:"size,omitempty"`
 }
 
+// pitrSupported needs a named volume, because an adopted database without one can't be recreated safely.
 func pitrSupported(d dbRow) bool {
-	return d.Engine == "postgres" && d.Image == "" && d.PreviewApp == "" && !isPreviewStack(d.Stack)
+	return d.Engine == "postgres" && (d.Image == "" || d.Volume != "") && d.PreviewApp == "" && !isPreviewStack(d.Stack)
 }
 
 func getPITRStatus(d dbRow) pitrStatus {
 	s := pitrStatus{Supported: pitrSupported(d), Enabled: pitrEnabled(d.ID), Paused: pitrPaused(d.ID)}
+	_ = sqlDB.QueryRow(`SELECT error FROM pitr WHERE db_id=?`, d.ID).Scan(&s.Error)
 	bases := listPITRBases(d.ID)
 	if len(bases) > 0 {
 		s.WindowStart = bases[0].Created
@@ -522,7 +547,7 @@ func (p *Panel) handlePITR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !pitrSupported(d) {
-		http.Error(w, "point-in-time recovery only works with Skiff's own Postgres databases", http.StatusBadRequest)
+		http.Error(w, "point-in-time recovery only works with Postgres databases that keep their data in a named volume", http.StatusBadRequest)
 		return
 	}
 	if p.eng.State(d.Container) != "running" {

@@ -655,7 +655,12 @@ function PitrSection({ db, onRecovered }: { db: Db; onRecovered: () => void }) {
         <Toggle on={status.enabled} busy={busy === 'toggle'} onClick={toggle} />
       </div>
       {status.paused && <p className="mt-2 text-[11px] text-warning">{status.paused}</p>}
-      {status.enabled && !status.paused && !status.windowStart && (
+      {status.error && (
+        <p className="mt-2 text-[11px] text-danger">
+          Couldn't take a snapshot, and Skiff will keep trying: {status.error}
+        </p>
+      )}
+      {status.enabled && !status.paused && !status.error && !status.windowStart && (
         <p className="text-muted-foreground mt-2 text-[11px]">Taking the first snapshot…</p>
       )}
       {status.enabled && status.windowStart ? (

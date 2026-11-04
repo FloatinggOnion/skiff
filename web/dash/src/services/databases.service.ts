@@ -51,6 +51,7 @@ export type PitrStatus = {
   supported: boolean
   enabled: boolean
   paused?: string
+  error?: string
   windowStart?: number
   size?: number
 }

@@ -464,3 +464,92 @@ func TestPointInTimeRecovery(t *testing.T) {
 		t.Fatalf("volumes left after deleting the database: %s", out)
 	}
 }
+
+// TestPointInTimeRecoveryAdopted recovers a database started outside Skiff, with its own user and volume.
+func TestPointInTimeRecoveryAdopted(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	ctr := fmt.Sprintf("e2e-adopted-%d", time.Now().UnixNano())
+	volume := ctr + "-data"
+	run(t, "", nil, "docker", "run", "-d", "--name", ctr, "-e", "POSTGRES_USER=home", "-e", "POSTGRES_PASSWORD=adopted-pass", "-e", "POSTGRES_DB=home", "-v", volume+":/var/lib/postgresql/data", "postgres:16-alpine")
+	t.Cleanup(func() {
+		_ = exec.Command("docker", "rm", "-f", ctr).Run()
+		_ = exec.Command("sh", "-c", "docker volume rm -f $(docker volume ls -q --filter name="+ctr+")").Run()
+	})
+	sql := func(stmt string) (string, error) {
+		out, err := exec.Command("docker", "exec", ctr, "psql", "-h", "127.0.0.1", "-U", "home", "-d", "home", "-v", "ON_ERROR_STOP=1", "-qtAc", stmt).CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+	eventually(t, time.Minute, func() bool {
+		_, err := sql("create table if not exists t(v text)")
+		return err == nil
+	})
+	mustSQL := func(stmt string) {
+		t.Helper()
+		if out, err := sql(stmt); err != nil {
+			t.Fatalf("%s: %v: %s", stmt, err, out)
+		}
+	}
+	mustSQL("insert into t values ('a')")
+
+	var db struct {
+		ID string `json:"id"`
+	}
+	postJSON(t, c, "http://"+panel+"/api/databases/unmanaged?container="+ctr, "", &db)
+	pitr := "http://" + panel + "/api/databases/pitr?db=" + db.ID
+	var status struct {
+		Supported   bool   `json:"supported"`
+		WindowStart int64  `json:"windowStart"`
+		Error       string `json:"error"`
+	}
+	getJSON(t, c, pitr, &status)
+	if !status.Supported {
+		t.Fatalf("an adopted database with a named volume isn't supported: %+v", status)
+	}
+	postJSON(t, c, pitr, `{"action":"enable"}`, &status)
+	eventually(t, 2*time.Minute, func() bool {
+		getJSON(t, c, pitr, &status)
+		if status.Error != "" {
+			t.Fatalf("snapshot failed: %s", status.Error)
+		}
+		return status.WindowStart > 0
+	})
+	if got, err := sql("show archive_mode"); err != nil || got != "on" {
+		t.Fatalf("archiving after turning it on: %q %v", got, err)
+	}
+
+	time.Sleep(2 * time.Second)
+	mustSQL("insert into t values ('b')")
+	time.Sleep(2 * time.Second)
+	between := time.Now().Unix()
+	time.Sleep(2 * time.Second)
+	mustSQL("delete from t")
+	time.Sleep(2 * time.Second)
+	postJSON(t, c, pitr, fmt.Sprintf(`{"action":"restore","at":%d}`, between), &status)
+	var got string
+	eventually(t, time.Minute, func() bool {
+		var err error
+		got, err = sql("select string_agg(v, ',' order by v) from t")
+		return err == nil
+	})
+	if got != "a,b" {
+		t.Fatalf("after recovering: got %q, want a,b", got)
+	}
+	// The same password has to keep working over TCP, because that's what the app uses.
+	out, err := exec.Command("docker", "exec", "-e", "PGPASSWORD=adopted-pass", ctr, "psql", "-h", "127.0.0.1", "-U", "home", "-d", "home", "-tAc", "select 1").CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "1" {
+		t.Fatalf("connecting after recovering: %v: %s", err, out)
+	}
+}

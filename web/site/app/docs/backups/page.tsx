@@ -99,8 +99,9 @@ export default function Backups() {
       <Callout>
         This history is kept on the same server as your database and isn&apos;t copied to your offsite
         bucket, so it won&apos;t help if you lose the server. The database also has to be running to
-        return it to a time. Snapshots and history aren&apos;t encrypted. Adopted databases and previews
-        don&apos;t support it.
+        return it to a time. Snapshots and history aren&apos;t encrypted. Previews and adopted databases
+        without a named volume don&apos;t support it. Turning it on recreates an adopted database&apos;s
+        container, so published ports and extra mounts you set up yourself don&apos;t carry over.
       </Callout>
 
       <h2>Add an offsite bucket</h2>
