@@ -653,6 +653,7 @@ func TestDrillBucketOutage(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, 5*time.Minute, func() bool {
+		status.OffsiteError = "" // left out of the reply when there's none
 		getJSON(t, b.c, pitr, &status)
 		return status.OffsiteError == "" && status.OffsiteAt > written
 	})
@@ -742,16 +743,20 @@ func TestDrillFullDisk(t *testing.T) {
 	ballast := "/var/tmp/skiff-drill-ballast"
 	release := func() {
 		_ = exec.Command("sudo", "sh", "-c", "rm -f "+ballast+"*").Run()
-		_ = exec.Command("docker", "exec", d.ctr, "rm", "-f", "/tmp/fill").Run()
 	}
 	t.Cleanup(release)
-	shell(t, `sudo fallocate -l $(( $(df --output=avail -B1 /var/tmp | tail -1) - 4096 )) `+ballast+` ; i=0; for size in 64M 8M 1M 64K 4K; do while sudo fallocate -l $size `+ballast+`.$i 2>/dev/null; do i=$((i+1)); done; done; true`)
-	// What fallocate can't reach still fills up with real writes, from each side that writes.
-	userFill, _ := exec.Command("sh", "-c", "dd if=/dev/zero of="+ballast+".user bs=64k 2>&1 | tail -1").CombinedOutput()
-	t.Logf("written as the panel's user before it failed: %s", strings.TrimSpace(string(userFill)))
-	dbFill, _ := exec.Command("sh", "-c", "docker exec "+d.ctr+" dd if=/dev/zero of=/tmp/fill bs=64k 2>&1 | tail -1").CombinedOutput()
-	t.Logf("written inside a container before it failed: %s", strings.TrimSpace(string(dbFill)))
-	t.Logf("disk: %s", shell(t, "df -h /var/tmp | tail -1"))
+	// Called again later, because whatever fails on a full disk cleans up after itself and frees a little.
+	round := 0
+	fill := func() {
+		t.Helper()
+		round++
+		name := fmt.Sprintf("%s-%d", ballast, round)
+		shell(t, `sudo fallocate -l $(( $(df --output=avail -B1 /var/tmp | tail -1) - 4096 )) `+name+` ; i=0; for size in 64M 8M 1M 64K 4K; do while sudo fallocate -l $size `+name+`.$i 2>/dev/null; do i=$((i+1)); done; done; true`)
+		out, _ := exec.Command("sh", "-c", "dd if=/dev/zero of="+name+".user bs=64k 2>&1 | tail -1").CombinedOutput()
+		t.Logf("written as the panel's user before it failed: %s", strings.TrimSpace(string(out)))
+		t.Logf("disk: %s", shell(t, "df -h /var/tmp | tail -1"))
+	}
+	fill()
 
 	finish := b.steady()
 	time.Sleep(20 * time.Second)
@@ -774,6 +779,7 @@ func TestDrillFullDisk(t *testing.T) {
 		resp.Body.Close()
 		t.Logf("taking a backup: %d %s", resp.StatusCode, msg)
 	}
+	fill()
 	ok, log := streamResult(t, b.c, b.url("/api/redeploy?app="+app))
 	t.Logf("deploying: ok=%v\n%s", ok, log)
 	if ok {

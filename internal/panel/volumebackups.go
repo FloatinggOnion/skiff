@@ -253,9 +253,7 @@ func uploadVolumeOffsite(b volumeBackupRow) error {
 		key = prefix + "/" + key
 	}
 	c := t.client()
-	ctx, cancel := context.WithTimeout(context.Background(), offsiteUploadLimit)
-	defer cancel()
-	if err := c.Put(ctx, key, f, info.Size()); err != nil {
+	if err := c.Put(context.Background(), key, f, info.Size()); err != nil {
 		return fail(err)
 	}
 	setVolumeBackupOffsite(b.ID, "ok", key)
