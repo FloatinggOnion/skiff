@@ -94,9 +94,19 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
       <h2>What&apos;s different from Compose</h2>
       <ul>
         <li>
-          <strong>Folders on your machine</strong>, like <code>./nginx.conf:/etc/nginx.conf</code>,
-          can&apos;t be used because they won&apos;t exist on the server. Build the file into the image or
-          use a named volume.
+          <strong>Files and folders from your repository</strong>, like{" "}
+          <code>./nginx.conf:/etc/nginx.conf</code>, are built into the service&apos;s image, so changes
+          reach it on the next deploy. A writable folder also becomes a volume that starts with the
+          repository&apos;s copy and keeps its own changes. Pasted Compose files have no repository, so
+          they can&apos;t mount files.
+        </li>
+        <li>
+          <strong>Paths the repository doesn&apos;t have</strong>, like <code>./data</code> or{" "}
+          <code>/opt/data</code>, become volumes that start empty.
+        </li>
+        <li>
+          <strong>The server&apos;s own files</strong> aren&apos;t shared with apps. System folders like{" "}
+          <code>/etc</code> and the Docker socket are refused.
         </li>
         <li>
           <strong>Volumes</strong> can only be shared between an app and its workers.

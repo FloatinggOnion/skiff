@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -51,6 +52,7 @@ type Port struct {
 type Mount struct {
 	Source, Target string
 	Bind           bool
+	ReadOnly       bool
 }
 
 type rawService struct {
@@ -366,6 +368,9 @@ func (m *rawMount) UnmarshalYAML(n *yaml.Node) error {
 			m.Target = t.Value
 		}
 		m.Bind = kind == "bind"
+		if r := mapValue(n, "read_only"); r != nil {
+			m.ReadOnly = r.Value == "true"
+		}
 		return nil
 	}
 	parts := strings.Split(n.Value, ":")
@@ -375,6 +380,9 @@ func (m *rawMount) UnmarshalYAML(n *yaml.Node) error {
 	}
 	m.Source, m.Target = parts[0], parts[1]
 	m.Bind = strings.ContainsAny(m.Source, "/.~$")
+	if len(parts) > 2 {
+		m.ReadOnly = slices.Contains(strings.Split(parts[2], ","), "ro")
+	}
 	return nil
 }
 

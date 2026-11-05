@@ -2,6 +2,7 @@ package compose
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -63,7 +64,7 @@ func plan(t *testing.T, src string) *Plan {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return BuildPlan("shop", f, noFiles)
+	return BuildPlan("shop", f, noFiles, nil)
 }
 
 func item(t *testing.T, p *Plan, service string) Item {
@@ -183,15 +184,15 @@ func TestFormsOfEachKey(t *testing.T) {
 		t.Errorf("ports: %+v", s.Ports)
 	}
 	v := s.Volumes
-	if v[0] != (Mount{"", "/anon", false}) || v[1] != (Mount{"named", "/data", false}) || v[2] != (Mount{"./local", "/src", true}) ||
-		v[3] != (Mount{"/etc/x", "/x", true}) || v[4] != (Mount{"v2", "/y", false}) {
+	if v[0] != (Mount{Target: "/anon"}) || v[1] != (Mount{Source: "named", Target: "/data", Bind: false}) || v[2] != (Mount{Source: "./local", Target: "/src", Bind: true, ReadOnly: true}) ||
+		v[3] != (Mount{Source: "/etc/x", Target: "/x", Bind: true}) || v[4] != (Mount{Source: "v2", Target: "/y", Bind: false}) {
 		t.Errorf("volumes: %+v", v)
 	}
 }
 
 func TestProblemsAreReported(t *testing.T) {
 	for name, tc := range map[string]struct{ src, want string }{
-		"bind mount":      {"services:\n  a:\n    image: x\n    volumes: [./code:/app]\n", "path on this machine"},
+		"system folder":   {"services:\n  a:\n    image: x\n    volumes: [/etc/app:/app]\n", "system folder"},
 		"no image":        {"services:\n  a:\n    command: hi\n", "needs an image or a build"},
 		"privileged":      {"services:\n  a:\n    image: x\n    privileged: true\n", "privileged"},
 		"host network":    {"services:\n  a:\n    image: x\n    network_mode: host\n", "network_mode"},
@@ -253,7 +254,7 @@ func TestEnvFile(t *testing.T) {
 		}
 	}
 	f, _ := Parse([]byte("services:\n  a:\n    image: x\n    env_file: .env\n    environment: {A: inline}\n"), noEnv)
-	p := BuildPlan("s", f, func(string) ([]byte, error) { return []byte("A=file\nB=file\n"), nil })
+	p := BuildPlan("s", f, func(string) ([]byte, error) { return []byte("A=file\nB=file\n"), nil }, nil)
 	if a := item(t, p, "a"); a.Env["A"] != "inline" || a.Env["B"] != "file" {
 		t.Errorf("environment should win over env_file: %v", a.Env)
 	}
@@ -272,7 +273,7 @@ func TestMissingVariablesBlockTheStack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := BuildPlan("s", f, noFiles); len(got.Problems) != 0 {
+	if got := BuildPlan("s", f, noFiles, nil); len(got.Problems) != 0 {
 		t.Fatalf("with the value given: %v", got.Problems)
 	}
 }
@@ -284,4 +285,85 @@ func TestMissingPasswordOnlyAsksForIt(t *testing.T) {
 			t.Fatalf("told to enter a password and that one will be generated: %q", n)
 		}
 	}
+}
+
+func TestMounts(t *testing.T) {
+	repo := func(p string) PathKind {
+		switch p {
+		case "./nginx.conf":
+			return PathFile
+		case "./site", "./seed":
+			return PathDir
+		}
+		return PathMissing
+	}
+	const file = `services:
+  a:
+    image: x
+    ports: ["80"]
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./site:/www:ro
+      - ./seed:/seed
+      - ./data:/data
+      - /opt/stuff:/stuff
+      - /etc/localtime:/etc/localtime:ro
+`
+	f, err := Parse([]byte(file), noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := BuildPlan("s", f, noFiles, repo)
+	if len(p.Problems) != 0 {
+		t.Fatalf("problems: %v", p.Problems)
+	}
+	a := item(t, p, "a")
+	wantFiles := []PlanFile{{"./nginx.conf", "/etc/nginx/nginx.conf"}, {"./site", "/www"}, {"./seed", "/seed"}}
+	if !slices.Equal(a.Files, wantFiles) {
+		t.Errorf("files: %v", a.Files)
+	}
+	wantVolumes := []PlanVolume{{"seed", "/seed"}, {"data", "/data"}, {"opt-stuff", "/stuff"}}
+	if !slices.Equal(a.Volumes, wantVolumes) {
+		t.Errorf("volumes: %v", a.Volumes)
+	}
+
+	for _, tc := range []struct{ name, mount, want string }{
+		{"docker socket", "/var/run/docker.sock:/var/run/docker.sock", "Docker socket"},
+		{"system folder", "/lib/modules:/lib/modules", "system folder"},
+		{"nested system folder", "/etc/pihole/:/etc/pihole", "system folder"},
+		{"whole disk", "/:/host", "system folder"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := Parse([]byte("services:\n  a:\n    image: x\n    volumes: [\""+tc.mount+"\"]\n"), noEnv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := BuildPlan("s", f, noFiles, repo)
+			if len(got.Problems) != 1 || !strings.Contains(got.Problems[0], tc.want) {
+				t.Errorf("problems: %v", got.Problems)
+			}
+		})
+	}
+
+	t.Run("a pasted file has no repository", func(t *testing.T) {
+		f, err := Parse([]byte("services:\n  a:\n    image: x\n    volumes: [\"./data:/data\", \"./app.conf:/app.conf\"]\n"), noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := BuildPlan("s", f, noFiles, nil)
+		if len(got.Problems) != 1 || !strings.Contains(got.Problems[0], "./app.conf") {
+			t.Errorf("problems: %v", got.Problems)
+		}
+	})
+
+	t.Run("a shared folder is still a shared volume", func(t *testing.T) {
+		f, err := Parse([]byte("services:\n  a:\n    image: x\n    ports: [\"80\"]\n    volumes: [\"./data:/data\"]\n  b:\n    image: y\n    ports: [\"81\"]\n    volumes: [\"./data:/data\"]\n"), noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := BuildPlan("s", f, noFiles, repo)
+		if len(got.Problems) != 1 || !strings.Contains(got.Problems[0], "is shared by") {
+			t.Errorf("problems: %v", got.Problems)
+		}
+	})
 }

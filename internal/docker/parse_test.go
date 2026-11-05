@@ -130,7 +130,7 @@ func TestDockerignoreKeepsConfigOut(t *testing.T) {
 	_ = os.WriteFile(path, []byte(own), 0o644)
 	clean = ensureDockerignore(dir)
 	b, _ = os.ReadFile(path)
-	if !strings.HasPrefix(string(b), own) || !strings.HasSuffix(string(b), "\n.git\nskiff.toml\n") {
+	if !strings.HasPrefix(string(b), own) || !strings.HasSuffix(string(b), "\n.git\nskiff.toml\n!.skiff-mounts\n!.skiff-mounts/**\n") {
 		t.Fatalf("during the build = %q", b)
 	}
 	clean()

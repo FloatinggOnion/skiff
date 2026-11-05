@@ -158,12 +158,14 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	var ctxDir string
 	var childEnv []string
 	if src.Image != "" {
+		if user, pass, ok := getRegistryCreds(src.App); ok {
+			childEnv = append(childEnv, "SKIFF_REGISTRY_USER="+user, "SKIFF_REGISTRY_PASSWORD="+pass)
+		}
+	}
+	if src.Image != "" && src.MountedFiles == "" {
 		if ctxDir = p.imageWorkDir(src); ctxDir == "" {
 			finish("✗ couldn't prepare the deploy")
 			return
-		}
-		if user, pass, ok := getRegistryCreds(src.App); ok {
-			childEnv = append(childEnv, "SKIFF_REGISTRY_USER="+user, "SKIFF_REGISTRY_PASSWORD="+pass)
 		}
 	} else {
 		var ok bool
@@ -175,7 +177,14 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 			setDeploySHA(src.App, id, sha)
 		}
 	}
-	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, deployEnv(src), appNetwork(src), p.volumeDefs(src)))
+	build := src
+	if src.MountedFiles != "" {
+		if err := prepareMountedFiles(&build, filepath.Join(p.buildsDir, sanitizeName(src.App)), ctxDir); err != nil {
+			finish("✗ " + err.Error())
+			return
+		}
+	}
+	tomlPath, cleanToml, err := writeDeployConfig(projectToml(build, deployEnv(src), appNetwork(src), p.volumeDefs(src)))
 	if err != nil {
 		finish("✗ couldn't prepare the deploy: " + err.Error())
 		return

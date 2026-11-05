@@ -54,7 +54,9 @@ type Source struct {
 	// Command is a JSON list that replaces the image's default command.
 	Command    string `json:"-"`
 	Dockerfile string `json:"-"`
-	HealthMode string `json:"-"`
+	// MountedFiles is a JSON list of repository paths a stack service mounts, built into its image.
+	MountedFiles string `json:"-"`
+	HealthMode   string `json:"-"`
 	// PreviewData gives each preview its own databases: "empty", "copy" of the latest backups, or "" to share the project's settings.
 	PreviewData string `json:"-"`
 	// TCPPort is a public port the router forwards straight to this app, for services that don't speak HTTP.
@@ -105,7 +107,7 @@ func logPath(app, id string) string {
 	return filepath.Join(skiffDir(), "deploys", sanitizeName(app), sanitizeID(id)+".log")
 }
 
-const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after,health_path,health_timeout,image,memory_limit,cpu_limit,catalog,is_private,rate_limit,stack,service,command,dockerfile,health_mode,preview_data,tcp_port`
+const sourceCols = `app,team,repo,branch,root_dir,port,clone_url,auto,parent,preview_auto,replicas,release,autoscale,scale_min,scale_max,scale_cpu,origin,sleep_after,health_path,health_timeout,image,memory_limit,cpu_limit,catalog,is_private,rate_limit,stack,service,command,dockerfile,mounted_files,health_mode,preview_data,tcp_port`
 
 // errTeamMismatch is returned when a write would hand an existing project to another team.
 var errTeamMismatch = errors.New("an app with that name exists in another team")
@@ -116,7 +118,7 @@ func putSource(s Source) error {
 	}
 	res, err := sqlDB.Exec(`
 		INSERT INTO sources(`+sourceCols+`)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(app) DO UPDATE SET
 			repo=excluded.repo, branch=excluded.branch,
 			root_dir=excluded.root_dir, port=excluded.port,
@@ -127,11 +129,11 @@ func putSource(s Source) error {
 			health_path=excluded.health_path, health_timeout=excluded.health_timeout, image=excluded.image,
 			memory_limit=excluded.memory_limit, cpu_limit=excluded.cpu_limit, catalog=excluded.catalog,
 			is_private=excluded.is_private, rate_limit=excluded.rate_limit, stack=excluded.stack, service=excluded.service,
-			command=excluded.command, dockerfile=excluded.dockerfile, health_mode=excluded.health_mode, preview_data=excluded.preview_data, tcp_port=excluded.tcp_port
+			command=excluded.command, dockerfile=excluded.dockerfile, mounted_files=excluded.mounted_files, health_mode=excluded.health_mode, preview_data=excluded.preview_data, tcp_port=excluded.tcp_port
 		WHERE sources.team=excluded.team`,
 		s.App, s.Team, s.Repo, s.Branch, s.RootDir, s.Port, s.CloneURL, b2i(s.Auto), s.Parent, b2i(s.PreviewAuto), s.Replicas, s.Release,
 		b2i(s.Autoscale), s.ScaleMin, s.ScaleMax, s.ScaleCPU, s.Origin, s.SleepAfter, s.HealthPath, s.HealthTimeout, s.Image, s.Memory, s.CPU, s.Catalog, b2i(s.Private), s.RateLimit,
-		s.Stack, s.Service, s.Command, s.Dockerfile, s.HealthMode, s.PreviewData, s.TCPPort)
+		s.Stack, s.Service, s.Command, s.Dockerfile, s.MountedFiles, s.HealthMode, s.PreviewData, s.TCPPort)
 	if err != nil {
 		return err
 	}
@@ -145,7 +147,7 @@ func scanSource(row interface{ Scan(...any) error }) (Source, bool) {
 	var s Source
 	var auto, previewAuto, autoscale, private int
 	if row.Scan(&s.App, &s.Team, &s.Repo, &s.Branch, &s.RootDir, &s.Port, &s.CloneURL, &auto, &s.Parent, &previewAuto, &s.Replicas, &s.Release,
-		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin, &s.SleepAfter, &s.HealthPath, &s.HealthTimeout, &s.Image, &s.Memory, &s.CPU, &s.Catalog, &private, &s.RateLimit, &s.Stack, &s.Service, &s.Command, &s.Dockerfile, &s.HealthMode, &s.PreviewData, &s.TCPPort) != nil {
+		&autoscale, &s.ScaleMin, &s.ScaleMax, &s.ScaleCPU, &s.Origin, &s.SleepAfter, &s.HealthPath, &s.HealthTimeout, &s.Image, &s.Memory, &s.CPU, &s.Catalog, &private, &s.RateLimit, &s.Stack, &s.Service, &s.Command, &s.Dockerfile, &s.MountedFiles, &s.HealthMode, &s.PreviewData, &s.TCPPort) != nil {
 		return Source{}, false
 	}
 	s.Auto = auto != 0

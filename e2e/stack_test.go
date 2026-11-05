@@ -809,7 +809,8 @@ func TestComposeStackPostgres18(t *testing.T) {
 		if id == "" {
 			return false
 		}
-		return exec.Command("docker", "exec", id, "pg_isready", "-U", "app", "-d", "shop").Run() == nil
+		// Over TCP, because the server Postgres runs during first-time setup only listens on its socket.
+		return exec.Command("docker", "exec", id, "pg_isready", "-h", "127.0.0.1", "-U", "app", "-d", "shop").Run() == nil
 	}
 	eventually(t, 3*time.Minute, ready)
 	dockerExec(t, container(), "psql -U app -d shop -c 'create table kept (id int)'")
@@ -819,5 +820,128 @@ func TestComposeStackPostgres18(t *testing.T) {
 	eventually(t, time.Minute, ready)
 	if got := dockerExec(t, container(), "psql -U app -d shop -tAc \"select to_regclass('kept')\""); got != "kept" {
 		t.Fatalf("the data didn't survive a restart: %q", got)
+	}
+}
+
+// TestComposeStackMounts deploys a stack that mounts files from its own repository, and checks each kind of mount does what its file asked.
+func TestComposeStackMounts(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	repo, push := gitServer(t, root)
+	work := filepath.Join(root, "work")
+	for path, content := range map[string]string{
+		"deploy/compose.yml": `services:
+  web:
+    image: busybox:1.36
+    command: httpd -f -p 3000 -h /www
+    ports: ["3000"]
+    volumes:
+      - ./conf/app.conf:/etc/app.conf:ro
+      - ./site:/www:ro
+      - ./seed:/seed
+      - ./data:/data
+      - ..:/whole-repo:ro
+  built:
+    build: ../api
+    command: sleep 100000
+    volumes: ["./conf/app.conf:/etc/app.conf"]
+`,
+		"deploy/conf/app.conf":   "from-the-repo\n",
+		"deploy/site/index.html": "<h1>mounted site</h1>\n",
+		"deploy/seed/start.txt":  "seeded\n",
+		"api/Dockerfile":         "FROM busybox:1.36\nRUN echo built > /marker\n",
+	} {
+		full := filepath.Join(work, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	push("v1")
+
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_ALLOW_PRIVATE_ENDPOINTS=1"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-mounts"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	body := fmt.Sprintf(`{"name":%q,"git":%q,"path":"deploy/compose.yml"}`, stack, repo)
+	resp, err := c.Post(base, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	running := func(app string) string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+app, "--filter", "status=running").Output()
+		if f := strings.Fields(string(out)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	eventually(t, 5*time.Minute, func() bool { return running(stack+"-web") != "" && running(stack+"-built") != "" })
+
+	web := running(stack + "-web")
+	if got := dockerExec(t, web, "cat /etc/app.conf"); got != "from-the-repo" {
+		t.Errorf("a repository file: %q", got)
+	}
+	if got := dockerExec(t, web, "wget -qO- http://127.0.0.1:3000/"); !strings.Contains(got, "mounted site") {
+		t.Errorf("a read-only folder: %q", got)
+	}
+	if got := dockerExec(t, web, "cat /seed/start.txt"); got != "seeded" {
+		t.Errorf("a writable folder should start with the repository's copy: %q", got)
+	}
+	if got := dockerExec(t, web, "ls -A /data | wc -l"); got != "0" {
+		t.Errorf("a folder the repository doesn't have should start empty: %q", got)
+	}
+	if got := dockerExec(t, web, "ls -a /whole-repo"); strings.Contains(got, ".git") || !strings.Contains(got, "api") {
+		t.Errorf("the whole repository, without .git: %q", got)
+	}
+	built := running(stack + "-built")
+	if got := dockerExec(t, built, "cat /marker /etc/app.conf"); got != "built\nfrom-the-repo" {
+		t.Errorf("a file on top of the service's own Dockerfile: %q", got)
+	}
+
+	// Data written to a volume outlives the deploy that carries the repository's next version.
+	dockerExec(t, web, "echo mine > /data/note; echo changed > /seed/start.txt")
+	if err := os.WriteFile(filepath.Join(work, "deploy/conf/app.conf"), []byte("second-version\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	push("v2")
+	redeploy, err := c.Post("http://"+panel+"/api/redeploy?app="+stack+"-web", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redeploy.Body.Close()
+	eventually(t, 3*time.Minute, func() bool {
+		id := running(stack + "-web")
+		if id == "" {
+			return false
+		}
+		out, err := exec.Command("docker", "exec", id, "cat", "/etc/app.conf").Output()
+		return err == nil && strings.TrimSpace(string(out)) == "second-version"
+	})
+	web = running(stack + "-web")
+	if got := dockerExec(t, web, "cat /data/note /seed/start.txt"); got != "mine\nchanged" {
+		t.Errorf("volumes should keep their changes across a deploy: %q", got)
 	}
 }

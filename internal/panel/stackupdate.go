@@ -203,6 +203,9 @@ func appChanges(s *stackSource, team string, it compose.Item, src Source, cur cu
 	field("image", src.Image, want.Image)
 	field("build folder", src.RootDir, want.RootDir)
 	field("dockerfile", src.Dockerfile, want.Dockerfile)
+	if src.MountedFiles != want.MountedFiles {
+		details = append(details, "files from the repository")
+	}
 	field("port", src.Port, want.Port)
 	field("memory", src.Memory, want.Memory)
 	field("cpu", src.CPU, want.CPU)
@@ -548,7 +551,7 @@ func (p *Panel) syncStackOnPush(name string, push github.Push) {
 	defer p.commentOnStackPreview(name, shortCommit(push.Commit))
 	var built []Source
 	for _, src := range stackApps(name) {
-		if src.Auto && touched(push.Paths, src.RootDir) {
+		if src.Auto && stackAppTouched(src, push.Paths) {
 			built = append(built, src)
 		}
 	}

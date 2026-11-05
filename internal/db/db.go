@@ -113,6 +113,7 @@ var migrations = []string{
 	`ALTER TABLE deploys ADD COLUMN branch TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE deploys ADD COLUMN actor TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE deploys ADD COLUMN full_sha TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE sources ADD COLUMN mounted_files TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -181,6 +182,7 @@ CREATE TABLE IF NOT EXISTS sources (
   service      TEXT NOT NULL DEFAULT '',
   command      TEXT NOT NULL DEFAULT '',
   dockerfile   TEXT NOT NULL DEFAULT '',
+  mounted_files TEXT NOT NULL DEFAULT '',
   health_mode  TEXT NOT NULL DEFAULT '',
   preview_data TEXT NOT NULL DEFAULT '',
   tcp_port     INTEGER NOT NULL DEFAULT 0

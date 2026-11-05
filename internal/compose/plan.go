@@ -3,6 +3,7 @@ package compose
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"fmt"
 	"regexp"
 	"slices"
@@ -29,6 +30,7 @@ type Item struct {
 	Port     int
 	Public   bool
 	Volumes  []PlanVolume
+	Files    []PlanFile
 	Replicas int
 	Memory   string
 	CPUs     string
@@ -43,6 +45,18 @@ type Item struct {
 }
 
 type PlanVolume struct{ Name, Path string }
+
+// PlanFile is a file or folder from the repository that a service mounts, built into its image.
+type PlanFile struct{ Source, Target string }
+
+// PathKind is what a path in a Compose file's repository turned out to be.
+type PathKind int
+
+const (
+	PathMissing PathKind = iota
+	PathFile
+	PathDir
+)
 
 type Plan struct {
 	Stack string
@@ -95,8 +109,8 @@ func ParseEnvFile(data []byte) map[string]string {
 	return out
 }
 
-// BuildPlan works out what a parsed file becomes. readFile loads env_file entries, relative to the Compose file.
-func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error)) *Plan {
+// BuildPlan works out what a parsed file becomes. readFile loads env_file entries, relative to the Compose file. repoPath says what a path is in the file's repository, and is nil for a pasted file, which has no repository.
+func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), repoPath func(string) PathKind) *Plan {
 	p := &Plan{Stack: safeName(stack)}
 	if p.Stack == "" {
 		p.Problems = append(p.Problems, "the stack needs a name made of letters, digits or dashes")
@@ -107,6 +121,7 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error)) *Pl
 	}
 
 	resolved := map[string]Service{}
+	files := map[string][]PlanFile{}
 	for _, name := range f.Order {
 		s := f.Services[name]
 		env := map[string]string{}
@@ -124,6 +139,9 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error)) *Pl
 			env[k] = v
 		}
 		s.Environment = env
+		if managedEngine(s) == "" {
+			s.Volumes, files[name] = resolveMounts(name, s.Volumes, repoPath, p)
+		}
 		resolved[name] = s
 	}
 
@@ -182,17 +200,13 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error)) *Pl
 		case len(s.Expose) > 0:
 			it.Port = s.Expose[0]
 		}
+		it.Files = files[name]
 		for _, m := range s.Volumes {
-			switch {
-			case m.Bind:
-				p.Problems = append(p.Problems, fmt.Sprintf("%s: %s is a path on this machine, which won't exist on the server. Build it into the image or use a named volume", name, m.Source))
-			default:
-				vol := safeName(m.Source)
-				if vol == "" {
-					vol = safeName(m.Target)
-				}
-				it.Volumes = append(it.Volumes, PlanVolume{Name: vol, Path: m.Target})
+			vol := safeName(m.Source)
+			if vol == "" {
+				vol = safeName(m.Target)
 			}
+			it.Volumes = append(it.Volumes, PlanVolume{Name: vol, Path: m.Target})
 		}
 		if len(it.Volumes) > 5 {
 			p.Problems = append(p.Problems, name+": Skiff allows 5 volumes per app")
@@ -265,6 +279,74 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error)) *Pl
 	return p
 }
 
+// systemPaths are places on the server that an app has no business reading or changing.
+var systemPaths = []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/root", "/run", "/sbin", "/sys", "/usr", "/var/lib/docker", "/var/run"}
+
+func isSystemPath(path string) bool {
+	if path == "/" {
+		return true
+	}
+	return slices.ContainsFunc(systemPaths, func(root string) bool {
+		return path == root || strings.HasPrefix(path, root+"/")
+	})
+}
+
+var fileLike = regexp.MustCompile(`\.[A-Za-z0-9]{1,8}$`)
+
+// resolveMounts decides what each path a service mounts becomes, since an app can't reach into the server's disk. Anything that keeps being a mount comes back as a named volume.
+func resolveMounts(service string, mounts []Mount, repoPath func(string) PathKind, p *Plan) ([]Mount, []PlanFile) {
+	out := make([]Mount, 0, len(mounts))
+	var files []PlanFile
+	asVolume := func(m Mount) {
+		m.Source, m.Bind = safeName(m.Source), false
+		out = append(out, m)
+	}
+	for _, m := range mounts {
+		if !m.Bind {
+			out = append(out, m)
+			continue
+		}
+		path := strings.TrimRight(m.Source, "/")
+		switch {
+		case path == "/etc/localtime" || path == "/etc/timezone":
+			p.Notes = append(p.Notes, fmt.Sprintf("%s: uses UTC, because the server's %s isn't shared. Set TZ to change it", service, path))
+		case path == "/var/run/docker.sock" || path == "/run/docker.sock":
+			p.Problems = append(p.Problems, fmt.Sprintf("%s: mounts the Docker socket, which would give it control of the whole server, so Skiff doesn't allow it", service))
+		case strings.HasPrefix(path, "/") || m.Source == "/":
+			if isSystemPath(cmp.Or(path, "/")) {
+				p.Problems = append(p.Problems, fmt.Sprintf("%s: mounts %s, a system folder on the server, which Skiff doesn't share with apps", service, m.Source))
+				continue
+			}
+			p.Notes = append(p.Notes, fmt.Sprintf("%s: %s becomes a volume that starts empty, since apps can't reach the server's own folders", service, m.Source))
+			asVolume(m)
+		case strings.HasPrefix(path, "~"):
+			p.Notes = append(p.Notes, fmt.Sprintf("%s: %s becomes a volume that starts empty, since apps can't reach the server's own folders", service, m.Source))
+			asVolume(m)
+		case repoPath == nil:
+			if m.ReadOnly || fileLike.MatchString(path) {
+				p.Problems = append(p.Problems, fmt.Sprintf("%s: mounts %s, which only works from a repository, so deploy this stack from one instead of pasting the file", service, m.Source))
+				continue
+			}
+			p.Notes = append(p.Notes, fmt.Sprintf("%s: %s becomes a volume that starts empty", service, m.Source))
+			asVolume(m)
+		default:
+			switch kind := repoPath(path); {
+			case kind == PathMissing:
+				p.Notes = append(p.Notes, fmt.Sprintf("%s: %s isn't in the repository, so it becomes a volume that starts empty", service, m.Source))
+				asVolume(m)
+			case kind == PathFile || m.ReadOnly:
+				p.Notes = append(p.Notes, fmt.Sprintf("%s: %s is built into its image from the repository, so changes reach it on the next deploy", service, m.Source))
+				files = append(files, PlanFile{Source: path, Target: m.Target})
+			default:
+				p.Notes = append(p.Notes, fmt.Sprintf("%s: %s becomes a volume that starts with the repository's copy and keeps its own changes", service, m.Source))
+				files = append(files, PlanFile{Source: path, Target: m.Target})
+				asVolume(m)
+			}
+		}
+	}
+	return out, files
+}
+
 func managedEngine(s Service) string {
 	if s.Build != nil || s.Image == "" {
 		return ""
@@ -332,6 +414,9 @@ func healthPath(test []string) string {
 }
 
 func sameBuild(a, b *Item) bool {
+	if !slices.Equal(a.Files, b.Files) {
+		return false
+	}
 	if a.Build != nil && b.Build != nil {
 		return *a.Build == *b.Build
 	}
