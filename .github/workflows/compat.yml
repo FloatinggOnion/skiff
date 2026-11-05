@@ -1,0 +1,46 @@
+name: compatibility
+
+# Runs real projects' own Compose files on Skiff, next to plain Compose, and reports how many work. A score, not a required check.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "e2e/compat_test.go"
+      - "e2e/testdata/compat/**"
+      - ".github/workflows/compat.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [web, backend, agents, data, network, inference]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: run the ${{ matrix.kind }} projects
+        env:
+          SKIFF_COMPAT: "1"
+          SKIFF_COMPAT_KIND: ${{ matrix.kind }}
+          SKIFF_COMPAT_OUT: compat-out
+          SKIFF_COMPAT_PRUNE: "1"
+        run: go test -tags e2e -count=1 -timeout 340m -v -run '^TestCompatRun$' ./e2e/...
+      - name: report
+        if: always()
+        run: cat e2e/compat-out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: compat-${{ matrix.kind }}
+          path: e2e/compat-out

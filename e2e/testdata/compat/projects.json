@@ -1,0 +1,765 @@
+[
+ {
+  "name": "appsmith",
+  "kind": "web",
+  "repo": "appsmithorg/appsmith",
+  "commit": "fa1c6faa6b00db9004df02ae02751920870b09d2",
+  "file": "deploy/docker/docker-compose.yml"
+ },
+ {
+  "name": "baserow",
+  "kind": "web",
+  "repo": "baserow/baserow",
+  "commit": "d36fc12e105d99112fb455b7c482d214903fe70f",
+  "file": "docker-compose.all-in-one.yml"
+ },
+ {
+  "name": "cal",
+  "kind": "web",
+  "repo": "calcom/cal.diy",
+  "commit": "2eb48eccd8aca8a0c0ffabf28cf92e298b33ecee",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "chatwoot",
+  "kind": "web",
+  "repo": "chatwoot/chatwoot",
+  "commit": "fd75a9532192de2e59997aee657840aecc1742d9",
+  "file": "docker-compose.production.yaml"
+ },
+ {
+  "name": "dockge",
+  "kind": "web",
+  "repo": "louislam/dockge",
+  "commit": "0329dabb5003f206d4fd9f7403a6af26d7138497",
+  "file": "compose.yaml"
+ },
+ {
+  "name": "documenso",
+  "kind": "web",
+  "repo": "documenso/documenso",
+  "commit": "91e73d59281254ad0e258adc861a337c85da60d0",
+  "file": "docker/production/compose.yml"
+ },
+ {
+  "name": "excalidraw",
+  "kind": "web",
+  "repo": "excalidraw/excalidraw",
+  "commit": "7ded689cad49331167e29fd88b38f38d3736d576",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "firefly",
+  "kind": "web",
+  "repo": "firefly-iii/docker",
+  "commit": "45e9b2cabb378608a845a748735e468ceb4f4929",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "formbricks",
+  "kind": "web",
+  "repo": "formbricks/formbricks",
+  "commit": "7cddb162bb4615b68561d90a7dbde4c5985213f0",
+  "file": "docker/docker-compose.yml"
+ },
+ {
+  "name": "freshrss",
+  "kind": "web",
+  "repo": "FreshRSS/FreshRSS",
+  "commit": "4e8a258b011aad190597d7953b7122fc43f4658f",
+  "file": "Docker/freshrss/docker-compose.yml"
+ },
+ {
+  "name": "ghostfolio",
+  "kind": "web",
+  "repo": "ghostfolio/ghostfolio",
+  "commit": "f3840ed29ae634c5f484529718975401ae940608",
+  "file": "docker/docker-compose.yml"
+ },
+ {
+  "name": "gitea-sample",
+  "kind": "web",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "gitea-postgres/compose.yaml"
+ },
+ {
+  "name": "growthbook",
+  "kind": "web",
+  "repo": "growthbook/growthbook",
+  "commit": "bbc45d186d39d375c4dc5ed99fc02d75b8430228",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "hedgedoc",
+  "kind": "web",
+  "repo": "hedgedoc/container",
+  "commit": "b75fde96d3235179a3491f6cd3abf84cb8fae2b8",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "hoppscotch",
+  "kind": "web",
+  "repo": "hoppscotch/hoppscotch",
+  "commit": "39d25650bdb4e86464b2cd69174c567b86f57892",
+  "file": "docker-compose.deploy.yml"
+ },
+ {
+  "name": "immich",
+  "kind": "web",
+  "repo": "immich-app/immich",
+  "commit": "0fe21a3e0c980be1549ec22304bac09c034fda93",
+  "file": "docker/docker-compose.yml"
+ },
+ {
+  "name": "invoiceninja",
+  "kind": "web",
+  "repo": "invoiceninja/dockerfiles",
+  "commit": "95fa5e6841e22999213eb296861c65e5c9c36194",
+  "file": "debian/docker-compose.yml"
+ },
+ {
+  "name": "jitsi",
+  "kind": "web",
+  "repo": "jitsi/docker-jitsi-meet",
+  "commit": "6bb51e620633b826dedc7b32ff575bf543ff16ac",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "linkwarden",
+  "kind": "web",
+  "repo": "linkwarden/linkwarden",
+  "commit": "eff7c6b735f6b20a4766745dc86c6bdc52bd9840",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "listmonk",
+  "kind": "web",
+  "repo": "knadh/listmonk",
+  "commit": "517b46169e2d7b7b6a544b3caa9ce8970ac5028c",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "mattermost",
+  "kind": "web",
+  "repo": "mattermost/docker",
+  "commit": "12bbeda5009e1d8381be294a88d1cb69dc624290",
+  "file": "docker-compose.without-nginx.yml"
+ },
+ {
+  "name": "nextcloud",
+  "kind": "web",
+  "repo": "nextcloud/docker",
+  "commit": "7e9e152f77372845195ed28dc65569df74f582ff",
+  "file": ".examples/docker-compose/insecure/postgres/apache/compose.yaml"
+ },
+ {
+  "name": "nextcloud-sample",
+  "kind": "web",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "nextcloud-redis-mariadb/compose.yaml"
+ },
+ {
+  "name": "nocodb",
+  "kind": "web",
+  "repo": "nocodb/nocodb",
+  "commit": "5f2e38194e0bda13d8818a412bd4d723fd944cb8",
+  "file": "docker-compose/examples/quickstart-demo/docker-compose.yml"
+ },
+ {
+  "name": "paperless",
+  "kind": "web",
+  "repo": "paperless-ngx/paperless-ngx",
+  "commit": "cb3513c6f3cee9b4f769afe7fd58616c6ad21ca6",
+  "file": "docker/compose/docker-compose.postgres.yml"
+ },
+ {
+  "name": "payload",
+  "kind": "web",
+  "repo": "payloadcms/payload",
+  "commit": "526bd4f2c1ec62bf9cc69156e34cf422acd98873",
+  "file": "templates/with-postgres/docker-compose.yml"
+ },
+ {
+  "name": "penpot",
+  "kind": "web",
+  "repo": "penpot/penpot",
+  "commit": "eb9594a614b986b3df73b202f9a2dcd94511c5cd",
+  "file": "docker/images/docker-compose.yaml"
+ },
+ {
+  "name": "plane",
+  "kind": "web",
+  "repo": "makeplane/plane",
+  "commit": "618d0eb74658329a6f6e92434ac54231422c5b96",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "plausible",
+  "kind": "web",
+  "repo": "plausible/community-edition",
+  "commit": "ec6c4da776547516d8f48159ce1a704df4f475ad",
+  "file": "compose.yml"
+ },
+ {
+  "name": "sentry",
+  "kind": "web",
+  "repo": "getsentry/self-hosted",
+  "commit": "3f62007f76f27f5a787b9f0e276f5af1278e6b65",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "stirling-pdf",
+  "kind": "web",
+  "repo": "Stirling-Tools/Stirling-PDF",
+  "commit": "b78729215bf33dabf2759bcea53de2603044c520",
+  "file": "docker/compose/docker-compose.ultra-lite.yml"
+ },
+ {
+  "name": "synapse",
+  "kind": "web",
+  "repo": "element-hq/synapse",
+  "commit": "e3b6b231f6108981a1696ba21a660ebfec87694b",
+  "file": "contrib/docker/docker-compose.yml"
+ },
+ {
+  "name": "tooljet",
+  "kind": "web",
+  "repo": "ToolJet/ToolJet",
+  "commit": "0e565c3cbf009ff3338fd006da161c672eb19e3e",
+  "file": "deploy/docker/docker-compose.yaml"
+ },
+ {
+  "name": "twenty",
+  "kind": "web",
+  "repo": "twentyhq/twenty",
+  "commit": "a074732678d68ee75c020cf65c95b7c5f3c79207",
+  "file": "packages/twenty-docker/docker-compose.yml"
+ },
+ {
+  "name": "umami",
+  "kind": "web",
+  "repo": "umami-software/umami",
+  "commit": "559e3c607c23d2c72d9bd4f6481bda428255323c",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "unleash",
+  "kind": "web",
+  "repo": "Unleash/unleash",
+  "commit": "6e416ef757455bbf531661ef73fec61d33539055",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "wordpress",
+  "kind": "web",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "wordpress-mysql/compose.yaml"
+ },
+ {
+  "name": "zulip",
+  "kind": "web",
+  "repo": "zulip/docker-zulip",
+  "commit": "916aeb2348c9648ad2271225f54560ae4c31b655",
+  "file": "compose.yaml"
+ },
+ {
+  "name": "apisix",
+  "kind": "backend",
+  "repo": "apache/apisix-docker",
+  "commit": "12f16610dbc23ed005d08b773d040a245097062a",
+  "file": "example/docker-compose.yml"
+ },
+ {
+  "name": "appwrite",
+  "kind": "backend",
+  "repo": "appwrite/appwrite",
+  "commit": "61374c738620004cc058b7856a832b1bfbb04bdd",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "authelia",
+  "kind": "backend",
+  "repo": "authelia/authelia",
+  "commit": "5874db435f05236bb81439e8ec94ae8dfdc825b4",
+  "file": "examples/compose/lite/compose.yml"
+ },
+ {
+  "name": "authentik",
+  "kind": "backend",
+  "repo": "goauthentik/authentik",
+  "commit": "1ad0decc6b337098704cc6d18dae4447ddfbf489",
+  "file": "lifecycle/container/compose.yml"
+ },
+ {
+  "name": "budibase",
+  "kind": "backend",
+  "repo": "Budibase/budibase",
+  "commit": "fbec97a5dbf0885374dd49bba853959649a46c76",
+  "file": "hosting/docker-compose.yaml"
+ },
+ {
+  "name": "django",
+  "kind": "backend",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "django/compose.yaml"
+ },
+ {
+  "name": "fastapi",
+  "kind": "backend",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "fastapi/compose.yaml"
+ },
+ {
+  "name": "flask-redis",
+  "kind": "backend",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "flask-redis/compose.yaml"
+ },
+ {
+  "name": "hasura",
+  "kind": "backend",
+  "repo": "hasura/graphql-engine",
+  "commit": "904a79e94d640fd03acc4b977791eeacf0f9d2aa",
+  "file": "install-manifests/docker-compose/docker-compose.yaml"
+ },
+ {
+  "name": "hatchet",
+  "kind": "backend",
+  "repo": "hatchet-dev/hatchet",
+  "commit": "806c6055edf0969cee16fd35c2c70f307703dbdc",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "infisical",
+  "kind": "backend",
+  "repo": "Infisical/infisical",
+  "commit": "41db38dca9f70d69f3bab268b631c31debfc51d4",
+  "file": "docker-compose.prod.yml"
+ },
+ {
+  "name": "kong",
+  "kind": "backend",
+  "repo": "Kong/docker-kong",
+  "commit": "8b2c2238ca0607e210cada8223407c13fedec943",
+  "file": "compose/docker-compose.yml"
+ },
+ {
+  "name": "lago",
+  "kind": "backend",
+  "repo": "getlago/lago",
+  "commit": "a244f0ad27d34aee76a8ccc2ff4eb1e47f07ce73",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "nginx-flask-mysql",
+  "kind": "backend",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "nginx-flask-mysql/compose.yaml"
+ },
+ {
+  "name": "nginx-golang-postgres",
+  "kind": "backend",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "nginx-golang-postgres/compose.yaml"
+ },
+ {
+  "name": "novu",
+  "kind": "backend",
+  "repo": "novuhq/novu",
+  "commit": "53dce0cd87a9d9b1fbc539bb1fd6b537fc3ef739",
+  "file": "docker/community/docker-compose.yml"
+ },
+ {
+  "name": "otel-demo",
+  "kind": "backend",
+  "repo": "open-telemetry/opentelemetry-demo",
+  "commit": "0aeadb11cf3ecaac318bacd1986f23eff531c8f5",
+  "file": "compose.yaml"
+ },
+ {
+  "name": "react-express-mongodb",
+  "kind": "backend",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "react-express-mongodb/compose.yaml"
+ },
+ {
+  "name": "saleor",
+  "kind": "backend",
+  "repo": "saleor/saleor-platform",
+  "commit": "ab6315bd59c58b4815175df4c679107ff9695be4",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "supabase",
+  "kind": "backend",
+  "repo": "supabase/supabase",
+  "commit": "3a2af6cdc9855e765e89a17afbe475cbd147045d",
+  "file": "docker/docker-compose.yml"
+ },
+ {
+  "name": "temporal",
+  "kind": "backend",
+  "repo": "temporalio/docker-compose",
+  "commit": "cd6d3b19a3307e2cbbc4c1830228166e92caef24",
+  "file": "docker-compose-postgres.yml"
+ },
+ {
+  "name": "trigger",
+  "kind": "backend",
+  "repo": "triggerdotdev/trigger.dev",
+  "commit": "41ad1995b30573a9b55cfaab80c3293b7c35c1f8",
+  "file": "hosting/docker/webapp/docker-compose.yml"
+ },
+ {
+  "name": "voting-app",
+  "kind": "backend",
+  "repo": "dockersamples/example-voting-app",
+  "commit": "63e9150ca17af4ed05880d4245e486481f73fcb4",
+  "file": "docker-compose.images.yml"
+ },
+ {
+  "name": "windmill",
+  "kind": "backend",
+  "repo": "windmill-labs/windmill",
+  "commit": "120415af151593716d39140c8a7d7f3bbe9d99cf",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "zitadel",
+  "kind": "backend",
+  "repo": "zitadel/zitadel",
+  "commit": "62c9668cc7fec2dc039174015a28d9fbb3bf7dcc",
+  "file": "deploy/compose/docker-compose.yml"
+ },
+ {
+  "name": "anything-llm",
+  "kind": "agents",
+  "repo": "Mintplex-Labs/anything-llm",
+  "commit": "cbaf3357c7d9810bfa1f91f075cae7f533554f80",
+  "file": "docker/docker-compose.yml"
+ },
+ {
+  "name": "autogpt",
+  "kind": "agents",
+  "repo": "Significant-Gravitas/AutoGPT",
+  "commit": "13ac38c5b6583bd01b0a6142b0060fc03e102b6e",
+  "file": "autogpt_platform/docker-compose.yml"
+ },
+ {
+  "name": "dify",
+  "kind": "agents",
+  "repo": "langgenius/dify",
+  "commit": "2d5c83d2b6f1d6e348e14780b539bb2a20beb386",
+  "file": "docker/docker-compose.yaml"
+ },
+ {
+  "name": "flowise",
+  "kind": "agents",
+  "repo": "FlowiseAI/Flowise",
+  "commit": "9291856d1ea4a4ceea9f8fef8ce14f4f6c81e8eb",
+  "file": "docker/docker-compose.yml"
+ },
+ {
+  "name": "khoj",
+  "kind": "agents",
+  "repo": "khoj-ai/khoj",
+  "commit": "ae229ca894c0b80ad84664afcfdde523b5e87057",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "langflow",
+  "kind": "agents",
+  "repo": "langflow-ai/langflow",
+  "commit": "60999cc9a7350e44dde3ef641baae864e10861f0",
+  "file": "docker_example/docker-compose.yml"
+ },
+ {
+  "name": "langfuse",
+  "kind": "agents",
+  "repo": "langfuse/langfuse",
+  "commit": "728e69371ec7667e24602c2b1d87a8c60cfc6404",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "mem0",
+  "kind": "agents",
+  "repo": "mem0ai/mem0",
+  "commit": "ed1f10fc87080f0b67f99be370817504888462ab",
+  "file": "server/docker-compose.yaml"
+ },
+ {
+  "name": "mlflow",
+  "kind": "agents",
+  "repo": "mlflow/mlflow",
+  "commit": "9cfbf5c1f3f0b2529bf29cc477045c2256400ad6",
+  "file": "docker-compose/docker-compose.yml"
+ },
+ {
+  "name": "n8n",
+  "kind": "agents",
+  "repo": "n8n-io/n8n-hosting",
+  "commit": "94a7776df4cf817f8db92e510a3c02f67670a7ca",
+  "file": "docker-compose/withPostgresAndWorker/docker-compose.yml"
+ },
+ {
+  "name": "onyx",
+  "kind": "agents",
+  "repo": "onyx-dot-app/onyx",
+  "commit": "57cb7b8e4f3fcc9e96b0f82bb566ce3fd4588167",
+  "file": "deployment/docker_compose/docker-compose.prod.yml"
+ },
+ {
+  "name": "open-webui",
+  "kind": "agents",
+  "repo": "open-webui/open-webui",
+  "commit": "c38885a1a737da4968f157092f304f3b5481d0bf",
+  "file": "docker-compose.yaml"
+ },
+ {
+  "name": "openhands",
+  "kind": "agents",
+  "repo": "OpenHands/OpenHands",
+  "commit": "ad0f38ff2099558790d99b73e64fff74bf19edfa",
+  "file": "examples/acp-docker/docker-compose.yml"
+ },
+ {
+  "name": "phoenix",
+  "kind": "agents",
+  "repo": "Arize-ai/phoenix",
+  "commit": "496dbdb12aa3cd830d41be87ec613db08491b428",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "rag-api",
+  "kind": "agents",
+  "repo": "LibreChat-AI/rag-api",
+  "commit": "c4e5cbf79fcece1df9adfff5dfed983a5990ca9f",
+  "file": "docker-compose.yaml"
+ },
+ {
+  "name": "ragflow",
+  "kind": "agents",
+  "repo": "infiniflow/ragflow",
+  "commit": "8cab68a9a3b083da95abb2ea0789b0a5623defaf",
+  "file": "docker/docker-compose.yml"
+ },
+ {
+  "name": "dagster",
+  "kind": "data",
+  "repo": "dagster-io/dagster",
+  "commit": "a75336e8cb9eacc87d8a57027461c2a33a906945",
+  "file": "examples/deploy_docker/docker-compose.yml"
+ },
+ {
+  "name": "druid",
+  "kind": "data",
+  "repo": "apache/druid",
+  "commit": "2f53dfefd68b8ac2e1f87d3659ba6803c3d6b424",
+  "file": "distribution/docker/docker-compose.yml"
+ },
+ {
+  "name": "elk-sample",
+  "kind": "data",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "elasticsearch-logstash-kibana/compose.yaml"
+ },
+ {
+  "name": "flink",
+  "kind": "data",
+  "repo": "apache/flink-playgrounds",
+  "commit": "2117c5ea8cf31d39237d16cc9dee5507544761fc",
+  "file": "operations-playground/docker-compose.yaml"
+ },
+ {
+  "name": "kestra",
+  "kind": "data",
+  "repo": "kestra-io/kestra",
+  "commit": "740444a61df029d7e128e3ba9fcce55dd3af2191",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "loki",
+  "kind": "data",
+  "repo": "grafana/loki",
+  "commit": "a4c199c343412c1274020d142ba72ecb94ee4124",
+  "file": "production/docker/docker-compose.yaml"
+ },
+ {
+  "name": "mage",
+  "kind": "data",
+  "repo": "mage-ai/mage-ai",
+  "commit": "1826a3795ead8c62e56e81497edd824efb1d5472",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "milvus",
+  "kind": "data",
+  "repo": "milvus-io/milvus",
+  "commit": "744c047d8d73648d0820b3b257d2beed00643cd3",
+  "file": "deployments/docker/standalone/docker-compose.yml"
+ },
+ {
+  "name": "minio",
+  "kind": "data",
+  "repo": "minio/minio",
+  "commit": "7aac2a2c5b7c882e68c1ce017d8256be2feea27f",
+  "file": "docs/orchestration/docker-compose/docker-compose.yaml"
+ },
+ {
+  "name": "prometheus-grafana",
+  "kind": "data",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "prometheus-grafana/compose.yaml"
+ },
+ {
+  "name": "qdrant",
+  "kind": "data",
+  "repo": "qdrant/qdrant",
+  "commit": "222b2e44ab1c3f17e8246396ead6558e45041df7",
+  "file": "tools/compose/docker-compose.yaml"
+ },
+ {
+  "name": "redash",
+  "kind": "data",
+  "repo": "getredash/setup",
+  "commit": "5190b9ed99cd6b8d6663ef1f74ffcf8eea309636",
+  "file": "data/compose.yaml"
+ },
+ {
+  "name": "superset",
+  "kind": "data",
+  "repo": "apache/superset",
+  "commit": "fcc13d4a301e81e5f5f2d82ba021e078b87187e7",
+  "file": "docker-compose-image-tag.yml"
+ },
+ {
+  "name": "weaviate",
+  "kind": "data",
+  "repo": "weaviate/weaviate",
+  "commit": "9e152c7cbcf4a679338c7e389b9095d95d669ee3",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "coturn",
+  "kind": "network",
+  "repo": "coturn/coturn",
+  "commit": "ad8885a54ac1d59a39f2cc49ae7662fc2d842c64",
+  "file": "docker/docker-compose-postgresql.yml"
+ },
+ {
+  "name": "docker-mailserver",
+  "kind": "network",
+  "repo": "docker-mailserver/docker-mailserver",
+  "commit": "29203aeafc4b762c271d22dab68ec98e995f2548",
+  "file": "compose.yaml"
+ },
+ {
+  "name": "mailcow",
+  "kind": "network",
+  "repo": "mailcow/mailcow-dockerized",
+  "commit": "55982ac74bfd35581cc44b122ab5fc659e3ae90a",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "minecraft",
+  "kind": "network",
+  "repo": "itzg/docker-minecraft-server",
+  "commit": "67e4e8bb7252405a2794ca9e1161e146b618a627",
+  "file": "examples/docker-compose-simple.yml"
+ },
+ {
+  "name": "netmaker",
+  "kind": "network",
+  "repo": "gravitl/netmaker",
+  "commit": "43f903874fa3a9a0e9f56830caf39bedb92e3f40",
+  "file": "compose/docker-compose.yml"
+ },
+ {
+  "name": "pihole-sample",
+  "kind": "network",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "pihole-cloudflared-DoH/compose.yaml"
+ },
+ {
+  "name": "plex-sample",
+  "kind": "network",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "plex/compose.yaml"
+ },
+ {
+  "name": "portainer-sample",
+  "kind": "network",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "portainer/compose.yaml"
+ },
+ {
+  "name": "uptime-kuma",
+  "kind": "network",
+  "repo": "louislam/uptime-kuma",
+  "commit": "41194cb3d6e2bb8b9ae6c8a0fe59ce577c3f3928",
+  "file": "compose.yaml"
+ },
+ {
+  "name": "wg-easy",
+  "kind": "network",
+  "repo": "wg-easy/wg-easy",
+  "commit": "78db203e0eb61373526ca0e27185446819a5d92b",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "wireguard-sample",
+  "kind": "network",
+  "repo": "docker/awesome-compose",
+  "commit": "30f4b7f6a6c3b0c0ecf4d4efb0de203c48d11562",
+  "file": "wireguard/compose.yaml"
+ },
+ {
+  "name": "litellm",
+  "kind": "inference",
+  "repo": "BerriAI/litellm",
+  "commit": "b080c59e78e25d73934ad8550e832d3ee7cd882d",
+  "file": "docker-compose.yml"
+ },
+ {
+  "name": "localai",
+  "kind": "inference",
+  "repo": "mudler/LocalAI",
+  "commit": "f0caddf8f1aca0d8559f9eafd79da2609719c437",
+  "file": "docker-compose.yaml"
+ },
+ {
+  "name": "textgen",
+  "kind": "inference",
+  "repo": "oobabooga/textgen",
+  "commit": "c93f8871239550de2ccfe1e95d469aa82616f07e",
+  "file": "docker/cpu/docker-compose.yml"
+ },
+ {
+  "name": "vllm-observability",
+  "kind": "inference",
+  "repo": "vllm-project/vllm",
+  "commit": "7ecc83a9877552a5f4be31c133ab8502dd40f50e",
+  "file": "examples/observability/prometheus_grafana/docker-compose.yaml"
+ },
+ {
+  "name": "xinference",
+  "kind": "inference",
+  "repo": "xorbitsai/inference",
+  "commit": "ccfe04c5480106212cb46c126cf3daf199e3f522",
+  "file": "xinference/deploy/docker/docker-compose.cpu.yml"
+ }
+]
