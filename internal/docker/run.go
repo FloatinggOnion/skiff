@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nuelScript/skiff/internal/config"
 )
 
 type RunSpec struct {
@@ -22,6 +24,7 @@ type RunSpec struct {
 	Volumes       []Mount
 	Aliases       []string // extra names on the network, such as a Compose service name
 	Command       []string // replaces the image's default command
+	Options       config.RunOptions
 }
 
 type Route struct {
@@ -125,8 +128,9 @@ func (e *Engine) runArgs(s RunSpec) []string {
 	for _, k := range sortedKeys(s.Env) {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
 	}
+	args = append(args, s.Options.DockerArgs()...)
 	args = append(args, s.Image)
-	return append(args, s.Command...)
+	return append(args, s.Options.Command(s.Command)...)
 }
 
 // waitHostPort allows for an app that exits straight away: a restarting container has no published port until it's running again, and one that crashes once waiting for its database can still come up.
@@ -150,6 +154,7 @@ type WorkerSpec struct {
 	Volumes []Mount
 	Memory  string
 	CPU     string
+	Options config.RunOptions
 }
 
 func (e *Engine) RunWorker(s WorkerSpec) error {
@@ -168,6 +173,7 @@ func (e *Engine) RunWorker(s WorkerSpec) error {
 	for _, k := range sortedKeys(s.Env) {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
 	}
+	args = append(args, s.Options.DockerArgs()...)
 	args = append(args, s.Image, "sh", "-c", s.Command)
 	if out, err := e.command(args...).CombinedOutput(); err != nil {
 		return cmdErr(out, err)

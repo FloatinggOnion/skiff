@@ -118,7 +118,16 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
         <li>
           <strong>Not supported:</strong> <code>privileged</code>, <code>network_mode</code>,{" "}
           <code>devices</code>, <code>extends</code>, <code>secrets</code> and <code>configs</code>.
-          Keys like <code>restart</code> and <code>networks</code> are ignored.
+          Keys like <code>restart</code> and <code>networks</code> are ignored, and so are permission
+          settings like <code>cap_add</code> and <code>sysctls</code>.
+        </li>
+        <li>
+          <strong>Services behind a profile</strong> are left out, as they are in a plain{" "}
+          <code>docker compose up</code>.
+        </li>
+        <li>
+          <strong>Managed databases</strong> ignore settings like <code>user</code> and{" "}
+          <code>entrypoint</code>, because Skiff chooses how they start.
         </li>
       </ul>
 

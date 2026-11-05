@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/nuelScript/skiff/internal/config"
 )
 
 type Kind string
@@ -31,6 +33,7 @@ type Item struct {
 	Public   bool
 	Volumes  []PlanVolume
 	Files    []PlanFile
+	Options  config.RunOptions
 	Replicas int
 	Memory   string
 	CPUs     string
@@ -116,6 +119,9 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 		p.Problems = append(p.Problems, "the stack needs a name made of letters, digits or dashes")
 	}
 	p.Unset = dedupe(f.Unset)
+	for _, name := range f.Profiled {
+		p.Notes = append(p.Notes, name+": only runs with a Compose profile, so Skiff leaves it out")
+	}
 	for _, v := range p.Unset {
 		p.Problems = append(p.Problems, fmt.Sprintf("%s needs a value. For one that can stay empty, write ${%s:-} in the file", v, v))
 	}
@@ -181,6 +187,9 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 		}
 		for _, d := range s.DependsOn {
 			if _, ok := f.Services[d]; !ok {
+				if slices.Contains(f.Profiled, d) {
+					continue
+				}
 				p.Problems = append(p.Problems, fmt.Sprintf("%s: depends on %s, which isn't in this file", name, d))
 			}
 		}
@@ -201,6 +210,10 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 			it.Port = s.Expose[0]
 		}
 		it.Files = files[name]
+		it.Options = s.Options
+		if err := s.Options.Validate(); err != nil {
+			p.Problems = append(p.Problems, name+": "+err.Error())
+		}
 		for _, m := range s.Volumes {
 			vol := safeName(m.Source)
 			if vol == "" {
@@ -221,7 +234,8 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 	// A service built like another one, differing only by command, is that service's worker.
 	for _, name := range f.Order {
 		it := byName[name]
-		if it.Kind != KindApp || len(it.Command) == 0 || it.Port != 0 {
+		// A worker runs through a shell, which a custom entrypoint would replace.
+		if it.Kind != KindApp || len(it.Command) == 0 || it.Port != 0 || len(it.Options.Entrypoint) > 0 {
 			continue
 		}
 		for _, other := range f.Order {
@@ -390,6 +404,9 @@ func applyDatabase(it *Item, engine string, s Service, p *Plan) {
 	} else if it.DBPassword == "" && len(p.Unset) == 0 {
 		p.Notes = append(p.Notes, it.Service+": has no password, so Skiff generates one. Apps that connect with a hardcoded URL need updating")
 	}
+	if !s.Options.IsZero() {
+		p.Notes = append(p.Notes, it.Service+": is a managed database, so Skiff chooses how it starts and ignores settings like user and entrypoint")
+	}
 	if len(s.Ports) > 0 {
 		p.Notes = append(p.Notes, it.Service+": stays private, so its published port is ignored. Turn on public access in the dashboard if you need it")
 	}
@@ -414,7 +431,7 @@ func healthPath(test []string) string {
 }
 
 func sameBuild(a, b *Item) bool {
-	if !slices.Equal(a.Files, b.Files) {
+	if !slices.Equal(a.Files, b.Files) || !a.Options.Equal(b.Options) {
 		return false
 	}
 	if a.Build != nil && b.Build != nil {

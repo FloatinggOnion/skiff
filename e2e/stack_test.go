@@ -945,3 +945,86 @@ func TestComposeStackMounts(t *testing.T) {
 		t.Errorf("volumes should keep their changes across a deploy: %q", got)
 	}
 }
+
+// TestComposeStackRunSettings checks a container starts the way its Compose file asks.
+func TestComposeStackRunSettings(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-run"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	const file = `services:
+  app:
+    image: busybox:1.36
+    entrypoint: ["sh", "-c", "echo started-by-entrypoint > /scratch/mark; exec sleep 100000"]
+    user: "1000:1000"
+    working_dir: /scratch
+    init: true
+    read_only: true
+    shm_size: 32m
+    tmpfs: ["/scratch:mode=1777"]
+    ulimits: {nofile: 4096}
+    extra_hosts: ["db.local:10.9.8.7"]
+    stop_grace_period: 7s
+  skipped:
+    image: busybox:1.36
+    profiles: [debug]
+`
+	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(file)
+	resp, err := c.Post(base, "application/json", strings.NewReader(`{"name":"`+stack+`","compose":"`+quoted+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	container := func() string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+stack+"-app", "--filter", "status=running").Output()
+		return strings.TrimSpace(string(out))
+	}
+	eventually(t, 3*time.Minute, func() bool { return container() != "" })
+	id := container()
+	eventually(t, 30*time.Second, func() bool {
+		return exec.Command("docker", "exec", container(), "test", "-f", "/scratch/mark").Run() == nil
+	})
+	id = container()
+	for script, want := range map[string]string{
+		"cat /scratch/mark":                "started-by-entrypoint",
+		"id -u":                            "1000",
+		"pwd":                              "/scratch",
+		"ulimit -n":                        "4096",
+		"grep db.local /etc/hosts | wc -l": "1",
+		"df -m /dev/shm | tail -1 | awk '{print $2}'":           "32",
+		"touch /nope 2>/dev/null && echo wrote || echo refused": "refused",
+	} {
+		if got := dockerExec(t, id, script); got != want {
+			t.Errorf("%s = %q, want %q", script, got, want)
+		}
+	}
+	out, err := exec.Command("docker", "inspect", "-f", "{{.HostConfig.Init}} {{.Config.StopTimeout}}", id).Output()
+	if err != nil || strings.TrimSpace(string(out)) != "true 7" {
+		t.Errorf("init and stop timeout: %q %v", out, err)
+	}
+	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+stack+"-skipped").Output(); strings.TrimSpace(string(out)) != "" {
+		t.Errorf("a service behind a profile started: %s", out)
+	}
+}

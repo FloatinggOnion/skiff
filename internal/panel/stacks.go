@@ -341,6 +341,7 @@ func stackSourceFor(s *stackSource, team string, it compose.Item) Source {
 			src.Command = string(b)
 		}
 	}
+	src.RunOptions = config.EncodeRunOptions(it.Options)
 	if it.Build != nil || len(it.Files) > 0 {
 		src.CloneURL, src.Branch, src.Auto, src.Repo = s.cloneURL, s.branch, true, githubRepo(s.cloneURL)
 	}

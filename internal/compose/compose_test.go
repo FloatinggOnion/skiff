@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/nuelScript/skiff/internal/config"
 )
 
 const backend = `
@@ -366,4 +368,91 @@ func TestMounts(t *testing.T) {
 			t.Errorf("problems: %v", got.Problems)
 		}
 	})
+}
+
+func TestRunSettings(t *testing.T) {
+	const file = `services:
+  a:
+    image: x
+    ports: ["80"]
+    entrypoint: ["sh", "-c", "exec server"]
+    user: "1000:1000"
+    working_dir: /srv
+    init: true
+    read_only: true
+    shm_size: 256m
+    tmpfs: [/tmp, /run]
+    ulimits:
+      nofile: {soft: 1024, hard: 2048}
+      nproc: 512
+    extra_hosts: ["db.local:10.0.0.1"]
+    stop_grace_period: 1m30s
+    stop_signal: SIGQUIT
+    depends_on: [tools]
+  tools:
+    image: y
+    profiles: [debug]
+`
+	f, err := Parse([]byte(file), noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := BuildPlan("s", f, noFiles, nil)
+	if len(p.Problems) != 0 {
+		t.Fatalf("problems: %v", p.Problems)
+	}
+	if len(p.Items) != 1 {
+		t.Fatalf("a service behind a profile should be left out: %+v", p.Items)
+	}
+	got := p.Items[0].Options
+	want := config.RunOptions{
+		Entrypoint: []string{"sh", "-c", "exec server"}, User: "1000:1000", WorkingDir: "/srv", Init: true, ReadOnly: true, ShmSize: "256m",
+		Tmpfs: []string{"/tmp", "/run"}, Ulimits: []string{"nofile=1024:2048", "nproc=512"}, ExtraHosts: []string{"db.local:10.0.0.1"},
+		StopSeconds: 90, StopSignal: "SIGQUIT",
+	}
+	if !got.Equal(want) {
+		t.Errorf("options: %+v", got)
+	}
+	for _, note := range p.Notes {
+		if strings.Contains(note, "is ignored") {
+			t.Errorf("nothing here should be ignored: %s", note)
+		}
+	}
+
+	t.Run("a custom entrypoint isn't a worker", func(t *testing.T) {
+		f, err := Parse([]byte("services:\n  a:\n    image: x\n    ports: [\"80\"]\n  b:\n    image: x\n    command: run\n    entrypoint: other\n"), noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := item(t, BuildPlan("s", f, noFiles, nil), "b"); got.Kind != KindApp {
+			t.Errorf("kind: %s", got.Kind)
+		}
+	})
+
+	t.Run("merge tags read as plain values", func(t *testing.T) {
+		f, err := Parse([]byte("services:\n  a:\n    image: x\n    deploy: !reset null\n    environment: !override {A: b}\n"), noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.Services["a"].Environment["A"]; got != "b" {
+			t.Errorf("environment: %q", got)
+		}
+	})
+
+	for name, bad := range map[string]string{
+		"a user that looks like a flag": "user: --privileged",
+		"a ulimit Skiff doesn't set":    "ulimits: {rtprio: 99}",
+		"a relative working folder":     "working_dir: srv",
+		"a relative tmpfs":              "tmpfs: [tmp]",
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, err := Parse([]byte("services:\n  a:\n    image: x\n    "+bad+"\n"), noEnv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := BuildPlan("s", f, noFiles, nil); len(got.Problems) != 1 {
+				t.Errorf("problems: %v", got.Problems)
+			}
+		})
+	}
 }

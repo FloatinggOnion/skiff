@@ -8,7 +8,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,6 +25,8 @@ type File struct {
 	Unset []string
 	// Extra lists keys Skiff doesn't read, as "service: key".
 	Extra map[string][]string
+	// Profiled lists services that only run with a Compose profile, so a plain start leaves them out.
+	Profiled []string
 }
 
 type Service struct {
@@ -39,6 +43,7 @@ type Service struct {
 	Memory      string
 	CPUs        string
 	Healthcheck []string
+	Options     config.RunOptions
 }
 
 type Build struct{ Context, Dockerfile string }
@@ -79,12 +84,25 @@ type rawService struct {
 	Healthcheck struct {
 		Test stringList `yaml:"test"`
 	} `yaml:"healthcheck"`
+	Entrypoint      stringList `yaml:"entrypoint"`
+	User            string     `yaml:"user"`
+	WorkingDir      string     `yaml:"working_dir"`
+	Init            bool       `yaml:"init"`
+	ReadOnly        bool       `yaml:"read_only"`
+	ShmSize         string     `yaml:"shm_size"`
+	Tmpfs           stringList `yaml:"tmpfs"`
+	Ulimits         rawUlimits `yaml:"ulimits"`
+	ExtraHosts      rawHosts   `yaml:"extra_hosts"`
+	StopGracePeriod string     `yaml:"stop_grace_period"`
+	StopSignal      string     `yaml:"stop_signal"`
+	Profiles        []string   `yaml:"profiles"`
 }
 
 var serviceKeys = map[string]bool{
 	"image": true, "build": true, "command": true, "environment": true, "env_file": true, "ports": true,
 	"expose": true, "volumes": true, "depends_on": true, "mem_limit": true, "cpus": true, "deploy": true,
-	"healthcheck": true, "<<": true,
+	"healthcheck": true, "<<": true, "entrypoint": true, "user": true, "working_dir": true, "init": true, "read_only": true,
+	"shm_size": true, "tmpfs": true, "ulimits": true, "extra_hosts": true, "stop_grace_period": true, "stop_signal": true, "profiles": true,
 }
 
 // Parse reads a Compose file, filling in ${VAR} references from lookup.
@@ -97,6 +115,7 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		return nil, errors.New("the Compose file is empty")
 	}
 	f := &File{Services: map[string]Service{}, Extra: map[string][]string{}}
+	stripMergeTags(&doc, map[*yaml.Node]bool{})
 	if err := interpolate(&doc, lookup, f, map[*yaml.Node]bool{}); err != nil {
 		return nil, err
 	}
@@ -110,9 +129,24 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		if err := node.Decode(&raw); err != nil {
 			return nil, fmt.Errorf("service %s: %w", name, err)
 		}
+		if len(raw.Profiles) > 0 {
+			f.Profiled = append(f.Profiled, name)
+			continue
+		}
 		s := Service{
 			Image: raw.Image, Command: raw.Command, Environment: raw.Environment, EnvFiles: raw.EnvFile,
 			DependsOn: raw.DependsOn, Memory: raw.MemLimit, CPUs: raw.CPUs, Healthcheck: raw.Healthcheck.Test, Replicas: 1,
+		}
+		s.Options = config.RunOptions{
+			Entrypoint: raw.Entrypoint, User: raw.User, WorkingDir: raw.WorkingDir, Init: raw.Init, ReadOnly: raw.ReadOnly,
+			ShmSize: raw.ShmSize, Tmpfs: raw.Tmpfs, Ulimits: raw.Ulimits, ExtraHosts: raw.ExtraHosts, StopSignal: raw.StopSignal,
+		}
+		if raw.StopGracePeriod != "" {
+			d, err := time.ParseDuration(raw.StopGracePeriod)
+			if err != nil {
+				return nil, fmt.Errorf("service %s: stop_grace_period %q should look like 1m30s", name, raw.StopGracePeriod)
+			}
+			s.Options.StopSeconds = int(d.Seconds())
 		}
 		if raw.Build.Context != "" {
 			b := Build(raw.Build)
@@ -161,6 +195,26 @@ func mapValue(n *yaml.Node, key string) *yaml.Node {
 		}
 	}
 	return nil
+}
+
+// stripMergeTags reads Compose's !reset as empty and !override as the plain value, since Skiff reads one file with nothing to merge.
+func stripMergeTags(n *yaml.Node, seen map[*yaml.Node]bool) {
+	if seen[n] {
+		return
+	}
+	seen[n] = true
+	switch n.Tag {
+	case "!reset":
+		n.Kind, n.Tag, n.Value, n.Content = yaml.ScalarNode, "!!null", "", nil
+	case "!override":
+		n.Tag = ""
+	}
+	for _, c := range n.Content {
+		stripMergeTags(c, seen)
+	}
+	if n.Alias != nil {
+		stripMergeTags(n.Alias, seen)
+	}
 }
 
 var varPattern = regexp.MustCompile(`\$\$|\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-?+])([^}]*))?\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
@@ -382,6 +436,46 @@ func (m *rawMount) UnmarshalYAML(n *yaml.Node) error {
 	m.Bind = strings.ContainsAny(m.Source, "/.~$")
 	if len(parts) > 2 {
 		m.ReadOnly = slices.Contains(strings.Split(parts[2], ","), "ro")
+	}
+	return nil
+}
+
+// rawUlimits reads both forms: nofile: 1024, and nofile: {soft: 1024, hard: 2048}.
+type rawUlimits []string
+
+func (u *rawUlimits) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		name, v := n.Content[i].Value, n.Content[i+1]
+		limit := v.Value
+		if v.Kind == yaml.MappingNode {
+			soft, hard := mapValue(v, "soft"), mapValue(v, "hard")
+			if soft == nil || hard == nil {
+				continue
+			}
+			limit = soft.Value + ":" + hard.Value
+		}
+		*u = append(*u, name+"="+limit)
+	}
+	slices.Sort(*u)
+	return nil
+}
+
+// rawHosts reads both forms: a list of name:address, and a map from name to address.
+type rawHosts []string
+
+func (h *rawHosts) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.SequenceNode:
+		for _, c := range n.Content {
+			*h = append(*h, strings.Replace(c.Value, "=", ":", 1))
+		}
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			*h = append(*h, n.Content[i].Value+":"+n.Content[i+1].Value)
+		}
 	}
 	return nil
 }

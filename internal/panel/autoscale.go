@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
 	"github.com/nuelScript/skiff/internal/health"
 	"github.com/nuelScript/skiff/internal/registry"
@@ -173,6 +174,7 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 			CPU:           cpu,
 			Aliases:       stackAliases(src),
 			Command:       stackCommand(src),
+			Options:       config.DecodeRunOptions(src.RunOptions),
 		})
 		if err != nil {
 			break

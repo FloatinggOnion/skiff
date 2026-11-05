@@ -203,6 +203,9 @@ func appChanges(s *stackSource, team string, it compose.Item, src Source, cur cu
 	field("image", src.Image, want.Image)
 	field("build folder", src.RootDir, want.RootDir)
 	field("dockerfile", src.Dockerfile, want.Dockerfile)
+	if src.RunOptions != want.RunOptions {
+		details = append(details, "how it starts")
+	}
 	if src.MountedFiles != want.MountedFiles {
 		details = append(details, "files from the repository")
 	}

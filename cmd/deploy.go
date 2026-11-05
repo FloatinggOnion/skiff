@@ -387,6 +387,7 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			Volumes:       mounts,
 			Aliases:       cfg.Deploy.Aliases,
 			Command:       cfg.Deploy.Command,
+			Options:       config.DecodeRunOptions(cfg.Deploy.RunOptions),
 		})
 		if err != nil {
 			crashed := keptExiting(eng, container)

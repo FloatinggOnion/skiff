@@ -102,6 +102,7 @@ type Deploy struct {
 	HealthMode string   `toml:"health_mode"`
 	Aliases    []string `toml:"aliases"` // extra names on the network
 	Command    []string `toml:"command"` // replaces the image's default command
+	RunOptions string   `toml:"run_options"`
 }
 
 // ValidateHealth checks a health-check path and timeout (seconds, 0 for the default).

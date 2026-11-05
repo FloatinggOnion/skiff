@@ -633,6 +633,9 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if c := stackCommand(src); len(c) > 0 {
 		fmt.Fprintf(&b, "command = %s\n", tomlList(c))
 	}
+	if src.RunOptions != "" {
+		fmt.Fprintf(&b, "run_options = %s\n", tomlQuote(src.RunOptions))
+	}
 	if strings.TrimSpace(src.Release) != "" {
 		fmt.Fprintf(&b, "release = %s\n", tomlQuote(src.Release))
 	}
