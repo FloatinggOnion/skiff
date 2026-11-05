@@ -765,3 +765,59 @@ func TestComposeStackFollowsPushes(t *testing.T) {
 		t.Fatalf("the hold stayed: %q", got)
 	}
 }
+
+// TestComposeStackPostgres18 runs the Postgres image that moved its data folder, and checks data survives a restart.
+func TestComposeStackPostgres18(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-pg18"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	const file = `services:\n  db:\n    image: postgres:18-alpine\n    environment: {POSTGRES_USER: app, POSTGRES_PASSWORD: pw, POSTGRES_DB: shop}\n`
+	resp, err := c.Post(base, "application/json", strings.NewReader(`{"name":"`+stack+`","compose":"`+file+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	container := func() string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.stack="+stack, "--filter", "label=skiff.kind=database", "--filter", "status=running").Output()
+		return strings.TrimSpace(string(out))
+	}
+	ready := func() bool {
+		id := container()
+		if id == "" {
+			return false
+		}
+		return exec.Command("docker", "exec", id, "pg_isready", "-U", "app", "-d", "shop").Run() == nil
+	}
+	eventually(t, 3*time.Minute, ready)
+	dockerExec(t, container(), "psql -U app -d shop -c 'create table kept (id int)'")
+	if out, err := exec.Command("docker", "restart", container()).CombinedOutput(); err != nil {
+		t.Fatalf("restart: %v %s", err, out)
+	}
+	eventually(t, time.Minute, ready)
+	if got := dockerExec(t, container(), "psql -U app -d shop -tAc \"select to_regclass('kept')\""); got != "kept" {
+		t.Fatalf("the data didn't survive a restart: %q", got)
+	}
+}

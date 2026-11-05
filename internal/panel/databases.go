@@ -69,7 +69,8 @@ var dbEngines = map[string]dbEngine{
 		image: "postgres:16-alpine", port: 5432, mountAt: "/var/lib/postgresql/data",
 		envVar: "DATABASE_URL", label: "PostgreSQL", user: "skiff", hasDB: true,
 		container: func(user, pass, dbname string) (map[string]string, []string) {
-			return map[string]string{"POSTGRES_USER": user, "POSTGRES_PASSWORD": pass, "POSTGRES_DB": dbname}, nil
+			// Postgres 18's image moved its default data folder and refuses to start on a volume at the old one, so name it.
+			return map[string]string{"POSTGRES_USER": user, "POSTGRES_PASSWORD": pass, "POSTGRES_DB": dbname, "PGDATA": "/var/lib/postgresql/data"}, nil
 		},
 		url: func(host string, port int, user, pass, dbname string, tls bool) string {
 			// Private hop → sslmode=disable (some drivers otherwise demand TLS the container doesn't serve internally); public → require, so it's encrypted.
