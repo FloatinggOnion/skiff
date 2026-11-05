@@ -31,6 +31,21 @@ type Config struct {
 type Volume struct {
 	Name string `toml:"name" json:"name"`
 	Path string `toml:"path" json:"path"`
+	// Owner is the app holding a volume this app shares with others in its stack; empty means this app holds it.
+	Owner string `toml:"owner" json:"owner,omitempty"`
+}
+
+// DockerName is the volume's name on the server, for an app that mounts it.
+func (v Volume) DockerName(app string) string {
+	return VolumeName(v.Holder(app), v.Name)
+}
+
+// Holder is the app whose volume this is.
+func (v Volume) Holder(app string) string {
+	if v.Owner != "" {
+		return v.Owner
+	}
+	return app
 }
 
 const MaxVolumes = 5

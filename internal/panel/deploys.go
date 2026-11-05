@@ -678,6 +678,9 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	}
 	for _, v := range volumes {
 		fmt.Fprintf(&b, "\n[[volumes]]\nname = %s\npath = %s\n", tomlQuote(v.Name), tomlQuote(v.Path))
+		if v.Owner != "" {
+			fmt.Fprintf(&b, "owner = %s\n", tomlQuote(v.Owner))
+		}
 	}
 	return b.String()
 }

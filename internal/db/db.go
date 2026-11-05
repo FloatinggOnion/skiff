@@ -115,6 +115,7 @@ var migrations = []string{
 	`ALTER TABLE deploys ADD COLUMN full_sha TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN mounted_files TEXT NOT NULL DEFAULT ''`,
 	`ALTER TABLE sources ADD COLUMN run_options TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE volumes ADD COLUMN owner TEXT NOT NULL DEFAULT ''`,
 }
 
 const schema = `
@@ -446,6 +447,7 @@ CREATE TABLE IF NOT EXISTS volumes (
   name    TEXT NOT NULL,
   path    TEXT NOT NULL,
   created INTEGER NOT NULL,
+  owner   TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (app, name)
 );
 CREATE TABLE IF NOT EXISTS stacks (

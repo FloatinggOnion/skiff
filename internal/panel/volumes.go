@@ -13,7 +13,7 @@ import (
 )
 
 func listVolumes(app string) []config.Volume {
-	rows, err := sqlDB.Query(`SELECT name, path FROM volumes WHERE app=? ORDER BY created, name`, app)
+	rows, err := sqlDB.Query(`SELECT name, path, owner FROM volumes WHERE app=? ORDER BY created, name`, app)
 	if err != nil {
 		return nil
 	}
@@ -21,7 +21,7 @@ func listVolumes(app string) []config.Volume {
 	var out []config.Volume
 	for rows.Next() {
 		var v config.Volume
-		if rows.Scan(&v.Name, &v.Path) == nil {
+		if rows.Scan(&v.Name, &v.Path, &v.Owner) == nil {
 			out = append(out, v)
 		}
 	}
@@ -29,8 +29,8 @@ func listVolumes(app string) []config.Volume {
 }
 
 func addVolume(app string, v config.Volume) error {
-	_, err := sqlDB.Exec(`INSERT INTO volumes (app, name, path, created) VALUES (?, ?, ?, ?)`,
-		app, v.Name, v.Path, time.Now().Unix())
+	_, err := sqlDB.Exec(`INSERT INTO volumes (app, name, path, created, owner) VALUES (?, ?, ?, ?, ?)`,
+		app, v.Name, v.Path, time.Now().Unix(), v.Owner)
 	return err
 }
 
@@ -83,8 +83,8 @@ func (p *Panel) mountedVolumes(app string) []config.Volume {
 func (p *Panel) appMounts(src Source) []docker.Mount {
 	var out []docker.Mount
 	for _, v := range p.volumeDefs(src) {
-		name := config.VolumeName(src.App, v.Name)
-		if p.eng.EnsureAppVolume(name, src.App, v.Name) != nil {
+		name := v.DockerName(src.App)
+		if p.eng.EnsureAppVolume(name, v.Holder(src.App), v.Name) != nil {
 			continue
 		}
 		out = append(out, docker.Mount{Name: name, Destination: v.Path})
@@ -99,7 +99,7 @@ func (p *Panel) pruneVolumes(src Source) {
 	}
 	keep := map[string]bool{}
 	for _, v := range p.volumeDefs(src) {
-		keep[config.VolumeName(src.App, v.Name)] = true
+		keep[v.DockerName(src.App)] = true
 	}
 	for _, name := range p.eng.AppVolumes(src.App) {
 		if !keep[name] {
@@ -169,8 +169,8 @@ func (p *Panel) handleVolumes(w http.ResponseWriter, r *http.Request) {
 		for _, v := range p.volumeDefs(src) {
 			out = append(out, volumeView{
 				Name: v.Name, Path: v.Path,
-				Size:     sizes[config.VolumeName(app, v.Name)],
-				Attached: mounted[v.Name+"\x00"+v.Path],
+				Size:     sizes[v.DockerName(app)],
+				Attached: mounted[v.Name+"\x00"+v.Path] || v.Owner != "",
 			})
 		}
 		writeJSON(w, map[string]any{"kind": kind, "volumes": out})

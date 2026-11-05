@@ -529,7 +529,7 @@ func (p *Panel) createStack(s *stackSource, team, token string, vars map[string]
 			return err
 		}
 		for _, v := range it.Volumes {
-			if err := addVolume(src.App, config.Volume{Name: v.Name, Path: v.Path}); err != nil {
+			if err := addVolume(src.App, stackVolume(plan, v)); err != nil {
 				undo()
 				return err
 			}

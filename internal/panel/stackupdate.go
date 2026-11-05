@@ -91,10 +91,19 @@ func readCurrentStack(stack string) currentStack {
 
 func workerName(service string) string { return sanitizeName(strings.ReplaceAll(service, "_", "-")) }
 
-func stackVolumes(it compose.Item) []config.Volume {
+func stackVolumes(plan *compose.Plan, it compose.Item) []config.Volume {
 	out := make([]config.Volume, 0, len(it.Volumes))
 	for _, v := range it.Volumes {
-		out = append(out, config.Volume{Name: v.Name, Path: v.Path})
+		out = append(out, stackVolume(plan, v))
+	}
+	return out
+}
+
+// stackVolume names a shared volume's holder by its app, which is how it's stored.
+func stackVolume(plan *compose.Plan, v compose.PlanVolume) config.Volume {
+	out := config.Volume{Name: v.Name, Path: v.Path}
+	if v.Owner != "" {
+		out.Owner = plannedAppName(plan, v.Owner)
 	}
 	return out
 }
@@ -144,7 +153,7 @@ func diffStack(s *stackSource, team string, cur currentStack) (changes []StackCh
 	}
 	for svc := range cur.Apps {
 		if !seen["app/"+svc] {
-			changes = append(changes, StackChange{Service: svc, Kind: "app", Action: "remove", DeletesData: len(cur.Volumes[svc]) > 0})
+			changes = append(changes, StackChange{Service: svc, Kind: "app", Action: "remove", DeletesData: holdsVolume(cur.Volumes[svc])})
 		}
 	}
 	for svc := range cur.Workers {
@@ -160,6 +169,73 @@ func diffStack(s *stackSource, team string, cur currentStack) (changes []StackCh
 	slices.SortFunc(changes, func(a, b StackChange) int { return strings.Compare(a.Service+a.Action, b.Service+b.Action) })
 	slices.Sort(problems)
 	return changes, problems
+}
+
+// keepVolumeHolders leaves a shared volume with the service already holding it, so reordering a file doesn't move anyone's data, and refuses a change that would take the volume away from services still using it.
+func keepVolumeHolders(plan *compose.Plan, cur currentStack) []string {
+	var problems []string
+	holders := map[string]string{}
+	for service, vols := range cur.Volumes {
+		for _, v := range vols {
+			if v.Owner == "" {
+				holders[v.Name] = service
+			}
+		}
+	}
+	for name, holder := range holders {
+		var users []string
+		holds := false
+		for i := range plan.Items {
+			it := &plan.Items[i]
+			if it.Kind == compose.KindWorker {
+				continue
+			}
+			for _, v := range it.Volumes {
+				if v.Name == name {
+					users = append(users, it.Service)
+					holds = holds || it.Service == holder
+				}
+			}
+		}
+		if len(users) == 0 || (len(users) == 1 && holds) {
+			continue
+		}
+		if !holds {
+			if sharedBefore(cur, name) {
+				slices.Sort(users)
+				problems = append(problems, fmt.Sprintf("volume %s is held by %s, so %s must keep mounting it while %s use it", name, holder, holder, strings.Join(users, ", ")))
+			}
+			continue
+		}
+		for i := range plan.Items {
+			for j := range plan.Items[i].Volumes {
+				v := &plan.Items[i].Volumes[j]
+				if v.Name != name {
+					continue
+				}
+				v.Owner = holder
+				if plan.Items[i].Service == holder {
+					v.Owner = ""
+				}
+			}
+		}
+	}
+	return problems
+}
+
+func holdsVolume(vols []config.Volume) bool {
+	return slices.ContainsFunc(vols, func(v config.Volume) bool { return v.Owner == "" })
+}
+
+func sharedBefore(cur currentStack, name string) bool {
+	for _, vols := range cur.Volumes {
+		for _, v := range vols {
+			if v.Name == name && v.Owner != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func plannedAppName(p *compose.Plan, service string) string {
@@ -246,7 +322,7 @@ func appChanges(s *stackSource, team string, it compose.Item, src Source, cur cu
 			details = append(details, g.label+": "+strings.Join(g.keys, ", "))
 		}
 	}
-	wantVols := stackVolumes(it)
+	wantVols := stackVolumes(s.plan, it)
 	for _, v := range wantVols {
 		found := slices.IndexFunc(cur.Volumes[it.Service], func(o config.Volume) bool { return o.Name == v.Name })
 		switch {
@@ -254,13 +330,20 @@ func appChanges(s *stackSource, team string, it compose.Item, src Source, cur cu
 			details = append(details, "adds volume "+v.Name)
 		case cur.Volumes[it.Service][found].Path != v.Path:
 			details = append(details, fmt.Sprintf("moves volume %s to %s", v.Name, v.Path))
+		case cur.Volumes[it.Service][found].Owner != v.Owner:
+			details = append(details, "shares volume "+v.Name)
 		}
 	}
 	for _, o := range cur.Volumes[it.Service] {
-		if !slices.ContainsFunc(wantVols, func(v config.Volume) bool { return v.Name == o.Name }) {
-			details = append(details, "deletes volume "+o.Name+" and its files")
-			deletes = true
+		if slices.ContainsFunc(wantVols, func(v config.Volume) bool { return v.Name == o.Name }) {
+			continue
 		}
+		if o.Owner != "" {
+			details = append(details, "stops using shared volume "+o.Name)
+			continue
+		}
+		details = append(details, "deletes volume "+o.Name+" and its files")
+		deletes = true
 	}
 	return details, deletes
 }
@@ -314,7 +397,9 @@ func loadStackUpdate(ctx context.Context, req stackRequest, team string) (*stack
 	if rec.CloneURL != "" {
 		s.path = rec.Path
 	}
-	changes, problems := diffStack(s, team, readCurrentStack(s.plan.Stack))
+	cur := readCurrentStack(s.plan.Stack)
+	s.plan.Problems = append(s.plan.Problems, keepVolumeHolders(s.plan, cur)...)
+	changes, problems := diffStack(s, team, cur)
 	s.plan.Problems = append(s.plan.Problems, problems...)
 	view := stackChangesView{Stack: s.plan.Stack, FromGit: rec.CloneURL != "", Changes: changes, Problems: append([]string{}, s.plan.Problems...),
 		Notes: append([]string{}, s.plan.Notes...), Unset: append([]string{}, s.plan.Unset...)}
@@ -431,7 +516,7 @@ func (p *Panel) applyStackChanges(s *stackSource, team, token string, vars map[s
 		if err := setEnv(want.App, env); err != nil {
 			return err
 		}
-		wantVols := stackVolumes(it)
+		wantVols := stackVolumes(s.plan, it)
 		for _, o := range cur.Volumes[it.Service] {
 			if !slices.Contains(wantVols, o) {
 				deleteVolume(want.App, o.Name)

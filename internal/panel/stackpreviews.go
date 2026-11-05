@@ -198,8 +198,15 @@ func (p *Panel) removeStack(name string) {
 	for _, child := range stackPreviewNames(name) {
 		p.removeStack(child)
 	}
-	for _, s := range stackApps(name) {
+	apps := stackApps(name)
+	for _, s := range apps {
 		p.removeApp(s.App)
+	}
+	// A shared volume can't go while another service still mounts it, so it goes now that they've all stopped.
+	for _, s := range apps {
+		for _, volume := range p.eng.AppVolumes(s.App) {
+			_ = p.eng.RemoveVolume(volume)
+		}
 	}
 	for _, d := range stackDatabases(name) {
 		p.removeStackDB(d)

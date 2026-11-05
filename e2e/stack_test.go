@@ -1028,3 +1028,118 @@ func TestComposeStackRunSettings(t *testing.T) {
 		t.Errorf("a service behind a profile started: %s", out)
 	}
 }
+
+const sharedVolumeFile = `services:
+  web:
+    image: busybox:1.36
+    command: sleep 100000
+    volumes: ["uploads:/files"]
+  reader:
+    image: busybox:1.36
+    command: sleep 100001
+    volumes: ["uploads:/incoming"]
+volumes: {uploads: {}}
+`
+
+// TestComposeStackSharedVolume shares a volume between two services and checks it stays in one place through updates, backups and removal.
+func TestComposeStackSharedVolume(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-sharedvol"
+	removed := false
+	t.Cleanup(func() {
+		if removed {
+			return
+		}
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	body := func(file string) string {
+		quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(file)
+		return `{"name":"` + stack + `","compose":"` + quoted + `"}`
+	}
+	send := func(method, url, b string) (int, string) {
+		t.Helper()
+		req, _ := http.NewRequest(method, url, strings.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		msg, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(msg)
+	}
+	if code, msg := send(http.MethodPost, base, body(sharedVolumeFile)); code != http.StatusCreated {
+		t.Fatalf("create: %d %s", code, msg)
+	}
+	running := func(service string) string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+stack+"-"+service, "--filter", "status=running").Output()
+		if f := strings.Fields(string(out)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	eventually(t, 3*time.Minute, func() bool { return running("web") != "" && running("reader") != "" })
+	dockerExec(t, running("web"), "echo shared > /files/note")
+	if got := dockerExec(t, running("reader"), "cat /incoming/note"); got != "shared" {
+		t.Fatalf("the other service should see the file: %q", got)
+	}
+	volumes := func() string {
+		out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "name=skiff-"+stack).Output()
+		return strings.Join(strings.Fields(string(out)), " ")
+	}
+	if got := volumes(); got != "skiff-"+stack+"-web_uploads" {
+		t.Fatalf("there should be one volume, held by the first service: %q", got)
+	}
+
+	// Writing the services in the other order changes nothing.
+	reordered := strings.Replace(sharedVolumeFile, "  web:\n    image: busybox:1.36\n    command: sleep 100000\n    volumes: [\"uploads:/files\"]\n", "", 1)
+	reordered = strings.Replace(reordered, "volumes: {uploads: {}}", "  web:\n    image: busybox:1.36\n    command: sleep 100000\n    volumes: [\"uploads:/files\"]\nvolumes: {uploads: {}}", 1)
+	code, msg := send(http.MethodPost, base+"/changes", body(reordered))
+	if code != http.StatusOK || !strings.Contains(msg, `"changes":[]`) && !strings.Contains(msg, `"changes":null`) {
+		t.Fatalf("reordering should be no change: %d %s", code, msg)
+	}
+
+	// The service holding the volume can't leave while another still uses it.
+	withoutHolder := "services:\n  reader:\n    image: busybox:1.36\n    command: sleep 100001\n    volumes: [\"uploads:/incoming\"]\nvolumes: {uploads: {}}\n"
+	code, msg = send(http.MethodPost, base+"/changes", body(withoutHolder))
+	if code != http.StatusOK || !strings.Contains(msg, "held by web") {
+		t.Fatalf("removing the holder should be refused: %d %s", code, msg)
+	}
+
+	// A backup asked for through either service is the same volume's.
+	backup := func(service string) {
+		t.Helper()
+		if code, msg := send(http.MethodPost, "http://"+panel+"/api/volumes/backups?app="+stack+"-"+service+"&volume=uploads", ""); code != http.StatusOK {
+			t.Fatalf("backup through %s: %d %s", service, code, msg)
+		}
+	}
+	backup("reader")
+	var list []struct{ ID string }
+	getJSON(t, c, "http://"+panel+"/api/volumes/backups?app="+stack+"-web&volume=uploads", &list)
+	if len(list) != 1 {
+		t.Fatalf("the holder should list the backup: %+v", list)
+	}
+
+	if code, msg := send(http.MethodDelete, base+"?name="+stack, ""); code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", code, msg)
+	}
+	removed = true
+	eventually(t, time.Minute, func() bool { return volumes() == "" })
+}

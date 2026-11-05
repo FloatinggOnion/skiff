@@ -307,8 +307,8 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 
 	var mounts []docker.Mount
 	for _, v := range cfg.Volumes {
-		name := config.VolumeName(cfg.Name, v.Name)
-		if err := eng.EnsureAppVolume(name, cfg.Name, v.Name); err != nil {
+		name := v.DockerName(cfg.Name)
+		if err := eng.EnsureAppVolume(name, v.Holder(cfg.Name), v.Name); err != nil {
 			ui.Fail("Couldn't create volume " + v.Name)
 			return err
 		}

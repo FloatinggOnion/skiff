@@ -105,7 +105,7 @@ func TestPlanForATypicalBackend(t *testing.T) {
 		t.Errorf("cache: %+v", c)
 	}
 	s := item(t, p, "search")
-	if s.Kind != KindApp || s.Public || s.Port != 7700 || len(s.Volumes) != 1 || s.Volumes[0] != (PlanVolume{"search", "/meili_data"}) {
+	if s.Kind != KindApp || s.Public || s.Port != 7700 || len(s.Volumes) != 1 || s.Volumes[0] != (PlanVolume{Name: "search", Path: "/meili_data"}) {
 		t.Errorf("search: %+v", s)
 	}
 	pos := map[string]int{}
@@ -200,7 +200,7 @@ func TestProblemsAreReported(t *testing.T) {
 		"host network":    {"services:\n  a:\n    image: x\n    network_mode: host\n", "network_mode"},
 		"unknown depends": {"services:\n  a:\n    image: x\n    depends_on: [ghost]\n", "ghost"},
 		"cycle":           {"services:\n  a:\n    image: x\n    depends_on: [b]\n  b:\n    image: x\n    depends_on: [a]\n", "circle"},
-		"shared volume":   {"services:\n  a:\n    image: x\n    volumes: [v:/a]\n  b:\n    image: y\n    volumes: [v:/b]\n", "volume v is shared"},
+		"database volume": {"services:\n  a:\n    image: x\n    volumes: [v:/a]\n  b:\n    image: postgres:16\n    volumes: [v:/var/lib/postgresql/data]\n", "managed database"},
 		"missing envfile": {"services:\n  a:\n    image: x\n    env_file: gone.env\n", "gone.env"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -324,7 +324,7 @@ func TestMounts(t *testing.T) {
 	if !slices.Equal(a.Files, wantFiles) {
 		t.Errorf("files: %v", a.Files)
 	}
-	wantVolumes := []PlanVolume{{"seed", "/seed"}, {"data", "/data"}, {"opt-stuff", "/stuff"}}
+	wantVolumes := []PlanVolume{{Name: "seed", Path: "/seed"}, {Name: "data", Path: "/data"}, {Name: "opt-stuff", Path: "/stuff"}}
 	if !slices.Equal(a.Volumes, wantVolumes) {
 		t.Errorf("volumes: %v", a.Volumes)
 	}
@@ -358,14 +358,18 @@ func TestMounts(t *testing.T) {
 		}
 	})
 
-	t.Run("a shared folder is still a shared volume", func(t *testing.T) {
-		f, err := Parse([]byte("services:\n  a:\n    image: x\n    ports: [\"80\"]\n    volumes: [\"./data:/data\"]\n  b:\n    image: y\n    ports: [\"81\"]\n    volumes: [\"./data:/data\"]\n"), noEnv)
+	t.Run("a shared folder is a shared volume", func(t *testing.T) {
+		f, err := Parse([]byte("services:\n  a:\n    image: x\n    ports: [\"80\"]\n    volumes: [\"./data:/data\"]\n  b:\n    image: y\n    ports: [\"81\"]\n    volumes: [\"./data:/other\"]\n"), noEnv)
 		if err != nil {
 			t.Fatal(err)
 		}
 		got := BuildPlan("s", f, noFiles, repo)
-		if len(got.Problems) != 1 || !strings.Contains(got.Problems[0], "is shared by") {
-			t.Errorf("problems: %v", got.Problems)
+		if len(got.Problems) != 0 {
+			t.Fatalf("problems: %v", got.Problems)
+		}
+		a, b := item(t, got, "a"), item(t, got, "b")
+		if a.Volumes[0] != (PlanVolume{Name: "data", Path: "/data"}) || b.Volumes[0] != (PlanVolume{Name: "data", Path: "/other", Owner: "a"}) {
+			t.Errorf("a: %+v, b: %+v", a.Volumes, b.Volumes)
 		}
 	})
 }

@@ -47,7 +47,8 @@ type Item struct {
 	DBUser, DBPassword, DB string
 }
 
-type PlanVolume struct{ Name, Path string }
+// PlanVolume is a volume a service mounts. Owner is the service holding one shared across services; empty means this service holds it.
+type PlanVolume struct{ Name, Path, Owner string }
 
 // PlanFile is a file or folder from the repository that a service mounts, built into its image.
 type PlanFile struct{ Source, Target string }
@@ -257,25 +258,39 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 			continue
 		}
 		owner := ""
-		ok := true
+		shared := false
 		for _, u := range users {
 			it := byName[u]
 			if it == nil || it.Kind == KindDatabase {
-				ok = false
+				p.Problems = append(p.Problems, fmt.Sprintf("volume %s is shared with %s, a managed database, which keeps its data to itself", vol, u))
+				owner = ""
 				break
 			}
 			root := u
 			if it.WorkerOf != "" {
 				root = it.WorkerOf
 			}
-			if owner != "" && owner != root {
-				ok = false
+			if owner == "" {
+				owner = root
 			}
-			owner = root
+			shared = shared || root != owner
 		}
-		if !ok {
-			p.Problems = append(p.Problems, fmt.Sprintf("volume %s is shared by %s, but only an app and its workers can share one", vol, strings.Join(users, ", ")))
+		if owner == "" || !shared {
+			continue
 		}
+		name := safeName(vol)
+		for _, u := range users {
+			it := byName[u]
+			if it.WorkerOf != "" || u == owner {
+				continue
+			}
+			for i := range it.Volumes {
+				if it.Volumes[i].Name == name {
+					it.Volumes[i].Owner = owner
+				}
+			}
+		}
+		p.Notes = append(p.Notes, fmt.Sprintf("volume %s is shared by %s, and %s holds it and its backups", name, strings.Join(users, ", "), owner))
 	}
 
 	order, cycle := startOrder(f.Order, resolved)

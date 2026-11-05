@@ -109,7 +109,9 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
           <code>/etc</code> and the Docker socket are refused.
         </li>
         <li>
-          <strong>Volumes</strong> can only be shared between an app and its workers.
+          <strong>Shared volumes</strong> are held by the first service that uses them, which also
+          keeps their backups. That service has to keep mounting a volume while others use it. Managed
+          databases keep their data to themselves, so they can&apos;t share one.
         </li>
         <li>
           <strong>Health checks</strong> are used when they make an HTTP request. Otherwise a private
