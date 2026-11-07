@@ -3,7 +3,7 @@ import { CodeBlock } from "@/components/code-block";
 
 export const metadata: Metadata = {
   title: "API reference",
-  description: "Deploy, roll back, manage previews and environment variables, and read logs over Skiff's HTTP API.",
+  description: "Deploy, roll back, manage previews, workers, scheduled jobs and environment variables, and read logs over Skiff's HTTP API.",
   alternates: { canonical: "/docs/api" },
 };
 
@@ -32,6 +32,23 @@ const groups: { title: string; rows: [string, string, string][] }[] = [
     rows: [
       ["POST", "/apps/{name}/previews", 'Create or redeploy a branch\'s preview. Send {"branch": "feat/login"}.'],
       ["DELETE", "/apps/{name}/previews?branch=", "Remove a branch's preview."],
+    ],
+  },
+  {
+    title: "Workers",
+    rows: [
+      ["GET", "/apps/{name}/workers", "List the app's workers, with how many are running."],
+      ["PUT", "/apps/{name}/workers/{worker}", 'Create the worker or change it. Send {"command": "node queue.js", "replicas": 2}. Replicas go from 1 to 10.'],
+      ["DELETE", "/apps/{name}/workers/{worker}", "Stop and remove the worker."],
+    ],
+  },
+  {
+    title: "Scheduled jobs",
+    rows: [
+      ["GET", "/apps/{name}/jobs", "List the app's jobs, with when each last ran, whether it worked and when it runs next."],
+      ["POST", "/apps/{name}/jobs", 'Add a job. Send {"name": "report", "schedule": "0 3 * * *", "command": "node report.js"}. The schedule uses cron syntax, in the server\'s time zone.'],
+      ["POST", "/apps/{name}/jobs/{id}/run", "Run the job now and wait for it. Answers with ok and its output."],
+      ["DELETE", "/apps/{name}/jobs/{id}", "Remove the job."],
     ],
   },
   {

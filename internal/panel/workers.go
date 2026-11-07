@@ -137,36 +137,19 @@ func (p *Panel) handleWorkers(w http.ResponseWriter, r *http.Request) {
 			Replicas      int
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		name := sanitizeName(body.Name)
-		command := strings.TrimSpace(body.Command)
-		if name == "" {
-			http.Error(w, "a worker name is required", http.StatusBadRequest)
+		wk, problem := newWorker(app, body.Name, body.Command, body.Replicas)
+		if problem != "" {
+			http.Error(w, problem, http.StatusBadRequest)
 			return
-		}
-		if command == "" {
-			http.Error(w, "a command is required", http.StatusBadRequest)
-			return
-		}
-		reps := body.Replicas
-		if reps < 1 {
-			reps = 1
-		}
-		if reps > 10 {
-			reps = 10
-		}
-		src, _ := getSource(app)
-		wk := workerRow{
-			ID: randToken()[:12], App: app, Team: src.Team, Name: name,
-			Command: command, Replicas: reps, Created: time.Now().Unix(),
 		}
 		if err := putWorker(wk); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		p.audit(r, "worker.set", app, name)
+		p.audit(r, "worker.set", app, wk.Name)
 		go p.reconcileWorkers(app)
 		// re-read the stored row: on a conflict update the id differs from the one we submitted.
-		writeJSON(w, toWorker(mustWorker(app, name, wk), p.eng.WorkerContainers(app)))
+		writeJSON(w, toWorker(mustWorker(app, wk.Name, wk), p.eng.WorkerContainers(app)))
 
 	case http.MethodDelete:
 		wk, ok := getWorker(sanitizeID(r.URL.Query().Get("id")))
@@ -182,6 +165,22 @@ func (p *Panel) handleWorkers(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// newWorker checks a worker's settings, the same for the dashboard and the API; replicas are kept between 1 and 10.
+func newWorker(app, name, command string, replicas int) (workerRow, string) {
+	name, command = sanitizeName(name), strings.TrimSpace(command)
+	if name == "" {
+		return workerRow{}, "a worker name is required"
+	}
+	if command == "" {
+		return workerRow{}, "a command is required"
+	}
+	src, _ := getSource(app)
+	return workerRow{
+		ID: randToken()[:12], App: app, Team: src.Team, Name: name,
+		Command: command, Replicas: min(max(replicas, 1), 10), Created: time.Now().Unix(),
+	}, ""
 }
 
 func mustWorker(app, name string, fallback workerRow) workerRow {
