@@ -342,12 +342,16 @@ func stackSourceFor(s *stackSource, team string, it compose.Item) Source {
 		}
 	}
 	src.RunOptions = config.EncodeRunOptions(it.Options)
-	if it.Build != nil || len(it.Files) > 0 {
+	if it.Build != nil || slices.ContainsFunc(it.Files, func(f compose.PlanFile) bool { return f.Content == nil }) {
 		src.CloneURL, src.Branch, src.Auto, src.Repo = s.cloneURL, s.branch, true, githubRepo(s.cloneURL)
 	}
 	if len(it.Files) > 0 {
 		files := make([]mountedFile, 0, len(it.Files))
 		for _, f := range it.Files {
+			if f.Content != nil {
+				files = append(files, mountedFile{To: f.Target, Content: f.Content})
+				continue
+			}
 			files = append(files, mountedFile{From: strings.TrimPrefix(filepath.Join(s.dir, f.Source), "/"), To: f.Target})
 		}
 		if b, err := json.Marshal(files); err == nil {

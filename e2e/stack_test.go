@@ -1143,3 +1143,102 @@ func TestComposeStackSharedVolume(t *testing.T) {
 	removed = true
 	eventually(t, time.Minute, func() bool { return volumes() == "" })
 }
+
+// TestComposeStackSecretsAndConfigs checks secrets and configs reach the services that ask for them, a database takes its password from a secret file, and a service can extend another.
+func TestComposeStackSecretsAndConfigs(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	repo, push := gitServer(t, root)
+	work := filepath.Join(root, "work")
+	for path, content := range map[string]string{
+		"compose.yml": `services:
+  web:
+    image: busybox:1.36
+    command: httpd -f -p 3000 -h /etc
+    ports: ["3000"]
+    environment: {FROM_BASE: "yes"}
+    depends_on: [db]
+    secrets: [db-password]
+    configs: [{source: greeting, target: /etc/greeting}]
+  helper:
+    extends: web
+    environment: {ROLE: helper}
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db-password
+    secrets: [db-password]
+secrets:
+  db-password: {file: ./db/password.txt}
+configs:
+  greeting: {content: "hello from compose"}
+`,
+		"db/password.txt": "s3cret-pw\n",
+	} {
+		full := filepath.Join(work, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	push("v1")
+
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_ALLOW_PRIVATE_ENDPOINTS=1"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-secrets"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	resp, err := c.Post(base, "application/json", strings.NewReader(fmt.Sprintf(`{"name":%q,"git":%q}`, stack, repo)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	running := func(app string) string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+app, "--filter", "status=running").Output()
+		if f := strings.Fields(string(out)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	eventually(t, 5*time.Minute, func() bool { return running(stack+"-web") != "" && running(stack+"-helper") != "" })
+
+	web := running(stack + "-web")
+	if got := dockerExec(t, web, "cat /run/secrets/db-password /etc/greeting"); got != "s3cret-pw\nhello from compose" {
+		t.Errorf("the secret and the config: %q", got)
+	}
+	helper := running(stack + "-helper")
+	if got := dockerExec(t, helper, `cat /etc/greeting; echo; echo "$FROM_BASE $ROLE"`); got != "hello from compose\nyes helper" {
+		t.Errorf("a service that extends another: %q", got)
+	}
+
+	nets, err := exec.Command("docker", "inspect", "-f", "{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}", web).Output()
+	if err != nil || len(strings.Fields(string(nets))) == 0 {
+		t.Fatalf("the web service's network: %v %s", err, nets)
+	}
+	network := strings.Fields(string(nets))[0]
+	eventually(t, 2*time.Minute, func() bool {
+		return exec.Command("docker", "run", "--rm", "--network", network, "postgres:16-alpine",
+			"psql", "postgresql://postgres:s3cret-pw@db:5432/postgres", "-c", "select 1").Run() == nil
+	})
+}

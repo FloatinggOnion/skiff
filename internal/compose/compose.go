@@ -29,6 +29,8 @@ type File struct {
 	Extra map[string][]string
 	// Profiled lists services that only run with a Compose profile, so a plain start leaves them out.
 	Profiled []string
+	// Problems are parts of the file Skiff can't honor, found while reading it.
+	Problems []string
 }
 
 type Service struct {
@@ -60,6 +62,10 @@ type Mount struct {
 	Source, Target string
 	Bind           bool
 	ReadOnly       bool
+	// Need names the secret or config a file mount comes from; it must exist in the repository.
+	Need string
+	// Content is a config written in the Compose file itself.
+	Content *string
 }
 
 type rawService struct {
@@ -98,6 +104,35 @@ type rawService struct {
 	StopGracePeriod string     `yaml:"stop_grace_period"`
 	StopSignal      string     `yaml:"stop_signal"`
 	Profiles        []string   `yaml:"profiles"`
+	Secrets         []rawRef   `yaml:"secrets"`
+	Configs         []rawRef   `yaml:"configs"`
+}
+
+// rawRef is a service's use of a secret or config: a name, or a source with an optional target path.
+type rawRef struct{ Source, Target string }
+
+func (r *rawRef) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		r.Source = n.Value
+		return nil
+	}
+	var long struct {
+		Source string `yaml:"source"`
+		Target string `yaml:"target"`
+	}
+	if err := n.Decode(&long); err != nil {
+		return err
+	}
+	r.Source, r.Target = long.Source, long.Target
+	return nil
+}
+
+// fileSource is a top-level secret or config.
+type fileSource struct {
+	File        string  `yaml:"file"`
+	Content     *string `yaml:"content"`
+	Environment string  `yaml:"environment"`
+	External    bool    `yaml:"external"`
 }
 
 var serviceKeys = map[string]bool{
@@ -105,6 +140,7 @@ var serviceKeys = map[string]bool{
 	"expose": true, "volumes": true, "depends_on": true, "mem_limit": true, "cpus": true, "deploy": true,
 	"healthcheck": true, "<<": true, "entrypoint": true, "user": true, "working_dir": true, "init": true, "read_only": true,
 	"shm_size": true, "tmpfs": true, "ulimits": true, "extra_hosts": true, "stop_grace_period": true, "stop_signal": true, "profiles": true,
+	"secrets": true, "configs": true,
 }
 
 // Parse reads a Compose file, filling in ${VAR} references from lookup.
@@ -124,6 +160,16 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 	services := mapValue(doc.Content[0], "services")
 	if services == nil || services.Kind != yaml.MappingNode || len(services.Content) == 0 {
 		return nil, errors.New("the Compose file has no services")
+	}
+	if err := applyExtends(services); err != nil {
+		return nil, err
+	}
+	var top struct {
+		Secrets map[string]fileSource `yaml:"secrets"`
+		Configs map[string]fileSource `yaml:"configs"`
+	}
+	if err := doc.Content[0].Decode(&top); err != nil {
+		return nil, fmt.Errorf("reading secrets and configs: %w", err)
 	}
 	for i := 0; i+1 < len(services.Content); i += 2 {
 		name, node := services.Content[i].Value, services.Content[i+1]
@@ -174,6 +220,16 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		for _, m := range raw.Volumes {
 			s.Volumes = append(s.Volumes, Mount(m))
 		}
+		for _, r := range raw.Secrets {
+			if m, ok := f.fileMount(name, "secret", r, top.Secrets, lookup); ok {
+				s.Volumes = append(s.Volumes, m)
+			}
+		}
+		for _, r := range raw.Configs {
+			if m, ok := f.fileMount(name, "config", r, top.Configs, lookup); ok {
+				s.Volumes = append(s.Volumes, m)
+			}
+		}
 		f.Services[name] = s
 		f.Order = append(f.Order, name)
 		if node.Kind == yaml.MappingNode {
@@ -185,6 +241,148 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		}
 	}
 	return f, nil
+}
+
+// fileMount turns a secret or config into a read-only file mount: secrets land in /run/secrets/<name> and configs at /<name>, unless a target is given. A secret is only taken from a file, since building a value from the environment into an image would leave it there for anyone with the image.
+func (f *File) fileMount(service, kind string, r rawRef, sources map[string]fileSource, lookup func(string) (string, bool)) (Mount, bool) {
+	src, defined := sources[r.Source]
+	target := r.Target
+	if target == "" {
+		target = r.Source
+	}
+	if !strings.HasPrefix(target, "/") {
+		if kind == "secret" {
+			target = "/run/secrets/" + target
+		} else {
+			target = "/" + target
+		}
+	}
+	m := Mount{Target: cleanTarget(target), ReadOnly: true, Need: kind + " " + r.Source}
+	problem := func(why string) (Mount, bool) {
+		f.Problems = append(f.Problems, fmt.Sprintf("%s: %s %s %s", service, kind, r.Source, why))
+		return Mount{}, false
+	}
+	switch {
+	case !defined:
+		return problem("isn't defined at the top of the file")
+	case src.External:
+		return problem("is external, which Skiff can't read, so give it a file in the repository")
+	case src.File != "":
+		m.Source, m.Bind = src.File, true
+	case src.Content != nil && kind == "config":
+		m.Content = src.Content
+	case src.Environment != "" && kind == "config":
+		v, _ := lookup(src.Environment)
+		m.Content = &v
+	case src.Environment != "":
+		return problem("comes from an environment variable, so give it a file in the repository or set the variable on the service instead")
+	default:
+		return problem("needs a file")
+	}
+	return m, true
+}
+
+// applyExtends merges each service that extends another in the same file into a copy of that service. Extending a service from another file is left for the plan to refuse.
+func applyExtends(services *yaml.Node) error {
+	done := map[string]bool{}
+	var resolve func(name string, seen []string) error
+	resolve = func(name string, seen []string) error {
+		if done[name] {
+			return nil
+		}
+		if slices.Contains(seen, name) {
+			return fmt.Errorf("extends goes in a circle through %s", strings.Join(append(seen, name), ", "))
+		}
+		node := mapValue(services, name)
+		if node == nil || node.Kind != yaml.MappingNode {
+			return nil
+		}
+		ext := mapValue(node, "extends")
+		if ext == nil {
+			done[name] = true
+			return nil
+		}
+		base := ext.Value
+		if ext.Kind == yaml.MappingNode {
+			if mapValue(ext, "file") != nil {
+				done[name] = true
+				return nil
+			}
+			if s := mapValue(ext, "service"); s != nil {
+				base = s.Value
+			}
+		}
+		if mapValue(services, base) == nil {
+			return fmt.Errorf("service %s extends %s, which isn't in this file", name, base)
+		}
+		if err := resolve(base, append(seen, name)); err != nil {
+			return err
+		}
+		merged := mergeService(mapValue(services, base), node)
+		*node = *merged
+		done[name] = true
+		return nil
+	}
+	for i := 0; i+1 < len(services.Content); i += 2 {
+		if err := resolve(services.Content[i].Value, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// appendedKeys are lists Compose adds together when a service extends another; other lists replace the base's.
+var appendedKeys = map[string]bool{
+	"ports": true, "expose": true, "volumes": true, "secrets": true, "configs": true, "dns": true, "dns_search": true,
+	"extra_hosts": true, "tmpfs": true, "env_file": true, "cap_add": true, "cap_drop": true, "devices": true,
+}
+
+func mergeService(base, child *yaml.Node) *yaml.Node {
+	out := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	at := map[string]int{}
+	for i := 0; i+1 < len(base.Content); i += 2 {
+		if k := base.Content[i].Value; k != "extends" {
+			at[k] = len(out.Content)
+			out.Content = append(out.Content, base.Content[i], base.Content[i+1])
+		}
+	}
+	for i := 0; i+1 < len(child.Content); i += 2 {
+		k, v := child.Content[i].Value, child.Content[i+1]
+		if k == "extends" {
+			continue
+		}
+		j, ok := at[k]
+		if !ok {
+			out.Content = append(out.Content, child.Content[i], v)
+			continue
+		}
+		old := out.Content[j+1]
+		if k == "environment" || k == "labels" {
+			old, v = asMapping(old), asMapping(v)
+		}
+		switch {
+		case old.Kind == yaml.MappingNode && v.Kind == yaml.MappingNode:
+			out.Content[j+1] = mergeService(old, v)
+		case old.Kind == yaml.SequenceNode && v.Kind == yaml.SequenceNode && appendedKeys[k]:
+			out.Content[j+1] = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: append(slices.Clone(old.Content), v.Content...)}
+		default:
+			out.Content[j+1] = v
+		}
+	}
+	return out
+}
+
+// asMapping turns a KEY=value list into a mapping, so both forms of environment and labels merge the same way.
+func asMapping(n *yaml.Node) *yaml.Node {
+	if n.Kind != yaml.SequenceNode {
+		return n
+	}
+	out := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	for _, item := range n.Content {
+		k, v, _ := strings.Cut(item.Value, "=")
+		out.Content = append(out.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: k}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v})
+	}
+	return out
 }
 
 // cleanTarget drops a trailing slash, which Compose accepts in a container path.

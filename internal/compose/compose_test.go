@@ -2,6 +2,7 @@ package compose
 
 import (
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -320,7 +321,7 @@ func TestMounts(t *testing.T) {
 		t.Fatalf("problems: %v", p.Problems)
 	}
 	a := item(t, p, "a")
-	wantFiles := []PlanFile{{"./nginx.conf", "/etc/nginx/nginx.conf"}, {"./site", "/www"}, {"./seed", "/seed"}}
+	wantFiles := []PlanFile{{Source: "./nginx.conf", Target: "/etc/nginx/nginx.conf"}, {Source: "./site", Target: "/www"}, {Source: "./seed", Target: "/seed"}}
 	if !slices.Equal(a.Files, wantFiles) {
 		t.Errorf("files: %v", a.Files)
 	}
@@ -495,5 +496,130 @@ volumes: {data: {}, cache: {}}
 	}
 	if got := dockerSize("lots"); got != "lots" {
 		t.Errorf("an unreadable size should be left for validation: %q", got)
+	}
+}
+
+func TestSecretsAndConfigs(t *testing.T) {
+	const file = `services:
+  app:
+    image: x
+    ports: ["80"]
+    secrets: [key, {source: key, target: other-name}, from-env, outside, missing, undefined]
+    configs: [conf, {source: inline, target: /etc/app/inline.conf}, fromvar]
+secrets:
+  key: {file: ./secrets/key.txt}
+  from-env: {environment: TOKEN}
+  outside: {external: true}
+  missing: {file: ./nope.txt}
+configs:
+  conf: {file: ./conf/app.conf}
+  inline: {content: "a = 1"}
+  fromvar: {environment: GREETING}
+`
+	f, err := Parse([]byte(file), func(k string) (string, bool) { return map[string]string{"GREETING": "hi"}[k], k == "GREETING" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := func(p string) PathKind {
+		if p == "./secrets/key.txt" || p == "./conf/app.conf" {
+			return PathFile
+		}
+		return PathMissing
+	}
+	p := BuildPlan("s", f, noFiles, repo)
+	a := item(t, p, "app")
+	var got []string
+	for _, pf := range a.Files {
+		if pf.Content != nil {
+			got = append(got, pf.Target+"="+*pf.Content)
+		} else {
+			got = append(got, pf.Target+"<"+pf.Source)
+		}
+	}
+	want := []string{"/run/secrets/key<./secrets/key.txt", "/run/secrets/other-name<./secrets/key.txt", "/conf<./conf/app.conf", "/etc/app/inline.conf=a = 1", "/fromvar=hi"}
+	if !slices.Equal(got, want) {
+		t.Errorf("files:\n got %v\nwant %v", got, want)
+	}
+	for _, why := range []string{"secret from-env comes from an environment variable", "secret outside is external", "secret missing comes from ./nope.txt, which isn't in the repository", "secret undefined isn't defined"} {
+		if !slices.ContainsFunc(p.Problems, func(s string) bool { return strings.Contains(s, why) }) {
+			t.Errorf("no problem saying %q in %v", why, p.Problems)
+		}
+	}
+
+	t.Run("a pasted file has no repository to read a secret from", func(t *testing.T) {
+		f, err := Parse([]byte("services:\n  a:\n    image: x\n    secrets: [k]\nsecrets:\n  k: {file: ./k}\n"), noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p := BuildPlan("s", f, noFiles, nil); len(p.Problems) != 1 || !strings.Contains(p.Problems[0], "only works from a repository") {
+			t.Errorf("problems: %v", p.Problems)
+		}
+	})
+
+	t.Run("a database reads its password from a secret file", func(t *testing.T) {
+		f, err := Parse([]byte("services:\n  db:\n    image: postgres:16\n    environment: {POSTGRES_PASSWORD_FILE: /run/secrets/pw}\n    secrets: [pw]\nsecrets:\n  pw: {file: ./pw.txt}\n"), noEnv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		read := func(name string) ([]byte, error) {
+			if name == "./pw.txt" {
+				return []byte("hunter2\n"), nil
+			}
+			return nil, errors.New("missing")
+		}
+		if db := item(t, BuildPlan("s", f, read, repo), "db"); db.Kind != KindDatabase || db.DBPassword != "hunter2" {
+			t.Errorf("database: %s %q", db.Kind, db.DBPassword)
+		}
+	})
+}
+
+func TestExtends(t *testing.T) {
+	const file = `services:
+  base:
+    image: x
+    environment: {A: "1", B: "1"}
+    ports: ["80"]
+    volumes: ["data:/data"]
+    command: serve
+  child:
+    extends: base
+    environment: {B: "2"}
+    ports: ["81"]
+    command: other
+  grandchild:
+    extends: {service: child}
+    environment: [C=3]
+volumes: {data: {}}
+`
+	f, err := Parse([]byte(file), noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, grand := f.Services["child"], f.Services["grandchild"]
+	if !maps.Equal(child.Environment, map[string]string{"A": "1", "B": "2"}) || !slices.Equal(child.Command, []string{"other"}) {
+		t.Errorf("child: %v %v", child.Environment, child.Command)
+	}
+	if len(child.Ports) != 2 || child.Ports[1].Target != 81 || len(child.Volumes) != 1 || child.Image != "x" {
+		t.Errorf("child should keep the base's lists and add its own: %+v", child)
+	}
+	if grand.Environment["C"] != "3" || grand.Environment["B"] != "2" {
+		t.Errorf("an environment list should merge with a map: %v", grand.Environment)
+	}
+	if len(f.Extra["child"]) != 0 {
+		t.Errorf("extends shouldn't be left as an unread key: %v", f.Extra)
+	}
+
+	if _, err := Parse([]byte("services:\n  a: {extends: b, image: x}\n  b: {extends: a, image: x}\n"), noEnv); err == nil || !strings.Contains(err.Error(), "circle") {
+		t.Errorf("a circle: %v", err)
+	}
+	if _, err := Parse([]byte("services:\n  a: {extends: nope, image: x}\n"), noEnv); err == nil {
+		t.Error("extending a service that isn't there should be refused")
+	}
+	other, err := Parse([]byte("services:\n  a:\n    image: x\n    extends: {file: other.yml, service: b}\n"), noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := BuildPlan("s", other, noFiles, nil); !slices.ContainsFunc(p.Problems, func(s string) bool { return strings.Contains(s, "from another file") }) {
+		t.Errorf("extends from another file: %v", p.Problems)
 	}
 }

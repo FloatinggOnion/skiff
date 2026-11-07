@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -14,6 +16,17 @@ import (
 type mountedFile struct {
 	From string `json:"from"`
 	To   string `json:"to"`
+	// Content is written to To instead of copying From, for a config written in the Compose file.
+	Content *string `json:"content,omitempty"`
+}
+
+// mountsFromRepo says whether any of a service's mounted files is copied from its repository, which the deploy then has to clone.
+func mountsFromRepo(encoded string) bool {
+	var files []mountedFile
+	if json.Unmarshal([]byte(encoded), &files) != nil {
+		return encoded != ""
+	}
+	return slices.ContainsFunc(files, func(f mountedFile) bool { return f.Content == nil })
 }
 
 const mountedDir = ".skiff-mounts"
@@ -43,7 +56,25 @@ func prepareMountedFiles(src *Source, work, ctxDir string) error {
 	}
 	var b strings.Builder
 	b.WriteString(base)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
 	for i, f := range files {
+		if f.Content != nil {
+			copied := filepath.Join(mountedDir, fmt.Sprint(i), path.Base(f.To))
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(ctxDir, copied)), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(ctxDir, copied), []byte(*f.Content), 0o644); err != nil {
+				return err
+			}
+			line, err := json.Marshal([]string{filepath.ToSlash(copied), f.To})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(&b, "COPY %s\n", line)
+			continue
+		}
 		from := filepath.Join(work, filepath.Clean("/"+f.From))
 		info, err := os.Lstat(from)
 		if err != nil {

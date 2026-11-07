@@ -120,8 +120,21 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
           service counts as ready once its port opens.
         </li>
         <li>
+          <strong>Secrets and configs</strong> are built into the service&apos;s image as read-only
+          files: secrets at <code>/run/secrets/&lt;name&gt;</code>, configs at{" "}
+          <code>/&lt;name&gt;</code>, or wherever <code>target</code> says. Secrets come from a{" "}
+          <code>file</code> in the repository. Configs can also be written with{" "}
+          <code>content</code> or taken from a variable with <code>environment</code>. A managed
+          database reads its password from a secret through variables like{" "}
+          <code>POSTGRES_PASSWORD_FILE</code>.
+        </li>
+        <li>
+          <strong>extends</strong> works for a service in the same file.
+        </li>
+        <li>
           <strong>Not supported:</strong> <code>privileged</code>, <code>network_mode</code>,{" "}
-          <code>devices</code>, <code>extends</code>, <code>secrets</code> and <code>configs</code>.
+          <code>devices</code>, <code>extends</code> from another file, secrets taken from an
+          environment variable, and external secrets and configs.
           Keys like <code>restart</code> and <code>networks</code> are ignored, and so are permission
           settings like <code>cap_add</code> and <code>sysctls</code>.
         </li>

@@ -162,7 +162,7 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 			childEnv = append(childEnv, "SKIFF_REGISTRY_USER="+user, "SKIFF_REGISTRY_PASSWORD="+pass)
 		}
 	}
-	if src.Image != "" && src.MountedFiles == "" {
+	if src.Image != "" && !mountsFromRepo(src.MountedFiles) {
 		if ctxDir = p.imageWorkDir(src); ctxDir == "" {
 			finish("✗ couldn't prepare the deploy")
 			return

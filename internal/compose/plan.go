@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,7 +52,11 @@ type Item struct {
 type PlanVolume struct{ Name, Path, Owner string }
 
 // PlanFile is a file or folder from the repository that a service mounts, built into its image.
-type PlanFile struct{ Source, Target string }
+type PlanFile struct {
+	Source, Target string
+	// Content is written to Target instead of copying Source, for a config written in the Compose file.
+	Content *string
+}
 
 // PathKind is what a path in a Compose file's repository turned out to be.
 type PathKind int
@@ -85,9 +90,7 @@ var unsupportedKeys = map[string]string{
 	"privileged":   "needs privileges Skiff doesn't grant",
 	"network_mode": "Skiff manages the network",
 	"devices":      "Skiff doesn't pass devices through",
-	"extends":      "isn't supported yet, so merge it into the file",
-	"secrets":      "isn't supported yet, so use environment variables",
-	"configs":      "isn't supported yet, so build the file into the image",
+	"extends":      "from another file isn't supported yet, so merge it into this file",
 }
 
 var nameUnsafe = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -126,6 +129,7 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 		p.Problems = append(p.Problems, "the stack needs a name made of letters, digits or dashes")
 	}
 	p.Unset = dedupe(f.Unset)
+	p.Problems = append(p.Problems, f.Problems...)
 	for _, name := range f.Profiled {
 		p.Notes = append(p.Notes, name+": only runs with a Compose profile, so Skiff leaves it out")
 	}
@@ -202,7 +206,7 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 		}
 
 		if engine := managedEngine(s); engine != "" {
-			applyDatabase(&it, engine, s, p)
+			applyDatabase(&it, engine, s, p, readFile)
 			byName[name] = &it
 			continue
 		}
@@ -341,6 +345,26 @@ func resolveMounts(service string, mounts []Mount, repoPath func(string) PathKin
 		out = append(out, m)
 	}
 	for _, m := range mounts {
+		if m.Content != nil {
+			p.Notes = append(p.Notes, fmt.Sprintf("%s: %s is built into its image, so changes reach it on the next deploy", service, m.Need))
+			files = append(files, PlanFile{Target: m.Target, Content: m.Content})
+			continue
+		}
+		if m.Need != "" {
+			path := strings.TrimRight(m.Source, "/")
+			switch {
+			case strings.HasPrefix(path, "/") || strings.HasPrefix(path, "~"):
+				p.Problems = append(p.Problems, fmt.Sprintf("%s: %s comes from %s on the server, so give it a file in the repository", service, m.Need, m.Source))
+			case repoPath == nil:
+				p.Problems = append(p.Problems, fmt.Sprintf("%s: %s comes from %s, which only works from a repository, so deploy this stack from one instead of pasting the file", service, m.Need, m.Source))
+			case repoPath(path) == PathMissing:
+				p.Problems = append(p.Problems, fmt.Sprintf("%s: %s comes from %s, which isn't in the repository", service, m.Need, m.Source))
+			default:
+				p.Notes = append(p.Notes, fmt.Sprintf("%s: %s is built into its image from the repository, so changes reach it on the next deploy", service, m.Need))
+				files = append(files, PlanFile{Source: path, Target: m.Target})
+			}
+			continue
+		}
 		if !m.Bind {
 			out = append(out, m)
 			continue
@@ -386,6 +410,28 @@ func resolveMounts(service string, mounts []Mount, repoPath func(string) PathKin
 	return out, files
 }
 
+// withFileValues fills a database's KEY from KEY_FILE when that file is one of its secrets or configs, as the official images do at start.
+func withFileValues(s Service, readFile func(string) ([]byte, error)) map[string]string {
+	env := maps.Clone(s.Environment)
+	for k, v := range s.Environment {
+		key, ok := strings.CutSuffix(k, "_FILE")
+		if !ok || env[key] != "" {
+			continue
+		}
+		for _, m := range s.Volumes {
+			if m.Need == "" || m.Target != v {
+				continue
+			}
+			if m.Content != nil {
+				env[key] = *m.Content
+			} else if data, err := readFile(m.Source); err == nil {
+				env[key] = strings.TrimRight(string(data), "\r\n")
+			}
+		}
+	}
+	return env
+}
+
 func managedEngine(s Service) string {
 	if s.Build != nil || s.Image == "" {
 		return ""
@@ -398,9 +444,9 @@ func managedEngine(s Service) string {
 	return managedEngines[repo]
 }
 
-func applyDatabase(it *Item, engine string, s Service, p *Plan) {
+func applyDatabase(it *Item, engine string, s Service, p *Plan, readFile func(string) ([]byte, error)) {
 	it.Kind, it.Engine = KindDatabase, engine
-	env := s.Environment
+	env := withFileValues(s, readFile)
 	switch engine {
 	case "postgres":
 		it.DBUser, it.DBPassword, it.DB = env["POSTGRES_USER"], env["POSTGRES_PASSWORD"], env["POSTGRES_DB"]
