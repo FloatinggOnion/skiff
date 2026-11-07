@@ -45,8 +45,9 @@ type compatPlanResult struct {
 	Notes       []string `json:"notes,omitempty"`
 	Services    int      `json:"services"`
 
-	plan *compose.Plan
-	env  map[string]string
+	plan     *compose.Plan
+	env      map[string]string
+	envFiles []string
 }
 
 func compatProjects(t *testing.T) []compatProject {
@@ -83,6 +84,23 @@ func compatEnv(work string, p compatProject) map[string]string {
 		}
 	}
 	return map[string]string{}
+}
+
+// compatEnvExample finds the example a user would copy to a missing env file: the same name with an example suffix, or the folder's usual example.
+func compatEnvExample(path string) string {
+	dir, base := filepath.Split(path)
+	var names []string
+	for _, suffix := range []string{".example", ".sample", ".template", ".dist"} {
+		names = append(names, base+suffix)
+	}
+	for _, name := range append(names, compatEnvFiles...) {
+		if full := filepath.Join(dir, name); full != path {
+			if info, err := os.Stat(full); err == nil && info.Mode().IsRegular() {
+				return full
+			}
+		}
+	}
+	return ""
 }
 
 // compatFill gives a value to anything the file insists on that the example doesn't provide.
@@ -146,10 +164,8 @@ func compatLoad(p compatProject, work string) compatPlanResult {
 			return body, nil
 		}
 		// A missing .env is the one the user would have created from the example.
-		for _, name := range compatEnvFiles {
-			if body, err := os.ReadFile(filepath.Join(dir, filepath.Dir(file), name)); err == nil {
-				return body, nil
-			}
+		if example := compatEnvExample(filepath.Join(dir, file)); example != "" {
+			return os.ReadFile(example)
 		}
 		return nil, err
 	}, func(path string) compose.PathKind {
@@ -162,6 +178,9 @@ func compatLoad(p compatProject, work string) compatPlanResult {
 		return compose.PathFile
 	})
 	r.plan, r.env = plan, env
+	for _, s := range f.Services {
+		r.envFiles = append(r.envFiles, s.EnvFiles...)
+	}
 	r.Services = len(f.Services)
 	r.Problems = plan.Problems
 	for _, n := range plan.Notes {
@@ -219,7 +238,7 @@ type compatRunResult struct {
 	Seconds int    `json:"seconds,omitempty"`
 }
 
-// TestCompatRun deploys what the planner accepts and checks it stays up, answers and survives a restart. SKIFF_COMPAT_KIND or SKIFF_COMPAT_ONLY narrow the list.
+// TestCompatRun deploys what the planner accepts and checks it stays up, answers, and survives a restart and a redeploy. SKIFF_COMPAT_KIND or SKIFF_COMPAT_ONLY narrow the list.
 func TestCompatRun(t *testing.T) {
 	if os.Getenv("SKIFF_COMPAT") == "" {
 		t.Skip("set SKIFF_COMPAT=1: this pulls and runs real projects")
@@ -397,6 +416,27 @@ func compatDeploy(t *testing.T, c *http.Client, panel, gitURL string, r compatPl
 	if why := compatAnswers(r, appOf); why != "" {
 		return "crashed", "after a restart: " + why
 	}
+
+	// A redeploy replaces every app's containers, which is where shared volumes and start order get tested again.
+	for _, m := range members() {
+		if m.Kind != "app" {
+			continue
+		}
+		if resp, err := c.Post(panel+"/api/redeploy?app="+m.App, "application/json", nil); err == nil {
+			resp.Body.Close()
+		}
+	}
+	time.Sleep(10 * time.Second)
+	left = waiting()
+	for deadline := time.Now().Add(12 * time.Minute); left != "" && time.Now().Before(deadline); time.Sleep(5 * time.Second) {
+		left = waiting()
+	}
+	if left != "" {
+		return "crashed", "after a redeploy: " + left + ": " + compatWhy(c, panel, stack, members())
+	}
+	if why := compatAnswers(r, appOf); why != "" {
+		return "crashed", "after a redeploy: " + why
+	}
 	return "runs", ""
 }
 
@@ -485,9 +525,13 @@ func compatSummary(t *testing.T, results []compatRunResult) {
 	t.Helper()
 	count := map[string]int{}
 	broken := 0
+	var beyond []string
 	for _, r := range results {
 		if r.Control != "" {
 			broken++
+			if r.Outcome == "runs" {
+				beyond = append(beyond, r.Name)
+			}
 			continue
 		}
 		count[r.Outcome]++
@@ -496,10 +540,15 @@ func compatSummary(t *testing.T, results []compatRunResult) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "### Runs on Skiff: %d of %d\n\n", count["runs"], count["total"])
 	fmt.Fprintf(&b, "%d crashed, %d silent, %d failed to deploy, %d refused, %d unmeasured. %d more don't run under plain Compose with their example settings: some are broken, others need setup steps first.\n\n", count["crashed"], count["silent"], count["failed"], count["refused"], count["unmeasured"], broken)
+	if len(beyond) > 0 {
+		fmt.Fprintf(&b, "Runs on Skiff although plain Compose fails, not counted above: %s.\n\n", strings.Join(beyond, ", "))
+	}
 	b.WriteString("| Project | Kind | Result | Detail |\n|---|---|---|---|\n")
 	for _, r := range results {
 		outcome, detail := r.Outcome, r.Detail
-		if r.Control != "" {
+		if r.Control != "" && r.Outcome == "runs" {
+			outcome, detail = "runs, though not under Compose", r.Control
+		} else if r.Control != "" {
 			outcome, detail = "not running under Compose", r.Control
 		}
 		detail = strings.NewReplacer("|", "/", "\n", " ").Replace(detail)
@@ -549,6 +598,24 @@ func compatPublish(gitRoot, work string, r compatPlanResult) error {
 		}
 		if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(b.String()), 0o644); err != nil {
 			return err
+		}
+	}
+	for _, file := range r.envFiles {
+		path := filepath.Join(dir, file)
+		if !strings.HasPrefix(path, work+string(filepath.Separator)) {
+			continue
+		}
+		if _, err := os.Stat(path); err == nil {
+			continue
+		}
+		if example := compatEnvExample(path); example != "" {
+			data, err := os.ReadFile(example)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(path, data, 0o644); err != nil {
+				return err
+			}
 		}
 	}
 	for _, step := range [][]string{
