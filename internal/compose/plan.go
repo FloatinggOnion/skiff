@@ -78,7 +78,7 @@ var managedEngines = map[string]string{"postgres": "postgres", "mysql": "mysql",
 // plainTCPPorts are well-known ports for databases, queues and mail, which a web address can't serve.
 var plainTCPPorts = map[int]bool{
 	25: true, 465: true, 587: true, 1025: true, 1883: true, 3306: true, 4222: true, 5432: true, 5672: true,
-	6379: true, 6432: true, 9042: true, 11211: true, 27017: true,
+	6379: true, 6432: true, 9042: true, 11211: true, 25565: true, 27017: true,
 }
 
 var unsupportedKeys = map[string]string{

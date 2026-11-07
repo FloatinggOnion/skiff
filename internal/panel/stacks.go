@@ -653,11 +653,12 @@ func (p *Panel) viewStack(name string, created int64) stackView {
 		v.Members = append(v.Members, stackMember{Service: d.Alias, App: d.Name, Kind: "database", Engine: d.Engine, State: p.eng.State(d.Container)})
 	}
 	for _, s := range stackApps(name) {
+		// A container exists while its health check runs and may still be rolled back, so a deploy in flight reads as building.
 		state := "stopped"
-		if len(p.eng.AppContainers(s.App)) > 0 {
-			state = "running"
-		} else if building(s.App) {
+		if building(s.App) {
 			state = "building"
+		} else if len(p.eng.AppContainers(s.App)) > 0 {
+			state = "running"
 		}
 		m := stackMember{Service: s.Service, App: s.App, Kind: "app", State: state, Public: !s.Private}
 		if m.Public {
