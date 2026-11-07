@@ -79,7 +79,9 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
         </li>
         <li>
           <strong>Services that publish a port</strong> become public apps with HTTPS. Skiff serves
-          one port per app, so only the first is used.
+          one port per app, so only the first web port is used. Ports that browsers can&apos;t open,
+          such as 5432 for Postgres or 6379 for Redis, stay inside the stack. To reach one from
+          outside, open a public TCP port in the project&apos;s settings.
         </li>
         <li>
           <strong>Services with no published port</strong> stay private, and only the stack can reach

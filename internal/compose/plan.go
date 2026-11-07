@@ -75,6 +75,12 @@ type Plan struct {
 
 var managedEngines = map[string]string{"postgres": "postgres", "mysql": "mysql", "mongo": "mongodb", "redis": "redis"}
 
+// plainTCPPorts are well-known ports for databases, queues and mail, which a web address can't serve.
+var plainTCPPorts = map[int]bool{
+	25: true, 465: true, 587: true, 1025: true, 1883: true, 3306: true, 4222: true, 5432: true, 5672: true,
+	6379: true, 6432: true, 9042: true, 11211: true, 27017: true,
+}
+
 var unsupportedKeys = map[string]string{
 	"privileged":   "needs privileges Skiff doesn't grant",
 	"network_mode": "Skiff manages the network",
@@ -201,12 +207,16 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 			continue
 		}
 
+		web := slices.IndexFunc(s.Ports, func(pt Port) bool { return !plainTCPPorts[pt.Target] })
 		switch {
-		case len(s.Ports) > 0:
-			it.Port, it.Public = s.Ports[0].Target, true
+		case web >= 0:
+			it.Port, it.Public = s.Ports[web].Target, true
 			if len(s.Ports) > 1 {
 				p.Notes = append(p.Notes, fmt.Sprintf("%s: only port %d is served, because Skiff serves one port per app", name, it.Port))
 			}
+		case len(s.Ports) > 0:
+			it.Port = s.Ports[0].Target
+			p.Notes = append(p.Notes, fmt.Sprintf("%s: port %d doesn't serve websites, so it stays inside the stack; open a public TCP port in its settings to reach it from outside", name, it.Port))
 		case len(s.Expose) > 0:
 			it.Port = s.Expose[0]
 		}

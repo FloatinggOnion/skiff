@@ -460,3 +460,40 @@ func TestRunSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestComposeSpellings(t *testing.T) {
+	const file = `services:
+  web:
+    image: x
+    ports: ["1025:1025", "8025:8025"]
+    mem_limit: 4G
+    shm_size: 128mb
+    volumes: ["data:/var/lib/data/"]
+  cache:
+    image: valkey/valkey
+    ports: ["6379:6379"]
+    deploy: {resources: {limits: {memory: 268435456}}}
+    volumes: [{type: volume, source: cache, target: /data/}]
+volumes: {data: {}, cache: {}}
+`
+	p := plan(t, file)
+	if len(p.Problems) != 0 {
+		t.Fatalf("problems: %v", p.Problems)
+	}
+	web, cache := item(t, p, "web"), item(t, p, "cache")
+	if web.Memory != "4096m" || web.Options.ShmSize != "128m" || cache.Memory != "256m" {
+		t.Errorf("sizes: %q %q %q", web.Memory, web.Options.ShmSize, cache.Memory)
+	}
+	if web.Volumes[0].Path != "/var/lib/data" || cache.Volumes[0].Path != "/data" {
+		t.Errorf("paths: %+v %+v", web.Volumes, cache.Volumes)
+	}
+	if web.Port != 8025 || !web.Public {
+		t.Errorf("web should serve its web port: %d %v", web.Port, web.Public)
+	}
+	if cache.Port != 6379 || cache.Public {
+		t.Errorf("a queue port should stay inside the stack: %d %v", cache.Port, cache.Public)
+	}
+	if got := dockerSize("lots"); got != "lots" {
+		t.Errorf("an unreadable size should be left for validation: %q", got)
+	}
+}

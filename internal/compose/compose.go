@@ -4,6 +4,8 @@ package compose
 import (
 	"errors"
 	"fmt"
+	"math"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -135,11 +137,11 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		}
 		s := Service{
 			Image: raw.Image, Command: raw.Command, Environment: raw.Environment, EnvFiles: raw.EnvFile,
-			DependsOn: raw.DependsOn, Memory: raw.MemLimit, CPUs: raw.CPUs, Healthcheck: raw.Healthcheck.Test, Replicas: 1,
+			DependsOn: raw.DependsOn, Memory: dockerSize(raw.MemLimit), CPUs: raw.CPUs, Healthcheck: raw.Healthcheck.Test, Replicas: 1,
 		}
 		s.Options = config.RunOptions{
 			Entrypoint: raw.Entrypoint, User: raw.User, WorkingDir: raw.WorkingDir, Init: raw.Init, ReadOnly: raw.ReadOnly,
-			ShmSize: raw.ShmSize, Tmpfs: raw.Tmpfs, Ulimits: raw.Ulimits, ExtraHosts: raw.ExtraHosts, StopSignal: raw.StopSignal,
+			ShmSize: dockerSize(raw.ShmSize), Tmpfs: raw.Tmpfs, Ulimits: raw.Ulimits, ExtraHosts: raw.ExtraHosts, StopSignal: raw.StopSignal,
 		}
 		if raw.StopGracePeriod != "" {
 			d, err := time.ParseDuration(raw.StopGracePeriod)
@@ -156,7 +158,7 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 			s.Replicas = *raw.Deploy.Replicas
 		}
 		if m := raw.Deploy.Resources.Limits.Memory; m != "" {
-			s.Memory = m
+			s.Memory = dockerSize(m)
 		}
 		if c := raw.Deploy.Resources.Limits.CPUs; c != "" {
 			s.CPUs = c
@@ -183,6 +185,34 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		}
 	}
 	return f, nil
+}
+
+// cleanTarget drops a trailing slash, which Compose accepts in a container path.
+func cleanTarget(t string) string {
+	if strings.HasPrefix(t, "/") {
+		return path.Clean(t)
+	}
+	return t
+}
+
+var sizePattern = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*([kmg]?)b?$`)
+
+// dockerSize rewrites a Compose size such as 1gb, 2G or 134217728 in megabytes, the form Skiff stores; anything else is left for validation to refuse.
+func dockerSize(s string) string {
+	m := sizePattern.FindStringSubmatch(strings.ToLower(strings.TrimSpace(s)))
+	if m == nil {
+		return s
+	}
+	n, _ := strconv.ParseFloat(m[1], 64)
+	switch m[2] {
+	case "":
+		n /= 1 << 20
+	case "k":
+		n /= 1 << 10
+	case "g":
+		n *= 1 << 10
+	}
+	return strconv.FormatFloat(math.Ceil(n), 'f', 0, 64) + "m"
 }
 
 func mapValue(n *yaml.Node, key string) *yaml.Node {
@@ -419,7 +449,7 @@ func (m *rawMount) UnmarshalYAML(n *yaml.Node) error {
 			m.Source = s.Value
 		}
 		if t := mapValue(n, "target"); t != nil {
-			m.Target = t.Value
+			m.Target = cleanTarget(t.Value)
 		}
 		m.Bind = kind == "bind"
 		if r := mapValue(n, "read_only"); r != nil {
@@ -429,10 +459,10 @@ func (m *rawMount) UnmarshalYAML(n *yaml.Node) error {
 	}
 	parts := strings.Split(n.Value, ":")
 	if len(parts) == 1 {
-		m.Target = parts[0]
+		m.Target = cleanTarget(parts[0])
 		return nil
 	}
-	m.Source, m.Target = parts[0], parts[1]
+	m.Source, m.Target = parts[0], cleanTarget(parts[1])
 	m.Bind = strings.ContainsAny(m.Source, "/.~$")
 	if len(parts) > 2 {
 		m.ReadOnly = slices.Contains(strings.Split(parts[2], ","), "ro")
