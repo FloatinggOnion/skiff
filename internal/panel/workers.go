@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
 )
 
@@ -65,10 +66,8 @@ func putWorker(w workerRow) error {
 	return err
 }
 
-func workerPrefix(app, name string) string { return "skiff-" + app + "-" + name + "-" }
-
 func toWorker(w workerRow, containers []string) Worker {
-	prefix := workerPrefix(w.App, w.Name)
+	prefix := docker.WorkerPrefix(w.App, w.Name)
 	running := 0
 	for _, c := range containers {
 		if strings.HasPrefix(c, prefix) {
@@ -106,7 +105,7 @@ func (p *Panel) reconcileWorkers(app string) {
 			reps = 1
 		}
 		for range reps {
-			name := workerPrefix(app, w.Name) + replicaSuffix()
+			name := docker.WorkerPrefix(app, w.Name) + replicaSuffix()
 			_ = p.eng.RunWorker(docker.WorkerSpec{Settings: settings, Name: name, App: app, Image: image, Command: w.Command})
 		}
 	}
@@ -133,6 +132,10 @@ func (p *Panel) handleWorkers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		if workLocked(app) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
+			return
+		}
 		var body struct {
 			Name, Command string
 			Replicas      int
@@ -156,6 +159,10 @@ func (p *Panel) handleWorkers(w http.ResponseWriter, r *http.Request) {
 		wk, ok := getWorker(sanitizeID(r.URL.Query().Get("id")))
 		if !ok || !p.canAccess(r, wk.App) {
 			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if workLocked(wk.App) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
 			return
 		}
 		_, _ = sqlDB.Exec(`DELETE FROM workers WHERE id=?`, wk.ID)
@@ -189,4 +196,65 @@ func mustWorker(app, name string, fallback workerRow) workerRow {
 		return w
 	}
 	return fallback
+}
+
+// tomlOwned explains why a CLI app's workers and jobs can't be changed here: its skiff.toml lists them, and the next deploy would put them back.
+const tomlOwned = "this app's workers and jobs are set by its skiff.toml, so change them there and run `skiff deploy`"
+
+// workLocked reports whether the app's skiff.toml decides its workers and jobs.
+func workLocked(app string) bool {
+	src, ok := getSource(app)
+	return ok && src.Origin == originCLI
+}
+
+// syncTomlWork copies the workers and jobs a CLI app's skiff.toml lists, read off its running container, so the dashboard shows them and the jobs run on schedule. An app deployed by an older CLI has no such labels and keeps what it has.
+func syncTomlWork(src Source, labels map[string]string) {
+	if raw, ok := labels["skiff.workers"]; ok {
+		var want []config.Worker
+		if json.Unmarshal([]byte(raw), &want) == nil {
+			setTomlWorkers(src, want)
+		}
+	}
+	if raw, ok := labels["skiff.jobs"]; ok {
+		var want []config.Job
+		if json.Unmarshal([]byte(raw), &want) == nil {
+			setTomlJobs(src, want)
+		}
+	}
+}
+
+func setTomlWorkers(src Source, want []config.Worker) {
+	keep := map[string]bool{}
+	for _, w := range want {
+		keep[w.Name] = true
+		_, _ = sqlDB.Exec(`INSERT INTO workers(`+workerCols+`) VALUES(?,?,?,?,?,?,?)
+			ON CONFLICT(app,name) DO UPDATE SET command=excluded.command, replicas=excluded.replicas`,
+			randToken()[:12], src.App, src.Team, w.Name, w.Command, max(w.Replicas, 1), time.Now().Unix())
+	}
+	for _, w := range listWorkers(src.App) {
+		if !keep[w.Name] {
+			_, _ = sqlDB.Exec(`DELETE FROM workers WHERE id=?`, w.ID)
+		}
+	}
+}
+
+// setTomlJobs keeps each job's id, and so when it last ran, while its schedule or command changes.
+func setTomlJobs(src Source, want []config.Job) {
+	have := map[string]jobRow{}
+	for _, j := range listJobRows(src.App) {
+		have[j.Name] = j
+	}
+	for _, j := range want {
+		if old, ok := have[j.Name]; ok {
+			delete(have, j.Name)
+			if old.Schedule != j.Schedule || old.Command != j.Command {
+				_, _ = sqlDB.Exec(`UPDATE jobs SET schedule=?, command=? WHERE id=?`, j.Schedule, j.Command, old.ID)
+			}
+			continue
+		}
+		_ = putJob(jobRow{ID: randToken()[:12], App: src.App, Team: src.Team, Name: j.Name, Schedule: j.Schedule, Command: j.Command, LastOk: 1, Created: time.Now().Unix()})
+	}
+	for _, j := range have {
+		_, _ = sqlDB.Exec(`DELETE FROM jobs WHERE id=?`, j.ID)
+	}
 }

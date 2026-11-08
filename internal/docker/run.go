@@ -155,6 +155,9 @@ func (e *Engine) waitHostPort(name string, containerPort int) (int, error) {
 	return port, err
 }
 
+// WorkerPrefix starts the name of every container of one of an app's workers; the dashboard counts a worker's running copies by it.
+func WorkerPrefix(app, worker string) string { return "skiff-" + app + "-" + worker + "-" }
+
 // WorkerSpec runs a long-lived background process with no published port, routing labels or network aliases, so nothing routes to it.
 type WorkerSpec struct {
 	Settings

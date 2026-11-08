@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -285,6 +286,10 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 	labels["skiff.health"] = cfg.Deploy.HealthPath
 	labels["skiff.memory"] = cfg.Resources.Memory
 	labels["skiff.cpu"] = cfg.Resources.CPU
+	// The server's panel reads these to show the workers and run the jobs, which skiff.toml owns for a CLI app.
+	workersJSON, _ := json.Marshal(nonNil(cfg.Workers))
+	jobsJSON, _ := json.Marshal(nonNil(cfg.Jobs))
+	labels["skiff.workers"], labels["skiff.jobs"] = string(workersJSON), string(jobsJSON)
 	// Runtime env = build env + secrets; secrets never bake into the image, so a rollback runs current secrets against the old code.
 	buildEnv := cfg.Environment(contextDir)
 	runtimeEnv := make(map[string]string, len(buildEnv)+len(cfg.Secrets))
@@ -462,6 +467,14 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 		ui.Done("Retired the previous version")
 	}
 
+	if err := replaceWorkers(eng, cfg, image, settings); err != nil {
+		ui.Fail("The new version is live, but " + err.Error())
+		return err
+	}
+	if n := len(cfg.Workers); n > 0 {
+		ui.Done(fmt.Sprintf("Started %d worker%s on the new version", n, map[bool]string{true: "", false: "s"}[n == 1]))
+	}
+
 	fmt.Println()
 	if eng.IsRemote() && direct {
 		ui.Live(fmt.Sprintf("http://%s:%d", docker.SSHHostname(cfg.RemoteHost()), reps[0].HostPort), time.Since(start))
@@ -472,6 +485,29 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 		ui.Field("direct", fmt.Sprintf("http://localhost:%d", reps[0].HostPort))
 	}
 	return nil
+}
+
+// replaceWorkers runs the workers skiff.toml lists on the new version, in place of whatever ran before, so they never lag behind the app.
+func replaceWorkers(eng *docker.Engine, cfg *config.Config, image string, s docker.Settings) error {
+	for _, c := range eng.WorkerContainers(cfg.Name) {
+		_ = eng.Remove(c)
+	}
+	for _, w := range cfg.Workers {
+		for range max(w.Replicas, 1) {
+			spec := docker.WorkerSpec{Settings: s, Name: docker.WorkerPrefix(cfg.Name, w.Name) + shortID(), App: cfg.Name, Image: image, Command: w.Command}
+			if err := eng.RunWorker(spec); err != nil {
+				return fmt.Errorf("worker %s didn't start: %w", w.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }
 
 // startingMargin is added to the health timeout for pulling and starting the container.

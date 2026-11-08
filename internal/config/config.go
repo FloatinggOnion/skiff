@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/robfig/cron/v3"
 )
 
 const DefaultFile = "skiff.toml"
@@ -25,6 +26,22 @@ type Config struct {
 	Env       map[string]string `toml:"env"`
 	Secrets   map[string]string `toml:"secrets"` // runtime only, never baked into the image
 	Volumes   []Volume          `toml:"volumes"`
+	Workers   []Worker          `toml:"workers"`
+	Jobs      []Job             `toml:"jobs"`
+}
+
+// Worker is a long-running background process from the app's build, such as a queue consumer.
+type Worker struct {
+	Name     string `toml:"name" json:"name"`
+	Command  string `toml:"command" json:"command"`
+	Replicas int    `toml:"replicas" json:"replicas,omitempty"`
+}
+
+// Job runs a command from the app's build on a cron schedule, in the server's time zone.
+type Job struct {
+	Name     string `toml:"name" json:"name"`
+	Schedule string `toml:"schedule" json:"schedule"`
+	Command  string `toml:"command" json:"command"`
 }
 
 // Volume is a named directory that outlives the app's containers.
@@ -62,7 +79,7 @@ func ValidateVolumes(vols []Volume) error {
 	}
 	names, paths := map[string]bool{}, map[string]bool{}
 	for _, v := range vols {
-		if !validVolumeName(v.Name) {
+		if !validName(v.Name) {
 			return fmt.Errorf("volume name %q: use 1-32 lowercase letters, digits or dashes", v.Name)
 		}
 		if !validMountPath(v.Path) {
@@ -79,7 +96,7 @@ func ValidateVolumes(vols []Volume) error {
 	return nil
 }
 
-func validVolumeName(n string) bool {
+func validName(n string) bool {
 	if n == "" || len(n) > 32 || n[0] == '-' {
 		return false
 	}
@@ -269,7 +286,58 @@ func (c *Config) validate() error {
 	if err := ValidateHealth(c.Deploy.HealthPath, c.Deploy.HealthTimeout); err != nil {
 		return err
 	}
-	return ValidateVolumes(c.Volumes)
+	if err := ValidateVolumes(c.Volumes); err != nil {
+		return err
+	}
+	if err := ValidateWorkers(c.Workers); err != nil {
+		return err
+	}
+	return ValidateJobs(c.Jobs)
+}
+
+// MaxWorkerReplicas is how many copies of one worker may run.
+const MaxWorkerReplicas = 10
+
+// ValidateWorkers checks the workers listed in skiff.toml.
+func ValidateWorkers(workers []Worker) error {
+	names := map[string]bool{}
+	for _, w := range workers {
+		if !validName(w.Name) {
+			return fmt.Errorf("worker name %q: use 1-32 lowercase letters, digits or dashes", w.Name)
+		}
+		if names[w.Name] {
+			return fmt.Errorf("worker %q is listed twice", w.Name)
+		}
+		names[w.Name] = true
+		if strings.TrimSpace(w.Command) == "" {
+			return fmt.Errorf("worker %q needs a command", w.Name)
+		}
+		if w.Replicas < 0 || w.Replicas > MaxWorkerReplicas {
+			return fmt.Errorf("worker %q: replicas must be 1-%d", w.Name, MaxWorkerReplicas)
+		}
+	}
+	return nil
+}
+
+// ValidateJobs checks the scheduled jobs listed in skiff.toml.
+func ValidateJobs(jobs []Job) error {
+	names := map[string]bool{}
+	for _, j := range jobs {
+		if !validName(j.Name) {
+			return fmt.Errorf("job name %q: use 1-32 lowercase letters, digits or dashes", j.Name)
+		}
+		if names[j.Name] {
+			return fmt.Errorf("job %q is listed twice", j.Name)
+		}
+		names[j.Name] = true
+		if strings.TrimSpace(j.Command) == "" {
+			return fmt.Errorf("job %q needs a command", j.Name)
+		}
+		if _, err := cron.ParseStandard(j.Schedule); err != nil {
+			return fmt.Errorf("job %q: schedule %q isn't cron syntax like \"0 3 * * *\"", j.Name, j.Schedule)
+		}
+	}
+	return nil
 }
 
 var hostRe = regexp.MustCompile(`^[A-Za-z0-9._@:-]+$`)

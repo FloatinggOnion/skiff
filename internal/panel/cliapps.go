@@ -50,14 +50,7 @@ func adoptCLIApps(apps map[string]registry.App, team string) []string {
 }
 
 // recordCLIDeploy adds the running version of a CLI app to its deploy history the first time the panel sees it.
-func (p *Panel) recordCLIDeploy(a registry.App) {
-	if a.Container == "" {
-		return
-	}
-	meta, err := p.eng.ContainerMeta(a.Container)
-	if err != nil {
-		return
-	}
+func (p *Panel) recordCLIDeploy(a registry.App, meta docker.ContainerMeta) {
 	id := sanitizeID(meta.Labels["skiff.deploy"])
 	if id == "" {
 		id = "cli-" + sanitizeID(a.Container)
@@ -97,9 +90,16 @@ func (p *Panel) syncCLIApps() {
 		recordAudit(team, AuditEntry{Actor: "cli", Action: "project.adopt", Target: name, Detail: "deployed from the CLI"})
 	}
 	for name, a := range apps {
-		if src, ok := getSource(name); ok && src.Origin == originCLI {
-			p.recordCLIDeploy(a)
+		src, ok := getSource(name)
+		if !ok || src.Origin != originCLI || a.Container == "" {
+			continue
 		}
+		meta, err := p.eng.ContainerMeta(a.Container)
+		if err != nil {
+			continue
+		}
+		p.recordCLIDeploy(a, meta)
+		syncTomlWork(src, meta.Labels)
 	}
 }
 

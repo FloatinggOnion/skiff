@@ -182,6 +182,10 @@ func (p *Panel) handleJobs(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		if workLocked(app) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
+			return
+		}
 		var body struct{ Name, Schedule, Command string }
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		j, problem := newJob(app, body.Name, body.Schedule, body.Command)
@@ -200,6 +204,10 @@ func (p *Panel) handleJobs(w http.ResponseWriter, r *http.Request) {
 		j, ok := getJob(sanitizeID(r.URL.Query().Get("id")))
 		if !ok || !p.canAccess(r, j.App) {
 			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if workLocked(j.App) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
 			return
 		}
 		_, _ = sqlDB.Exec(`DELETE FROM jobs WHERE id=?`, j.ID)

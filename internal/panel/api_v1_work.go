@@ -26,6 +26,10 @@ func (p *Panel) apiSetWorker(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusNotFound, "app not found")
 		return
 	}
+	if workLocked(app) {
+		apiErr(w, http.StatusBadRequest, tomlOwned)
+		return
+	}
 	var body struct {
 		Command  string `json:"command"`
 		Replicas int    `json:"replicas"`
@@ -52,6 +56,10 @@ func (p *Panel) apiRemoveWorker(w http.ResponseWriter, r *http.Request) {
 	app := sanitizeName(r.PathValue("name"))
 	if _, ok := apiSource(r, app); !ok {
 		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	if workLocked(app) {
+		apiErr(w, http.StatusBadRequest, tomlOwned)
 		return
 	}
 	name := sanitizeName(r.PathValue("worker"))
@@ -86,6 +94,10 @@ func (p *Panel) apiCreateJob(w http.ResponseWriter, r *http.Request) {
 	app := sanitizeName(r.PathValue("name"))
 	if _, ok := apiSource(r, app); !ok {
 		apiErr(w, http.StatusNotFound, "app not found")
+		return
+	}
+	if workLocked(app) {
+		apiErr(w, http.StatusBadRequest, tomlOwned)
 		return
 	}
 	var body struct {
@@ -124,6 +136,10 @@ func (p *Panel) apiRemoveJob(w http.ResponseWriter, r *http.Request) {
 	j, ok := apiJob(r)
 	if !ok {
 		apiErr(w, http.StatusNotFound, "job not found")
+		return
+	}
+	if workLocked(j.App) {
+		apiErr(w, http.StatusBadRequest, tomlOwned)
 		return
 	}
 	_, _ = sqlDB.Exec(`DELETE FROM jobs WHERE id=?`, j.ID)

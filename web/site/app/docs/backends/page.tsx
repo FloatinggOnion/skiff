@@ -106,6 +106,27 @@ export default function Backends() {
         </li>
       </ul>
 
+      <h2>Workers and jobs in skiff.toml</h2>
+      <p>
+        An app deployed with <code>skiff deploy</code> lists its workers and jobs in{" "}
+        <code>skiff.toml</code>. Each deploy restarts the workers on the new version, and the dashboard
+        shows them and runs the jobs on schedule, in the server&apos;s time zone.
+      </p>
+      <CodeBlock label="skiff.toml">{`[[workers]]
+name = "queue"
+command = "node queue.js"
+replicas = 2
+
+[[jobs]]
+name = "report"
+schedule = "0 3 * * *"
+command = "node report.js"`}</CodeBlock>
+      <p>
+        For these apps, <code>skiff.toml</code> decides, so the dashboard, the API and{" "}
+        <code>skiff worker</code> or <code>skiff job</code> can&apos;t change them. Running a job now
+        still works. A deploy without a <code>[[workers]]</code> section stops the app&apos;s workers.
+      </p>
+
       <h2>From the terminal</h2>
       <p>
         After <code>skiff login</code>, the CLI manages the same things as the dashboard. Attached
