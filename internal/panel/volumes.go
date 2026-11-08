@@ -139,6 +139,51 @@ type volumeView struct {
 	Attached bool   `json:"attached"`
 }
 
+// volumeKind says who sets an app's volumes: the dashboard for a project, skiff.toml for a CLI app, the parent project for a preview.
+func volumeKind(src Source) string {
+	switch {
+	case src.Origin == originCLI:
+		return "cli"
+	case src.Parent != "":
+		return "preview"
+	}
+	return "project"
+}
+
+// volumeLock explains why an app's volumes can't be changed here, or is empty when they can.
+func volumeLock(src Source) string {
+	if kind := volumeKind(src); kind != "project" {
+		return "this app's volumes are set by " + map[string]string{"cli": "its skiff.toml", "preview": "its project"}[kind]
+	}
+	return ""
+}
+
+func (p *Panel) volumeViews(src Source) []volumeView {
+	mounted := map[string]bool{}
+	for _, v := range p.mountedVolumes(src.App) {
+		mounted[v.Name+"\x00"+v.Path] = true
+	}
+	sizes := p.volumeSizes()
+	out := []volumeView{}
+	for _, v := range p.volumeDefs(src) {
+		out = append(out, volumeView{
+			Name: v.Name, Path: v.Path,
+			Size:     sizes[v.DockerName(src.App)],
+			Attached: mounted[v.Name+"\x00"+v.Path] || v.Owner != "",
+		})
+	}
+	return out
+}
+
+// newVolume checks a volume added by hand against the app's others. Only a stack shares one app's volume with another, so it always belongs to this app.
+func newVolume(app string, v config.Volume) (config.Volume, string) {
+	v.Name, v.Path, v.Owner = strings.TrimSpace(v.Name), strings.TrimSpace(v.Path), ""
+	if err := config.ValidateVolumes(append(listVolumes(app), v)); err != nil {
+		return v, err.Error()
+	}
+	return v, ""
+}
+
 func (p *Panel) handleVolumes(w http.ResponseWriter, r *http.Request) {
 	app := sanitizeName(r.URL.Query().Get("app"))
 	src, ok := getSource(app)
@@ -146,34 +191,14 @@ func (p *Panel) handleVolumes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	kind := "project"
-	switch {
-	case src.Origin == originCLI:
-		kind = "cli"
-	case src.Parent != "":
-		kind = "preview"
-	}
-	if r.Method != http.MethodGet && kind != "project" {
-		http.Error(w, "this app's volumes are set by "+map[string]string{"cli": "its skiff.toml", "preview": "its project"}[kind], http.StatusBadRequest)
+	if lock := volumeLock(src); r.Method != http.MethodGet && lock != "" {
+		http.Error(w, lock, http.StatusBadRequest)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		mounted := map[string]bool{}
-		for _, v := range p.mountedVolumes(app) {
-			mounted[v.Name+"\x00"+v.Path] = true
-		}
-		sizes := p.volumeSizes()
-		out := []volumeView{}
-		for _, v := range p.volumeDefs(src) {
-			out = append(out, volumeView{
-				Name: v.Name, Path: v.Path,
-				Size:     sizes[v.DockerName(app)],
-				Attached: mounted[v.Name+"\x00"+v.Path] || v.Owner != "",
-			})
-		}
-		writeJSON(w, map[string]any{"kind": kind, "volumes": out})
+		writeJSON(w, map[string]any{"kind": volumeKind(src), "volumes": p.volumeViews(src)})
 
 	case http.MethodPost:
 		var v config.Volume
@@ -181,9 +206,9 @@ func (p *Panel) handleVolumes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
-		v.Name, v.Path = strings.TrimSpace(v.Name), strings.TrimSpace(v.Path)
-		if err := config.ValidateVolumes(append(listVolumes(app), v)); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		v, problem := newVolume(app, v)
+		if problem != "" {
+			http.Error(w, problem, http.StatusBadRequest)
 			return
 		}
 		if err := addVolume(app, v); err != nil {

@@ -45,12 +45,12 @@ func holdTunnel(team string) (release func(), ok bool) {
 	}, true
 }
 
-// databaseToken refuses tokens that were never granted database access, so a token kept in CI can't reach a private database.
+// databaseToken refuses tokens that were never granted data access, so a token kept in CI can't reach a private database or delete stored data.
 func databaseToken(w http.ResponseWriter, r *http.Request) bool {
 	if tokenReachesDatabases(bearerToken(r)) {
 		return true
 	}
-	apiErr(w, http.StatusForbidden, "this token can't reach databases, sign in again with `skiff login`")
+	apiErr(w, http.StatusForbidden, "this token can't reach databases or buckets, sign in again with `skiff login`")
 	return false
 }
 
@@ -96,20 +96,6 @@ func apiDatabase(w http.ResponseWriter, r *http.Request) (dbRow, bool) {
 	}
 	apiErr(w, http.StatusConflict, "more than one database is named "+name+", so rename one in the dashboard")
 	return dbRow{}, false
-}
-
-func (p *Panel) apiListDatabases(w http.ResponseWriter, r *http.Request) {
-	type view struct {
-		Name   string `json:"name"`
-		Engine string `json:"engine"`
-		State  string `json:"state"`
-		Port   int    `json:"port"`
-	}
-	out := []view{}
-	for _, d := range listDBs(apiTeam(r)) {
-		out = append(out, view{d.Name, d.Engine, p.eng.State(d.Container), d.Port})
-	}
-	apiJSON(w, http.StatusOK, out)
 }
 
 // apiDatabaseConnection answers with the address a client uses through a local tunnel on ?port=.

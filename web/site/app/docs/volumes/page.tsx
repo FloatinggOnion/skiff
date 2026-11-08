@@ -50,6 +50,11 @@ path = "/data"
 name = "uploads"
 path = "/app/public/uploads"`}</CodeBlock>
 
+      <h2>Or from the terminal</h2>
+      <CodeBlock label="shell">{`skiff volume add shop-api data /data
+skiff volume ls shop-api
+skiff volume rm shop-api data --yes`}</CodeBlock>
+
       <h2>Where they&apos;re mounted</h2>
       <ul>
         <li>

@@ -58,3 +58,20 @@ func TestVolumeDefs(t *testing.T) {
 		t.Fatal("deleting the project left its volumes behind")
 	}
 }
+
+func TestNewVolume(t *testing.T) {
+	openTestDB(t)
+	if err := addVolume("shop", config.Volume{Name: "data", Path: "/data"}); err != nil {
+		t.Fatal(err)
+	}
+	v, problem := newVolume("shop", config.Volume{Name: " uploads ", Path: " /uploads ", Owner: "someone-else"})
+	if problem != "" || v.Name != "uploads" || v.Path != "/uploads" {
+		t.Fatalf("newVolume = %+v, %q", v, problem)
+	}
+	if v.Owner != "" {
+		t.Errorf("a volume added by hand belongs to %q, not its own app", v.Owner)
+	}
+	if _, problem := newVolume("shop", config.Volume{Name: "data", Path: "/elsewhere"}); problem == "" {
+		t.Error("a second volume named data was accepted")
+	}
+}

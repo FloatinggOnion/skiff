@@ -106,6 +106,23 @@ export default function Backends() {
         </li>
       </ul>
 
+      <h2>From the terminal</h2>
+      <p>
+        After <code>skiff login</code>, the CLI manages the same things as the dashboard. Attached
+        databases and buckets reach an app on its next deploy.
+      </p>
+      <CodeBlock label="shell">{`skiff db create orders --engine postgres
+skiff db attach orders shop-api      # adds DATABASE_URL to shop-api
+skiff bucket create media
+skiff bucket attach media shop-api   # adds S3_ENDPOINT, S3_BUCKET and its keys
+skiff worker set shop-api queue --command "node queue.js" --replicas 2
+skiff job add shop-api report --schedule "0 3 * * *" --command "node report.js"
+skiff job run shop-api report        # runs it now and prints its output`}</CodeBlock>
+      <p>
+        Commands that delete data, like <code>skiff db rm</code> and <code>skiff bucket rm</code>,
+        need <code>--yes</code>. The same actions are in the <a href="/docs/api">API</a>.
+      </p>
+
       <h2>What Skiff doesn&apos;t do yet</h2>
       <ul>
         <li>

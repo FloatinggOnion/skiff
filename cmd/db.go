@@ -37,7 +37,7 @@ type remoteDatabase struct {
 }
 
 func newDBCmd() *cobra.Command {
-	db := &cobra.Command{Use: "db", Short: "Reach your team's databases"}
+	db := &cobra.Command{Use: "db", Short: "Manage and reach your team's databases"}
 	db.AddCommand(&cobra.Command{
 		Use:   "ls",
 		Short: "List your team's databases",
@@ -82,6 +82,7 @@ dashboard's address. The database stays closed to the internet.`,
 	}
 	connect.Flags().IntVarP(&port, "port", "p", 0, "local port (default: the engine's usual port, or any free one)")
 	db.AddCommand(connect)
+	addDBManageCmds(db)
 	return db
 }
 

@@ -3,7 +3,7 @@ import { CodeBlock } from "@/components/code-block";
 
 export const metadata: Metadata = {
   title: "API reference",
-  description: "Deploy, roll back, manage previews, workers, scheduled jobs and environment variables, and read logs over Skiff's HTTP API.",
+  description: "Deploy, roll back, manage previews, workers, scheduled jobs, databases, buckets, volumes and environment variables, and read logs over Skiff's HTTP API.",
   alternates: { canonical: "/docs/api" },
 };
 
@@ -54,9 +54,31 @@ const groups: { title: string; rows: [string, string, string][] }[] = [
   {
     title: "Databases",
     rows: [
-      ["GET", "/databases", "List the team's databases: name, engine, state and port."],
+      ["GET", "/databases", "List the team's databases: name, engine, state, port and the apps they're attached to."],
+      ["POST", "/databases", 'Create one. Send {"engine": "postgres", "name": "shop-db"}. The engine is postgres, mysql, mongodb or redis.'],
+      ["DELETE", "/databases/{name}", "Delete the database, its data and its backups. Needs a token from skiff login."],
+      ["PUT", "/databases/{name}/apps/{app}", "Attach it to an app, which gets its address in a variable like DATABASE_URL on the next deploy. Needs a token from skiff login."],
+      ["DELETE", "/databases/{name}/apps/{app}", "Detach it and remove the variable. Needs a token from skiff login."],
       ["GET", "/databases/{name}/connection?port=", "The connection address, including its password, for a tunnel on that local port. Needs a token from skiff login."],
       ["GET", "/databases/{name}/tunnel", "A WebSocket carrying one client connection to the database. Needs a token from skiff login."],
+    ],
+  },
+  {
+    title: "Buckets",
+    rows: [
+      ["GET", "/buckets", "List the team's buckets, with the apps they're attached to."],
+      ["POST", "/buckets", 'Create one. Send {"name": "media"}, at least 3 lowercase letters, numbers or hyphens.'],
+      ["DELETE", "/buckets/{name}", "Delete the bucket and every file in it. Needs a token from skiff login."],
+      ["PUT", "/buckets/{name}/apps/{app}", "Attach it to an app, which gets S3_ENDPOINT, S3_BUCKET and its keys on the next deploy. Needs a token from skiff login."],
+      ["DELETE", "/buckets/{name}/apps/{app}", "Detach it and remove those variables. Needs a token from skiff login."],
+    ],
+  },
+  {
+    title: "Volumes",
+    rows: [
+      ["GET", "/apps/{name}/volumes", "List the app's volumes, with their size."],
+      ["POST", "/apps/{name}/volumes", 'Add one. Send {"name": "data", "path": "/data"}. It\'s mounted on the next deploy.'],
+      ["DELETE", "/apps/{name}/volumes/{volume}", "Stop mounting it. Its data is deleted after the next deploy."],
     ],
   },
   {
@@ -81,7 +103,9 @@ export default function ApiReference() {
       <p>
         Create an API token in the dashboard under <strong>Settings → Integrations</strong>, and send it as a bearer
         token. It can reach everything in the team that created it, including environment variables,
-        so treat it like a password.
+        so treat it like a password. Connecting to a database, and deleting or attaching databases
+        and buckets, needs a token from <code>skiff login</code> instead, so a token kept in CI
+        can&apos;t reach your data.
       </p>
       <CodeBlock label="shell">{`curl https://dash.example.com/api/v1/apps \\
   -H "Authorization: Bearer $SKIFF_TOKEN"`}</CodeBlock>

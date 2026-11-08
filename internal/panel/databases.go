@@ -493,17 +493,7 @@ func (p *Panel) handleDatabases(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		for _, app := range dbAttachments(id) {
-			if v, ok := detachDB(id, app); ok {
-				deleteEnvVar(app, v)
-			}
-		}
-		_ = p.eng.Stop(d.Container)
-		_ = p.eng.Remove(d.Container)
-		_ = p.eng.RemoveVolume(d.volume())
-		p.removePITR(d)
-		removeDatabaseBackups(id)
-		deleteDBRow(id)
+		p.removeDatabase(d)
 		p.audit(r, "database.delete", d.Name, d.Engine)
 		w.WriteHeader(http.StatusNoContent)
 
@@ -525,31 +515,60 @@ func (p *Panel) handleDatabaseAttach(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown app", http.StatusNotFound)
 		return
 	}
-	e := dbEngines[d.Engine]
 	switch r.Method {
 	case http.MethodPost:
-		if err := p.linkResource(d.Container, d.network(), app); err != nil {
+		if err := p.attachDatabase(d, app); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		url := e.url(d.Host, d.Port, d.Username, d.Password, d.DBName, false)
-		if err := upsertEnvVar(app, e.envVar, url, false); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		_ = attachDB(id, app, e.envVar)
 		p.audit(r, "database.attach", d.Name, app)
-		p.audit(r, "database.detach", d.Name, app)
 		writeJSON(w, p.toDatabase(d))
 	case http.MethodDelete:
-		if v, ok := detachDB(id, app); ok {
-			deleteEnvVar(app, v)
-			p.unlinkResource(d.Container, d.network(), appNetwork(src), dbAttachments(id))
+		if p.detachDatabase(d, src) {
+			p.audit(r, "database.detach", d.Name, app)
 		}
 		writeJSON(w, p.toDatabase(d))
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// removeDatabase deletes a database with its data and backups, and takes its connection variable out of every app it was attached to.
+func (p *Panel) removeDatabase(d dbRow) {
+	for _, app := range dbAttachments(d.ID) {
+		if v, ok := detachDB(d.ID, app); ok {
+			deleteEnvVar(app, v)
+		}
+	}
+	_ = p.eng.Stop(d.Container)
+	_ = p.eng.Remove(d.Container)
+	_ = p.eng.RemoveVolume(d.volume())
+	p.removePITR(d)
+	removeDatabaseBackups(d.ID)
+	deleteDBRow(d.ID)
+}
+
+// attachDatabase puts the database on the app's network and gives the app its connection variable for the next deploy.
+func (p *Panel) attachDatabase(d dbRow, app string) error {
+	if err := p.linkResource(d.Container, d.network(), app); err != nil {
+		return err
+	}
+	e := dbEngines[d.Engine]
+	if err := upsertEnvVar(app, e.envVar, e.url(d.Host, d.Port, d.Username, d.Password, d.DBName, false), false); err != nil {
+		return err
+	}
+	return attachDB(d.ID, app, e.envVar)
+}
+
+// detachDatabase reports whether the app had the database attached.
+func (p *Panel) detachDatabase(d dbRow, src Source) bool {
+	v, ok := detachDB(d.ID, src.App)
+	if !ok {
+		return false
+	}
+	deleteEnvVar(src.App, v)
+	p.unlinkResource(d.Container, d.network(), appNetwork(src), dbAttachments(d.ID))
+	return true
 }
 
 // runDatabaseContainer replaces the container with the same data and networks, open to the internet or not.
