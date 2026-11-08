@@ -224,6 +224,10 @@ Point `*.example.com` at the box, open `https://dash.example.com`, and log in wi
 the setup key it prints. The full walkthrough is in the
 [self-hosting guide](https://docs.useskiff.xyz/self-hosting).
 
+A Mac works too (a Mac mini, say): run the same command as your own user, with
+Docker already running. It sets up launchd agents instead of systemd services;
+see [self-hosting on a Mac](https://docs.useskiff.xyz/self-hosting#on-a-mac).
+
 Prefer the CLI? `skiff server setup user@host` bootstraps Docker on a box so you
 can `skiff deploy` to it over SSH.
 

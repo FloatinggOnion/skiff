@@ -5,7 +5,7 @@ description: "One command turns a fresh Linux server into your own deploy platfo
 
 ## What you'll need
 
-- A fresh **Ubuntu or Debian** server with a public IP and root SSH access (a $5/mo VPS is plenty to start).
+- A fresh **Ubuntu or Debian** server with a public IP and root SSH access (a $5/mo VPS is plenty to start). Running it on a Mac instead? See [On a Mac](#on-a-mac).
 - A **domain** you can add DNS records to. Apps are served at `<app>.yourdomain.com` and the dashboard at `dash.yourdomain.com`.
 
 ## Install
@@ -104,3 +104,54 @@ journalctl -u skiff-panel@7070 -n 50 --no-pager
   ```sh title="on your server"
   skiff server reset-2fa you@example.com
   ```
+
+## On a Mac
+
+The same platform runs on a Mac, such as a Mac mini under a desk. The installer sets up the same router and control panel, but as launchd agents in your login session instead of systemd services, and keeps everything under `~/.skiff`.
+
+You'll need:
+
+- **Docker Desktop**, installed and running. The installer doesn't install it, and stops if `docker` doesn't answer.
+- The **Xcode command line tools** (`xcode-select --install`), which include git.
+- A **domain**, and ports **80** and **443** forwarded from your router to the Mac, so the internet can reach it.
+
+Run the installer as your own user, not root and without `sudo`:
+
+```sh title="on the Mac"
+curl -fsSL https://useskiff.xyz/install | sh -s -- --domain example.com
+```
+
+It checks Docker, downloads the macOS binary (verified against the release checksums) into `~/.skiff/bin`, starts the two agents (`xyz.useskiff.router` and `xyz.useskiff.panel.7070`), and prints your DNS records and setup key. From there, [point your DNS](#point-your-dns) and sign in as above.
+
+<Callout>
+
+**Keep the Mac awake and logged in.** The agents and Docker Desktop run in your login session, so a Mac that is asleep, or sitting at the login screen after a restart, serves nothing. In System Settings, stop the Mac sleeping automatically, turn on **Start Docker Desktop when you sign in**, and turn on automatic login (macOS doesn't offer it with FileVault on).
+
+</Callout>
+
+What differs from a Linux server:
+
+| | Linux | Mac |
+| --- | --- | --- |
+| Settings (SMTP and so on) | `/etc/skiff/skiff.env` | `~/.skiff/skiff.env` |
+| Restart | `systemctl restart skiff-router skiff-panel@7070` | `launchctl kickstart -k gui/$(id -u)/xyz.useskiff.router` and `…/xyz.useskiff.panel.7070` |
+| Logs | `journalctl -u skiff-router` | `~/.skiff/logs/router.log` and `panel.log` |
+| Update | re-run the installer | re-run the installer |
+
+Not supported on a Mac yet: the panel updating itself from its own repository, `skiff db connect`, deploying to the Mac from another machine over SSH (`[server] host`), and the CPU, memory and uptime on the **Server** page.
+
+To remove Skiff, run the installer with `--uninstall`. It stops the agents and deletes the binary. Your apps keep running in Docker, and your data stays in `~/.skiff` until you delete it:
+
+```sh title="on the Mac"
+curl -fsSL https://useskiff.xyz/install | sh -s -- --uninstall
+```
+
+Check the agents and their logs:
+
+```sh title="on the Mac"
+launchctl print gui/$(id -u)/xyz.useskiff.router | grep -E 'state|last exit'
+tail -n 50 ~/.skiff/logs/router.log
+tail -n 50 ~/.skiff/logs/panel.log
+```
+
+If the macOS firewall is on and asks whether `skiff` may accept incoming connections, allow it, or it can't serve ports 80 and 443.
