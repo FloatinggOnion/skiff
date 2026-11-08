@@ -111,14 +111,18 @@ func (p *Panel) cliAppLoop() {
 }
 
 // appRuntime is the env and network to start more of an app's containers with. A CLI app's config lives in the skiff.toml on the machine that deployed it, so its running container is the only copy the server has.
-// appSettings is what the app's workers and jobs run with: its environment, network, volumes, limits and start settings. The network is created if it's missing.
+// appSettings is what the app's workers and jobs run with: its environment, network, volumes, limits and start settings. A CLI app's limits come from its skiff.toml, recorded on its running container. The network is created if it's missing.
 func (p *Panel) appSettings(src Source) docker.Settings {
 	env, net := p.appRuntime(src)
 	_ = p.eng.EnsureNetwork(net)
-	limits := healthOf(src)
+	var container string
+	if apps, err := registry.Load(); err == nil {
+		container = apps[src.App].Container
+	}
+	memory, cpu := p.replicaLimits(src, container)
 	return docker.Settings{
 		Env: env, Network: net, Volumes: p.appMounts(src),
-		Memory: limits.Memory, CPU: limits.CPU, Options: config.DecodeRunOptions(src.RunOptions),
+		Memory: memory, CPU: cpu, Options: config.DecodeRunOptions(src.RunOptions),
 	}
 }
 

@@ -41,7 +41,7 @@ func TestTomlWorkersAndJobs(t *testing.T) {
 	}
 	deploy := func(work string) {
 		t.Helper()
-		toml := "name = \"" + app + "\"\n\n[build]\nimage = \"python:3.12-alpine\"\nport = 8080\n\n[deploy]\ncommand = [\"python\", \"-m\", \"http.server\", \"8080\"]\n\n" + work
+		toml := "name = \"" + app + "\"\n\n[build]\nimage = \"python:3.12-alpine\"\nport = 8080\n\n[deploy]\ncommand = [\"python\", \"-m\", \"http.server\", \"8080\"]\n\n[resources]\nmemory = \"64m\"\n\n" + work
 		if err := os.WriteFile(filepath.Join(dir, "skiff.toml"), []byte(toml), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -79,7 +79,7 @@ func TestTomlWorkersAndJobs(t *testing.T) {
 		return out
 	}
 
-	deploy("[[workers]]\nname = \"queue\"\ncommand = \"sleep 100000\"\nreplicas = 2\n\n[[jobs]]\nname = \"report\"\nschedule = \"0 3 * * *\"\ncommand = \"echo job-ran\"\n")
+	deploy("[[workers]]\nname = \"queue\"\ncommand = \"sleep 100000\"\nreplicas = 2\n\n[[jobs]]\nname = \"report\"\nschedule = \"0 3 * * *\"\ncommand = \"echo job-ran; cat /sys/fs/cgroup/memory.max\"\n")
 	if got := workers(); len(got) != 2 {
 		t.Fatalf("%d workers running after the deploy, want 2", len(got))
 	}
@@ -107,6 +107,10 @@ func TestTomlWorkersAndJobs(t *testing.T) {
 	resp.Body.Close()
 	if !ran.OK || !strings.Contains(ran.Output, "job-ran") {
 		t.Errorf("running the job: %+v", ran)
+	}
+	// The job runs within the app's own memory limit from skiff.toml, not the server-wide cap.
+	if !strings.Contains(ran.Output, "67108864") {
+		t.Errorf("the job didn't get the app's 64m memory limit: %q", ran.Output)
 	}
 	resp, err = c.Post(base+"/api/workers?app="+app, "application/json", strings.NewReader(`{"name":"other","command":"sleep 1","replicas":1}`))
 	if err != nil {
