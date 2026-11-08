@@ -623,3 +623,86 @@ volumes: {data: {}}
 		t.Errorf("extends from another file: %v", p.Problems)
 	}
 }
+
+func TestMergeKeys(t *testing.T) {
+	f, err := Parse([]byte(`
+x-shared: &shared
+  image: worker:1
+  restart: always
+  privileged: true
+x-env: &env
+  DATABASE_URL: ${DATABASE_URL:-postgres://db/app}
+  MODE: shared
+x-more: &more
+  MODE: more
+  EXTRA: "1"
+services:
+  web:
+    image: web:1
+    ports: ["3000:3000"]
+    environment:
+      <<: [*env, *more]
+      OWN: yes
+  worker:
+    <<: *shared
+    environment:
+      <<: *env
+      MODE: own
+  literal:
+    image: lit:1
+    environment:
+      "<<": not-a-merge
+`), func(string) (string, bool) { return "", false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	web := f.Services["web"].Environment
+	if web["DATABASE_URL"] != "postgres://db/app" || web["MODE"] != "shared" || web["EXTRA"] != "1" || web["OWN"] != "yes" {
+		t.Errorf("web environment = %v", web)
+	}
+	worker := f.Services["worker"]
+	if worker.Image != "worker:1" || worker.Environment["MODE"] != "own" || worker.Environment["DATABASE_URL"] != "postgres://db/app" {
+		t.Errorf("worker = %+v", worker)
+	}
+	if !slices.Contains(f.Extra["worker"], "privileged") {
+		t.Errorf("a key merged into a service isn't checked: %v", f.Extra["worker"])
+	}
+	if f.Services["literal"].Environment["<<"] != "not-a-merge" {
+		t.Errorf("a quoted << key = %v", f.Services["literal"].Environment)
+	}
+}
+
+func TestDatabaseWithSetupScripts(t *testing.T) {
+	f, err := Parse([]byte(`
+services:
+  postgres:
+    image: postgres:16
+    environment: {POSTGRES_PASSWORD: secret}
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./init-data.sh:/docker-entrypoint-initdb.d/init-data.sh
+  plain:
+    image: postgres:16
+    environment: {POSTGRES_PASSWORD: secret}
+volumes:
+  db:
+`), noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := BuildPlan("shop", f, noFiles, func(path string) PathKind {
+		if path == "./init-data.sh" {
+			return PathFile
+		}
+		return PathMissing
+	})
+	if db := item(t, p, "postgres"); db.Kind != KindApp || len(db.Files) != 1 {
+		t.Errorf("a database with setup scripts = %+v", db)
+	}
+	if db := item(t, p, "plain"); db.Kind != KindDatabase {
+		t.Errorf("a stock database = %+v", db)
+	}
+	if !slices.ContainsFunc(p.Notes, func(n string) bool { return strings.Contains(n, "setup scripts") }) {
+		t.Errorf("notes = %v", p.Notes)
+	}
+}

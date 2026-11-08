@@ -75,7 +75,8 @@ skiff compose plan -f deploy/compose.yml --name shop`}</CodeBlock>
           <strong>Stock Postgres, MySQL, MongoDB and Redis images</strong> become managed databases
           with daily backups, using your file&apos;s image, username, password and database name. They
           stay private. Other images, like <code>pgvector/pgvector</code>, run as ordinary private
-          apps, and their data is covered by volume backups.
+          apps, and their data is covered by volume backups. So does a stock image that mounts its
+          own setup scripts into <code>/docker-entrypoint-initdb.d</code>, so the scripts still run.
         </li>
         <li>
           <strong>Services that publish a port</strong> become public apps with HTTPS. Skiff serves

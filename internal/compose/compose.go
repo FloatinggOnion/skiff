@@ -153,6 +153,7 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		return nil, errors.New("the Compose file is empty")
 	}
 	f := &File{Services: map[string]Service{}, Extra: map[string][]string{}}
+	expandMerges(&doc, map[*yaml.Node]bool{})
 	stripMergeTags(&doc, map[*yaml.Node]bool{})
 	if err := interpolate(&doc, lookup, f, map[*yaml.Node]bool{}); err != nil {
 		return nil, err
@@ -426,6 +427,58 @@ func mapValue(n *yaml.Node, key string) *yaml.Node {
 }
 
 // stripMergeTags reads Compose's !reset as empty and !override as the plain value, since Skiff reads one file with nothing to merge.
+// expandMerges writes YAML merge keys (<<: *anchor) out as ordinary keys, so every later step sees what Compose sees. Keys written beside the merge win, and earlier sources in a list win over later ones.
+func expandMerges(n *yaml.Node, seen map[*yaml.Node]bool) {
+	if seen[n] {
+		return
+	}
+	seen[n] = true
+	if n.Alias != nil {
+		expandMerges(n.Alias, seen)
+	}
+	for _, c := range n.Content {
+		expandMerges(c, seen)
+	}
+	if n.Kind != yaml.MappingNode {
+		return
+	}
+	var own, sources []*yaml.Node
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		k, v := n.Content[i], n.Content[i+1]
+		if k.ShortTag() != "!!merge" {
+			own = append(own, k, v)
+			continue
+		}
+		if v.Kind == yaml.SequenceNode {
+			sources = append(sources, v.Content...)
+		} else {
+			sources = append(sources, v)
+		}
+	}
+	if sources == nil {
+		return
+	}
+	have := map[string]bool{}
+	for i := 0; i < len(own); i += 2 {
+		have[own[i].Value] = true
+	}
+	for _, src := range sources {
+		for src.Kind == yaml.AliasNode && src.Alias != nil {
+			src = src.Alias
+		}
+		if src.Kind != yaml.MappingNode {
+			continue
+		}
+		for i := 0; i+1 < len(src.Content); i += 2 {
+			if k := src.Content[i].Value; !have[k] {
+				have[k] = true
+				own = append(own, src.Content[i], src.Content[i+1])
+			}
+		}
+	}
+	n.Content = own
+}
+
 func stripMergeTags(n *yaml.Node, seen map[*yaml.Node]bool) {
 	if seen[n] {
 		return
@@ -561,9 +614,7 @@ func (e *envMap) UnmarshalYAML(n *yaml.Node) error {
 	switch n.Kind {
 	case yaml.MappingNode:
 		for i := 0; i+1 < len(n.Content); i += 2 {
-			if n.Content[i].Value != "<<" {
-				out[n.Content[i].Value] = n.Content[i+1].Value
-			}
+			out[n.Content[i].Value] = n.Content[i+1].Value
 		}
 	case yaml.SequenceNode:
 		for _, c := range n.Content {
