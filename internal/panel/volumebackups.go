@@ -25,7 +25,7 @@ const (
 	volumeBackupRetention = 3
 	// Past this the app would be frozen for too long, so the copy is taken live and marked as such.
 	volumePauseLimit  = 1 << 30
-	volumeToolImage   = "alpine:3.20"
+	volumeToolImage   = docker.VolumeTool
 	volumeBackupLimit = 30 * time.Minute
 )
 

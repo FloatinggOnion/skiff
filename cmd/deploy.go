@@ -313,10 +313,11 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 		network = netName
 	}
 
+	options := config.DecodeRunOptions(cfg.Deploy.RunOptions)
 	var mounts []docker.Mount
 	for _, v := range cfg.Volumes {
 		name := v.DockerName(cfg.Name)
-		if err := eng.EnsureAppVolume(name, v.Holder(cfg.Name), v.Name); err != nil {
+		if err := eng.EnsureAppVolumeFor(name, v.Holder(cfg.Name), v.Name, image, options.User); err != nil {
 			ui.Fail("Couldn't create volume " + v.Name)
 			return err
 		}
@@ -325,7 +326,7 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 
 	settings := docker.Settings{
 		Memory: cfg.Resources.Memory, CPU: cfg.Resources.CPU, Env: runtimeEnv, Network: network, Volumes: mounts,
-		Options: config.DecodeRunOptions(cfg.Deploy.RunOptions),
+		Options: options,
 	}
 
 	// Release command (e.g. migrations) runs once before the new version goes live; on failure abort — the old version keeps serving.

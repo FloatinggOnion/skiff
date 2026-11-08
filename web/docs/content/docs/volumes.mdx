@@ -50,6 +50,7 @@ skiff volume rm shop-api data --yes
 - **Every replica** mounts the same volume, including ones added by autoscaling. Several replicas writing the same SQLite file at once can lock each other out, so keep a SQLite app at one replica.
 - **Workers, jobs and the release command** see the same files, so a migration in the release command runs against the live database.
 - **Previews** mount the same paths on empty volumes of their own. A preview never reads or changes production's files, and its volumes are deleted with it.
+- **Apps that don't run as root** can write to a new volume. Skiff gives it to the user the image runs as, or the one set with `user:`. A volume that already exists keeps its owner.
 
 ## Deleting
 

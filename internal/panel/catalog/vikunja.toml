@@ -1,0 +1,23 @@
+name = "Vikunja"
+category = "Productivity"
+blurb = "To-do lists and projects, with list, kanban, gantt and table views, and a Postgres database included."
+image = "vikunja/vikunja:2.8.0"
+database = "postgres"
+database_var = "VIKUNJA_DATABASE_DATABASE"
+port = 3456
+memory = "256 MB"
+timeout = 180
+setup = "Open it right away and register. Anyone can register until you add VIKUNJA_SERVICE_ENABLEREGISTRATION=false under Environment and redeploy."
+
+[[volumes]]
+name = "files"
+path = "/app/vikunja/files"
+
+[env]
+VIKUNJA_SERVICE_PUBLICURL = "{{url}}/"
+VIKUNJA_SERVICE_SECRET = "{{secret}}"
+VIKUNJA_DATABASE_TYPE = "postgres"
+VIKUNJA_DATABASE_HOST = "{{db.host}}:{{db.port}}"
+VIKUNJA_DATABASE_DATABASE = "{{db.name}}"
+VIKUNJA_DATABASE_USER = "{{db.user}}"
+VIKUNJA_DATABASE_PASSWORD = "{{db.password}}"

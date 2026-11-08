@@ -54,11 +54,12 @@ Don't skip the first-run step. These apps are on the public internet from the mo
 | Memos | Notes and short posts | 128 MB | Sign up; the first account becomes the admin |
 | Miniflux | Minimal feed reader, with Postgres | 128 MB | Sign in as admin with the generated password |
 | Actual Budget | Personal budgeting | 256 MB | Set the server password |
+| Vikunja | To-do lists and projects, with Postgres | 256 MB | Register, then turn off registration |
 
 ## After installing
 
 - **It's a normal project.** Logs, metrics, domains, limits and rollback all work, and its settings are yours to change.
 - **Files and databases stay across deploys.** App data sits on a [persistent volume](/volumes) or in a managed database. Managed databases and volumes both get [daily backups](/backups).
 - **Upgrades are up to you.** The version is pinned, so an app only changes when you change its image under **Settings** and redeploy. Check the app's release notes first.
-- **Adding a custom domain?** Several apps store their address in an environment variable: Ghost (`url`), n8n (`WEBHOOK_URL`), Vaultwarden (`DOMAIN`), Gitea (`GITEA__server__ROOT_URL`), NocoDB (`NC_SITE_URL`), Open WebUI (`WEBUI_URL`), Linkwarden (`NEXTAUTH_URL`), WordPress (`WORDPRESS_CONFIG_EXTRA`), Mattermost (`MM_SERVICESETTINGS_SITEURL`), Metabase (`MB_SITE_URL`), Grafana (`GF_SERVER_ROOT_URL`), Directus (`PUBLIC_URL`) and Miniflux (`BASE_URL`). Update it under **Environment** and redeploy.
+- **Adding a custom domain?** Several apps store their address in an environment variable: Ghost (`url`), n8n (`WEBHOOK_URL`), Vaultwarden (`DOMAIN`), Gitea (`GITEA__server__ROOT_URL`), NocoDB (`NC_SITE_URL`), Open WebUI (`WEBUI_URL`), Linkwarden (`NEXTAUTH_URL`), WordPress (`WORDPRESS_CONFIG_EXTRA`), Mattermost (`MM_SERVICESETTINGS_SITEURL`), Metabase (`MB_SITE_URL`), Grafana (`GF_SERVER_ROOT_URL`), Directus (`PUBLIC_URL`), Miniflux (`BASE_URL`) and Vikunja (`VIKUNJA_SERVICE_PUBLICURL`). Update it under **Environment** and redeploy.
 - **Deleting the project keeps its database.** Delete that separately under **Databases** when you're sure you don't need the data.

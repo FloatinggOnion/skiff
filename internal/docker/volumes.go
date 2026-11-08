@@ -2,8 +2,12 @@ package docker
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 )
+
+// VolumeTool is the small image Skiff runs to work on a volume's files.
+const VolumeTool = "alpine:3.20"
 
 const (
 	labelVolumeApp  = "skiff.volume.app"
@@ -12,17 +16,65 @@ const (
 
 // EnsureAppVolume creates an app's named volume, labelled with its owner so it can be listed and removed with the app; an existing volume is left as is.
 func (e *Engine) EnsureAppVolume(volume, app, name string) error {
+	_, err := e.ensureAppVolume(volume, app, name)
+	return err
+}
+
+// EnsureAppVolumeFor is EnsureAppVolume for a container that runs image as user (empty means the image's own user). A new volume is handed to that user, as Docker only does when the image already has the folder, so an image that doesn't run as root can write to it.
+func (e *Engine) EnsureAppVolumeFor(volume, app, name, image, user string) error {
+	created, err := e.ensureAppVolume(volume, app, name)
+	if err != nil || !created {
+		return err
+	}
+	if owner := e.runsAs(image, user); owner != "" {
+		_ = e.command("run", "--rm", "-v", volume+":/v", VolumeTool, "chown", owner, "/v").Run()
+	}
+	return nil
+}
+
+func (e *Engine) ensureAppVolume(volume, app, name string) (created bool, err error) {
 	if e.VolumeExists(volume) {
-		return nil
+		return false, nil
 	}
 	out, err := e.command("volume", "create",
 		"--label", labelVolumeApp+"="+app,
 		"--label", labelVolumeName+"="+name,
 		volume).CombinedOutput()
 	if err != nil {
-		return cmdErr(out, err)
+		return false, cmdErr(out, err)
 	}
-	return nil
+	return true, nil
+}
+
+var (
+	numericUser = regexp.MustCompile(`^\d+(:\d+)?$`)
+	idOutput    = regexp.MustCompile(`uid=(\d+).*?gid=(\d+)`)
+)
+
+// runsAs is the uid[:gid] a container of image runs as, or "" for root or when it can't be told.
+func (e *Engine) runsAs(image, user string) string {
+	if user == "" {
+		out, err := e.command("image", "inspect", "--format", "{{.Config.User}}", image).Output()
+		if err != nil {
+			return ""
+		}
+		user = strings.TrimSpace(string(out))
+	}
+	switch {
+	case user == "" || user == "root" || user == "0" || strings.HasPrefix(user, "0:") || strings.HasPrefix(user, "root:"):
+		return ""
+	case numericUser.MatchString(user):
+		return user
+	}
+	// A named user only means something inside the image.
+	out, err := e.command("run", "--rm", "--user", user, "--entrypoint", "id", image).Output()
+	if err != nil {
+		return ""
+	}
+	if m := idOutput.FindSubmatch(out); m != nil && string(m[1]) != "0" {
+		return string(m[1]) + ":" + string(m[2])
+	}
+	return ""
 }
 
 // AppVolumes names every volume created for an app.
