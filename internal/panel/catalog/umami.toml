@@ -1,0 +1,15 @@
+name = "Umami"
+category = "Analytics"
+blurb = "Privacy-friendly website analytics, with a Postgres database included."
+image = "ghcr.io/umami-software/umami:postgresql-v2.19.0"
+memory = "512 MB"
+setup = "Sign in straight away with username admin and password umami, then change the password. Until you do, anyone can sign in."
+port = 3000
+timeout = 240
+database = "postgres"
+database_var = "DATABASE_URL"
+
+[env]
+DATABASE_URL = "{{db.url}}"
+DATABASE_TYPE = "postgresql"
+APP_SECRET = "{{secret}}"

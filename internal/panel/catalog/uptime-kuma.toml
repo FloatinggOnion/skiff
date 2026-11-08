@@ -1,0 +1,12 @@
+name = "Uptime Kuma"
+category = "Monitoring"
+blurb = "Status pages and uptime monitoring for your sites and services."
+image = "louislam/uptime-kuma:1"
+memory = "256 MB"
+setup = "Open it right away and create the admin account. The first visitor sets it up."
+port = 3001
+timeout = 120
+
+[[volumes]]
+name = "data"
+path = "/app/data"

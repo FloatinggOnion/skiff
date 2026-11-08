@@ -1,0 +1,19 @@
+name = "Gitea"
+category = "Development"
+blurb = "Self-hosted Git with issues, pull requests and a package registry."
+image = "gitea/gitea:1.24"
+memory = "256 MB"
+setup = "Open it right away and finish the install screen, creating the admin account there. The first visitor sets it up."
+port = 3000
+timeout = 120
+
+[[volumes]]
+name = "data"
+path = "/data"
+
+[env]
+GITEA__server__ROOT_URL = "{{url}}/"
+GITEA__server__DISABLE_SSH = "true"
+GITEA__database__DB_TYPE = "sqlite3"
+GITEA__security__SECRET_KEY = "{{secret}}"
+GITEA__security__INTERNAL_TOKEN = "{{secret}}"

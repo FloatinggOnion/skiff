@@ -1,0 +1,20 @@
+name = "n8n"
+category = "Automation"
+blurb = "Workflow automation that connects your apps and APIs."
+image = "n8nio/n8n:1.100.1"
+memory = "512 MB"
+setup = "Open it right away and create the owner account. The first visitor sets it up."
+port = 5678
+timeout = 180
+
+[[volumes]]
+name = "data"
+path = "/home/node/.n8n"
+
+[env]
+N8N_ENCRYPTION_KEY = "{{secret}}"
+N8N_HOST = "{{host}}"
+N8N_PROTOCOL = "https"
+WEBHOOK_URL = "{{url}}/"
+N8N_RUNNERS_ENABLED = "true"
+N8N_PROXY_HOPS = "1"
