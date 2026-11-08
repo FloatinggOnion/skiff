@@ -198,6 +198,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/tokens", p.protected(p.handleTokens))
 
 	mux.HandleFunc("GET /api/v1/apps", p.apiAuth(p.apiListApps))
+	mux.HandleFunc("GET /api/v1/workloads", p.apiAuth(p.apiWorkloads))
 	mux.HandleFunc("GET /api/v1/apps/{name}", p.apiAuth(p.apiGetApp))
 	mux.HandleFunc("POST /api/v1/apps/{name}/deploy", p.apiAuth(p.apiDeploy))
 	mux.HandleFunc("GET /api/v1/apps/{name}/env", p.apiAuth(p.apiEnv))

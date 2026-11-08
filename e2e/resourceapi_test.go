@@ -164,6 +164,33 @@ func TestResourceAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("workloads", func(t *testing.T) {
+		if code := call(ci.Token, http.MethodPost, "/apps/"+app+"/jobs", `{"name":"nightly","schedule":"0 3 * * *","command":"true"}`, nil); code != http.StatusCreated {
+			t.Fatalf("adding a job: %d", code)
+		}
+		var raw json.RawMessage
+		if code := call(ci.Token, http.MethodGet, "/workloads", "", &raw); code != http.StatusOK {
+			t.Fatalf("listing workloads: %d", code)
+		}
+		var list []struct {
+			Kind, App, Name string
+			Run             struct{ Image, Shell string }
+			When            struct{ Schedule string }
+		}
+		_ = json.Unmarshal(raw, &list)
+		var sawApp, sawJob bool
+		for _, w := range list {
+			sawApp = sawApp || w.Kind == "app" && w.Name == app && w.Run.Image == "traefik/whoami:v1.10.2"
+			sawJob = sawJob || w.Kind == "job" && w.App == app && w.Name == "nightly" && w.When.Schedule == "0 3 * * *" && w.Run.Shell == "true"
+		}
+		if !sawApp || !sawJob {
+			t.Errorf("workloads = %s", raw)
+		}
+		if strings.Contains(string(raw), "cloneUrl") {
+			t.Errorf("a clone address reached the API: %s", raw)
+		}
+	})
+
 	t.Run("another team sees none of it", func(t *testing.T) {
 		var other struct{ ID string }
 		postJSON(t, c, base+"/api/teams", `{"name":"other"}`, &other)
@@ -173,6 +200,10 @@ func TestResourceAPI(t *testing.T) {
 		var theirs struct{ Token string }
 		postJSON(t, c, base+"/api/tokens", `{"name":"other","databases":true}`, &theirs)
 		post(t, c, base+"/api/auth/team", `{"team":"`+me.Team+`"}`)
+		var theirList []any
+		if code := call(theirs.Token, http.MethodGet, "/workloads", "", &theirList); code != http.StatusOK || len(theirList) != 0 {
+			t.Errorf("another team's workloads: %d %v", code, theirList)
+		}
 		if code := call(theirs.Token, http.MethodGet, "/apps/"+app+"/volumes", "", nil); code != http.StatusNotFound {
 			t.Errorf("another team listing volumes: %d", code)
 		}
