@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
 )
 
@@ -64,10 +66,8 @@ func putWorker(w workerRow) error {
 	return err
 }
 
-func workerPrefix(app, name string) string { return "skiff-" + app + "-" + name + "-" }
-
 func toWorker(w workerRow, containers []string) Worker {
-	prefix := workerPrefix(w.App, w.Name)
+	prefix := docker.WorkerPrefix(w.App, w.Name)
 	running := 0
 	for _, c := range containers {
 		if strings.HasPrefix(c, prefix) {
@@ -80,7 +80,13 @@ func toWorker(w workerRow, containers []string) Worker {
 	}
 }
 
+var workerLocks sync.Map // app → *sync.Mutex
+
+// reconcileWorkers replaces the app's worker containers with what its rows ask for. A deploy and a change to a worker can both ask at once, and each removes every worker before starting its own, so one runs at a time per app.
 func (p *Panel) reconcileWorkers(app string) {
+	mu, _ := workerLocks.LoadOrStore(app, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
 	src, ok := getSource(app)
 	if !ok {
 		return
@@ -92,20 +98,15 @@ func (p *Panel) reconcileWorkers(app string) {
 	if !p.eng.ImageExists(image) {
 		return
 	}
-	env, net := p.appRuntime(src)
-	_ = p.eng.EnsureNetwork(net)
-	mounts := p.appMounts(src)
+	settings := p.appSettings(src)
 	for _, w := range listWorkers(app) {
 		reps := w.Replicas
 		if reps < 1 {
 			reps = 1
 		}
 		for range reps {
-			name := workerPrefix(app, w.Name) + replicaSuffix()
-			_ = p.eng.RunWorker(docker.WorkerSpec{
-				Name: name, App: app, Image: image, Command: w.Command, Env: env, Network: net, Volumes: mounts,
-				Memory: healthOf(src).Memory, CPU: healthOf(src).CPU,
-			})
+			name := docker.WorkerPrefix(app, w.Name) + replicaSuffix()
+			_ = p.eng.RunWorker(docker.WorkerSpec{Settings: settings, Name: name, App: app, Image: image, Command: w.Command})
 		}
 	}
 }
@@ -131,46 +132,37 @@ func (p *Panel) handleWorkers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		if workLocked(app) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
+			return
+		}
 		var body struct {
 			Name, Command string
 			Replicas      int
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		name := sanitizeName(body.Name)
-		command := strings.TrimSpace(body.Command)
-		if name == "" {
-			http.Error(w, "a worker name is required", http.StatusBadRequest)
+		wk, problem := newWorker(app, body.Name, body.Command, body.Replicas)
+		if problem != "" {
+			http.Error(w, problem, http.StatusBadRequest)
 			return
-		}
-		if command == "" {
-			http.Error(w, "a command is required", http.StatusBadRequest)
-			return
-		}
-		reps := body.Replicas
-		if reps < 1 {
-			reps = 1
-		}
-		if reps > 10 {
-			reps = 10
-		}
-		src, _ := getSource(app)
-		wk := workerRow{
-			ID: randToken()[:12], App: app, Team: src.Team, Name: name,
-			Command: command, Replicas: reps, Created: time.Now().Unix(),
 		}
 		if err := putWorker(wk); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		p.audit(r, "worker.set", app, name)
+		p.audit(r, "worker.set", app, wk.Name)
 		go p.reconcileWorkers(app)
 		// re-read the stored row: on a conflict update the id differs from the one we submitted.
-		writeJSON(w, toWorker(mustWorker(app, name, wk), p.eng.WorkerContainers(app)))
+		writeJSON(w, toWorker(mustWorker(app, wk.Name, wk), p.eng.WorkerContainers(app)))
 
 	case http.MethodDelete:
 		wk, ok := getWorker(sanitizeID(r.URL.Query().Get("id")))
 		if !ok || !p.canAccess(r, wk.App) {
 			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if workLocked(wk.App) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
 			return
 		}
 		_, _ = sqlDB.Exec(`DELETE FROM workers WHERE id=?`, wk.ID)
@@ -183,9 +175,86 @@ func (p *Panel) handleWorkers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// newWorker checks a worker's settings, the same for the dashboard and the API; replicas are kept between 1 and 10.
+func newWorker(app, name, command string, replicas int) (workerRow, string) {
+	name, command = sanitizeName(name), strings.TrimSpace(command)
+	if name == "" {
+		return workerRow{}, "a worker name is required"
+	}
+	if command == "" {
+		return workerRow{}, "a command is required"
+	}
+	src, _ := getSource(app)
+	return workerRow{
+		ID: randToken()[:12], App: app, Team: src.Team, Name: name,
+		Command: command, Replicas: min(max(replicas, 1), 10), Created: time.Now().Unix(),
+	}, ""
+}
+
 func mustWorker(app, name string, fallback workerRow) workerRow {
 	if w, ok := scanWorker(sqlDB.QueryRow(`SELECT `+workerCols+` FROM workers WHERE app=? AND name=?`, app, name)); ok {
 		return w
 	}
 	return fallback
+}
+
+// tomlOwned explains why a CLI app's workers and jobs can't be changed here: its skiff.toml lists them, and the next deploy would put them back.
+const tomlOwned = "this app's workers and jobs are set by its skiff.toml, so change them there and run `skiff deploy`"
+
+// workLocked reports whether the app's skiff.toml decides its workers and jobs.
+func workLocked(app string) bool {
+	src, ok := getSource(app)
+	return ok && src.Origin == originCLI
+}
+
+// syncTomlWork copies the workers and jobs a CLI app's skiff.toml lists, read off its running container, so the dashboard shows them and the jobs run on schedule. An app deployed by an older CLI has no such labels and keeps what it has.
+func syncTomlWork(src Source, labels map[string]string) {
+	if raw, ok := labels["skiff.workers"]; ok {
+		var want []config.Worker
+		if json.Unmarshal([]byte(raw), &want) == nil {
+			setTomlWorkers(src, want)
+		}
+	}
+	if raw, ok := labels["skiff.jobs"]; ok {
+		var want []config.Job
+		if json.Unmarshal([]byte(raw), &want) == nil {
+			setTomlJobs(src, want)
+		}
+	}
+}
+
+func setTomlWorkers(src Source, want []config.Worker) {
+	keep := map[string]bool{}
+	for _, w := range want {
+		keep[w.Name] = true
+		_, _ = sqlDB.Exec(`INSERT INTO workers(`+workerCols+`) VALUES(?,?,?,?,?,?,?)
+			ON CONFLICT(app,name) DO UPDATE SET command=excluded.command, replicas=excluded.replicas`,
+			randToken()[:12], src.App, src.Team, w.Name, w.Command, max(w.Replicas, 1), time.Now().Unix())
+	}
+	for _, w := range listWorkers(src.App) {
+		if !keep[w.Name] {
+			_, _ = sqlDB.Exec(`DELETE FROM workers WHERE id=?`, w.ID)
+		}
+	}
+}
+
+// setTomlJobs keeps each job's id, and so when it last ran, while its schedule or command changes.
+func setTomlJobs(src Source, want []config.Job) {
+	have := map[string]jobRow{}
+	for _, j := range listJobRows(src.App) {
+		have[j.Name] = j
+	}
+	for _, j := range want {
+		if old, ok := have[j.Name]; ok {
+			delete(have, j.Name)
+			if old.Schedule != j.Schedule || old.Command != j.Command {
+				_, _ = sqlDB.Exec(`UPDATE jobs SET schedule=?, command=? WHERE id=?`, j.Schedule, j.Command, old.ID)
+			}
+			continue
+		}
+		_ = putJob(jobRow{ID: randToken()[:12], App: src.App, Team: src.Team, Name: j.Name, Schedule: j.Schedule, Command: j.Command, LastOk: 1, Created: time.Now().Unix()})
+	}
+	for _, j := range have {
+		_, _ = sqlDB.Exec(`DELETE FROM jobs WHERE id=?`, j.ID)
+	}
 }

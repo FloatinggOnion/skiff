@@ -48,8 +48,24 @@ jobs:
 
       - run: go test ./...
 
-  e2e:
+  # The e2e tests are independent, so they run in groups on separate runners. The groups are balanced by how long the tests took, and the last one runs everything the others don't name, so a new test always runs somewhere.
+  e2e-group:
+    name: e2e (${{ matrix.group.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - name: history
+            run: "^Test(CorruptHistory|PointInTimeRecovery|RestoreReturnsToBackup)"
+          - name: recovery
+            run: "^Test(HistorySurvivesServerLoss|DBConnect|DisasterRecovery|VolumeBackupFromBucket)"
+          - name: deploys
+            run: "^Test(GitDeployLifecycle|TomlWorkersAndJobs|GitHubAction|DeployLetsStreamsFinish)"
+          - name: stacks
+            run: "^Test(Stack|ComposeStack|PreviewData)"
+          - name: rest
+            skip: "^Test(Drill|Upgrade|CorruptHistory|PointInTimeRecovery|RestoreReturnsToBackup|HistorySurvivesServerLoss|DBConnect|DisasterRecovery|VolumeBackupFromBucket|GitDeployLifecycle|TomlWorkersAndJobs|GitHubAction|DeployLetsStreamsFinish|Stack|ComposeStack|PreviewData)"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -59,7 +75,23 @@ jobs:
           cache: true
 
       - name: deploy, redeploy, rollback and teardown through the real binary
-        run: go test -tags e2e -count=1 -timeout 25m -v -skip '^(TestDrill|TestUpgrade)' ./e2e/...
+        env:
+          RUN: ${{ matrix.group.run }}
+          SKIP: ${{ matrix.group.skip }}
+        run: |
+          if [ -n "$RUN" ]; then
+            go test -tags e2e -count=1 -timeout 25m -v -run "$RUN" ./e2e/...
+          else
+            go test -tags e2e -count=1 -timeout 25m -v -skip "$SKIP" ./e2e/...
+          fi
+
+  # Branch protection asks for one check named e2e; it passes only when every group did.
+  e2e:
+    needs: e2e-group
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.e2e-group.result }}" = success
 
   upgrade:
     name: upgrades from every released minor

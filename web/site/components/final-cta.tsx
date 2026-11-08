@@ -1,3 +1,5 @@
+import { DOCS_URL } from "@/lib/site";
+
 export function FinalCta() {
   return (
     <section className="well">
@@ -7,11 +9,11 @@ export function FinalCta() {
         </h2>
         <p className="text-muted mt-4 max-w-md text-lg">Free and open source, on any Linux box you have.</p>
         <div className="mt-8 flex flex-wrap items-center gap-3">
-          <a href="/docs" className="btn-brand rounded-lg px-5 py-2.5 text-sm font-semibold">
+          <a href={DOCS_URL} className="btn-brand rounded-lg px-5 py-2.5 text-sm font-semibold">
             Get started
           </a>
           <a
-            href="/docs/self-hosting"
+            href={`${DOCS_URL}/self-hosting`}
             className="border-line-strong text-fg hover:bg-elevated rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors"
           >
             Read the setup guide

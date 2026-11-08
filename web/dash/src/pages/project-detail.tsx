@@ -395,8 +395,8 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="processes" className="flex flex-col gap-10 pb-[46vh]">
-          <WorkersPanel app={project.name} />
-          <JobsPanel app={project.name} />
+          <WorkersPanel app={project.name} cli={cli} />
+          <JobsPanel app={project.name} cli={cli} />
         </TabsContent>
 
         {/* Settings */}

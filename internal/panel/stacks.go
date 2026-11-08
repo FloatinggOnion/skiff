@@ -144,6 +144,7 @@ func loadStack(ctx context.Context, req stackRequest, team string, updating bool
 	var data []byte
 	read := func(string) ([]byte, error) { return nil, errors.New("env_file needs a repository") }
 	repoEnv := map[string]string{}
+	var repoPath func(string) compose.PathKind
 
 	switch {
 	case strings.TrimSpace(req.Git) != "":
@@ -202,6 +203,15 @@ func loadStack(ctx context.Context, req stackRequest, team string, updating bool
 			repoEnv = compose.ParseEnvFile(b)
 		}
 		read = func(p string) ([]byte, error) { return readLimited(within(filepath.Join(out.dir, p))) }
+		repoPath = func(p string) compose.PathKind {
+			switch info, err := os.Stat(within(filepath.Join(out.dir, p))); {
+			case err != nil:
+				return compose.PathMissing
+			case info.IsDir():
+				return compose.PathDir
+			}
+			return compose.PathFile
+		}
 	case strings.TrimSpace(req.Compose) != "":
 		data = []byte(req.Compose)
 	default:
@@ -219,7 +229,7 @@ func loadStack(ctx context.Context, req stackRequest, team string, updating bool
 	if err != nil {
 		return nil, err
 	}
-	out.plan = compose.BuildPlan(name, f, read)
+	out.plan = compose.BuildPlan(name, f, read, repoPath)
 	checkStack(out, team, updating)
 	return out, nil
 }
@@ -331,8 +341,24 @@ func stackSourceFor(s *stackSource, team string, it compose.Item) Source {
 			src.Command = string(b)
 		}
 	}
-	if it.Build != nil {
+	src.RunOptions = config.EncodeRunOptions(it.Options)
+	if it.Build != nil || slices.ContainsFunc(it.Files, func(f compose.PlanFile) bool { return f.Content == nil }) {
 		src.CloneURL, src.Branch, src.Auto, src.Repo = s.cloneURL, s.branch, true, githubRepo(s.cloneURL)
+	}
+	if len(it.Files) > 0 {
+		files := make([]mountedFile, 0, len(it.Files))
+		for _, f := range it.Files {
+			if f.Content != nil {
+				files = append(files, mountedFile{To: f.Target, Content: f.Content})
+				continue
+			}
+			files = append(files, mountedFile{From: strings.TrimPrefix(filepath.Join(s.dir, f.Source), "/"), To: f.Target})
+		}
+		if b, err := json.Marshal(files); err == nil {
+			src.MountedFiles = string(b)
+		}
+	}
+	if it.Build != nil {
 		src.RootDir = strings.TrimPrefix(filepath.Clean(filepath.Join(s.dir, it.Build.Context)), "/")
 		src.Dockerfile = it.Build.Dockerfile
 	} else {
@@ -507,7 +533,7 @@ func (p *Panel) createStack(s *stackSource, team, token string, vars map[string]
 			return err
 		}
 		for _, v := range it.Volumes {
-			if err := addVolume(src.App, config.Volume{Name: v.Name, Path: v.Path}); err != nil {
+			if err := addVolume(src.App, stackVolume(plan, v)); err != nil {
 				undo()
 				return err
 			}
@@ -631,11 +657,12 @@ func (p *Panel) viewStack(name string, created int64) stackView {
 		v.Members = append(v.Members, stackMember{Service: d.Alias, App: d.Name, Kind: "database", Engine: d.Engine, State: p.eng.State(d.Container)})
 	}
 	for _, s := range stackApps(name) {
+		// A container exists while its health check runs and may still be rolled back, so a deploy in flight reads as building.
 		state := "stopped"
-		if len(p.eng.AppContainers(s.App)) > 0 {
-			state = "running"
-		} else if building(s.App) {
+		if building(s.App) {
 			state = "building"
+		} else if len(p.eng.AppContainers(s.App)) > 0 {
+			state = "running"
 		}
 		m := stackMember{Service: s.Service, App: s.App, Kind: "app", State: state, Public: !s.Private}
 		if m.Public {

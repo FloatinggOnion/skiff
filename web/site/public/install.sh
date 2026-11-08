@@ -160,5 +160,5 @@ cat <<EOF
   3. First login — you'll be asked for this setup key:
        $SETUP_KEY
 
-  Docs: https://useskiff.xyz/docs/self-hosting
+  Docs: https://docs.useskiff.xyz/self-hosting
 EOF

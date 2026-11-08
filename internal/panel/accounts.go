@@ -1,13 +1,18 @@
 package panel
 
 import (
+	"cmp"
+	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"log"
 	"net/http"
+	netmail "net/mail"
 	"strings"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/auth"
+	"github.com/nuelScript/skiff/internal/mail"
 )
 
 type userView struct {
@@ -225,8 +230,42 @@ func (p *Panel) handleInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.audit(r, "member.invite", strings.TrimSpace(body.Email), body.Role)
+	link := baseURL(r) + "/invite/" + inv.Token
+	out := map[string]any{"link": link}
+	if relay := mail.RelayFromEnv(); relay != nil && inv.Email != "" {
+		err := p.emailInvite(r.Context(), relay, s, inv.Email, link)
+		if err != nil {
+			log.Printf("skiff: emailing invite: %v", err)
+		}
+		out["emailed"] = err == nil
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"link": baseURL(r) + "/invite/" + inv.Token,
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+func (p *Panel) emailInvite(ctx context.Context, relay *mail.Relay, s sess, to, link string) error {
+	if _, err := netmail.ParseAddress(to); err != nil {
+		return err
+	}
+	inviter, _ := p.auth.User(s.userID)
+	var team string
+	for _, t := range p.auth.TeamsForUser(s.userID) {
+		if t.ID == s.teamID {
+			team = t.Name
+		}
+	}
+	who := cmp.Or(inviter.Name, inviter.Email)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	return relay.Send(ctx, to, mail.Letter{
+		Subject: who + " invited you to " + team + " on Skiff",
+		Heading: "Join " + team + " on Skiff",
+		Body: []string{
+			who + " (" + inviter.Email + ") invited you to join the " + team + " team on Skiff, where the team deploys and runs its apps.",
+		},
+		Button: "Accept invite",
+		URL:    link,
+		Note:   "The invite works once and expires in 7 days. If the button doesn't work, paste this link into your browser: " + link,
+		Reason: "If you weren't expecting this invite, you can ignore this email.",
 	})
 }

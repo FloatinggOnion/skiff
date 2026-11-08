@@ -1,5 +1,5 @@
 import { Logo } from "@/components/logo";
-import { GITHUB_URL } from "@/lib/site";
+import { DOCS_URL, GITHUB_URL } from "@/lib/site";
 
 export function SiteFooter() {
   return (
@@ -12,7 +12,7 @@ export function SiteFooter() {
           </p>
         </div>
         <div className="text-subtle flex flex-wrap items-center gap-6 text-sm">
-          <a href="/docs" className="hover:text-fg transition-colors">
+          <a href={DOCS_URL} className="hover:text-fg transition-colors">
             Docs
           </a>
           <a href="/#features" className="hover:text-fg transition-colors">

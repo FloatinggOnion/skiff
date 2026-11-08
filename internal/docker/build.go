@@ -27,7 +27,7 @@ func (e *Engine) BuildFromDockerfile(ctx context.Context, tag, dockerfile, conte
 const defaultDockerignore = "node_modules\n.git\n.skiff\n.env\n*.log\nskiff.toml\n"
 
 // alwaysIgnored comes after an app's own rules, which can't re-include these.
-const alwaysIgnored = "\n.git\nskiff.toml\n"
+const alwaysIgnored = "\n.git\nskiff.toml\n!.skiff-mounts\n!.skiff-mounts/**\n"
 
 // ensureDockerignore keeps skiff.toml out of the build for the length of it: it writes a default file when the app ships none, or adds the line to the app's own, and its cleanup puts things back as they were.
 func ensureDockerignore(dir string) func() {

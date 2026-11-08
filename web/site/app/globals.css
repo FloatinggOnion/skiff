@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -137,40 +136,4 @@ body {
     opacity: 0.7;
     box-shadow: 0 0 0 5px transparent;
   }
-}
-/* Docs prose — Tailwind Typography tuned to the theme tokens. */
-.prose {
-  --tw-prose-invert-body: var(--muted);
-  --tw-prose-invert-headings: var(--fg);
-  --tw-prose-invert-lead: var(--muted);
-  --tw-prose-invert-links: var(--fg);
-  --tw-prose-invert-bold: var(--fg);
-  --tw-prose-invert-counters: var(--subtle);
-  --tw-prose-invert-bullets: var(--line-strong);
-  --tw-prose-invert-hr: var(--line);
-  --tw-prose-invert-quotes: var(--fg);
-  --tw-prose-invert-quote-borders: var(--line);
-  --tw-prose-invert-code: var(--fg);
-  --tw-prose-invert-pre-bg: var(--surface);
-}
-.prose :is(h1, h2, h3, h4) {
-  font-family: var(--font-brand-display), system-ui, sans-serif;
-  letter-spacing: -0.012em;
-}
-.prose :where(a) {
-  font-weight: 400;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-.prose :where(code):not(:where(pre code, a code)) {
-  border: 1px solid color-mix(in oklab, var(--line) 70%, transparent);
-  background: var(--elevated);
-  border-radius: 6px;
-  padding: 0.1em 0.4em;
-  font-weight: 400;
-  font-size: 0.85em;
-}
-.prose :where(code)::before,
-.prose :where(code)::after {
-  content: none;
 }

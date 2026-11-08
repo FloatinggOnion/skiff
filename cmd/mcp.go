@@ -23,13 +23,15 @@ func newMCPCmd() *cobra.Command {
 		Use:   "mcp",
 		Short: "Serve your Skiff projects to AI agents over MCP (stdio)",
 		Long: `Runs a Model Context Protocol server on stdin/stdout so an agent can list
-projects, deploy, read logs and traffic, edit env vars and roll back.
+projects, deploy, read logs and traffic, edit env vars, roll back, and manage
+workers, jobs, databases, buckets and volumes.
 
 Uses the dashboard you signed in to with skiff login, or SKIFF_URL (e.g.
 https://dash.example.com) and SKIFF_TOKEN (Settings → API tokens).
 
 With --read-only, or SKIFF_MCP_READONLY=1, the tools that change things (deploy,
-rollback, set_env) are left out.`,
+rollback, set_env, and the ones that create or change workers, jobs, databases,
+buckets and volumes) are left out. No tool deletes a database, bucket or volume.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			base := strings.TrimSuffix(os.Getenv("SKIFF_URL"), "/")
 			token := os.Getenv("SKIFF_TOKEN")
@@ -44,7 +46,7 @@ rollback, set_env) are left out.`,
 			return srv.Serve(os.Stdin, os.Stdout)
 		},
 	}
-	cmd.Flags().BoolVar(&readOnly, "read-only", false, "leave out the tools that change things (deploy, rollback, set_env)")
+	cmd.Flags().BoolVar(&readOnly, "read-only", false, "leave out the tools that change things")
 	return cmd
 }
 
@@ -187,13 +189,20 @@ func mcpTools(c *apiClient, readOnly bool) []mcp.Tool {
 	}
 	out := tools[:0:0]
 	for _, t := range tools {
-		switch t.Name {
-		case "deploy", "rollback", "set_env":
-		default:
+		if !changingTools[t.Name] {
 			out = append(out, t)
 		}
 	}
 	return out
+}
+
+// changingTools are left out in read-only mode. Nothing here deletes a database, bucket or volume: that stays with a person.
+var changingTools = map[string]bool{
+	"deploy": true, "rollback": true, "set_env": true,
+	"set_worker": true, "remove_worker": true, "add_job": true, "run_job": true, "remove_job": true,
+	"create_database": true, "attach_database": true, "detach_database": true,
+	"create_bucket": true, "attach_bucket": true, "detach_bucket": true,
+	"add_volume": true,
 }
 
 func allMCPTools(c *apiClient) []mcp.Tool {
@@ -201,7 +210,7 @@ func allMCPTools(c *apiClient) []mcp.Tool {
 		w, ok := args["wait"].(bool)
 		return !ok || w
 	}
-	return []mcp.Tool{
+	tools := []mcp.Tool{
 		{
 			Name: "list_projects", Description: "List the team's projects with their state, URL, repo and last deploy.",
 			InputSchema: schema(map[string]any{}),
@@ -410,4 +419,5 @@ func allMCPTools(c *apiClient) []mcp.Tool {
 			},
 		},
 	}
+	return append(tools, resourceTools(c)...)
 }

@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
 	"github.com/nuelScript/skiff/internal/health"
 	"github.com/nuelScript/skiff/internal/registry"
@@ -166,13 +167,12 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 			App:           app.Name,
 			Image:         image,
 			ContainerPort: app.Port,
-			Env:           env,
-			Network:       net,
-			Volumes:       mounts,
-			Memory:        memory,
-			CPU:           cpu,
-			Aliases:       stackAliases(src),
-			Command:       stackCommand(src),
+			Settings: docker.Settings{
+				Env: env, Network: net, Volumes: mounts, Memory: memory, CPU: cpu,
+				Options: config.DecodeRunOptions(src.RunOptions),
+			},
+			Aliases: stackAliases(src),
+			Command: stackCommand(src),
 		})
 		if err != nil {
 			break

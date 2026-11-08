@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { errText } from '@/lib/errors'
+import { inviteNote, type InviteSent } from '@/lib/invites'
 
 export default function MembersDialog({
   open,
@@ -22,6 +23,7 @@ export default function MembersDialog({
   const [members, setMembers] = useState<Member[]>([])
   const [email, setEmail] = useState('')
   const [link, setLink] = useState('')
+  const [sent, setSent] = useState<InviteSent>({ to: '' })
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export default function MembersDialog({
     try {
       const r = await authService.invite(email.trim(), 'member')
       setLink(r.link)
+      setSent({ to: email.trim(), emailed: r.emailed })
       authService
         .members()
         .then(setMembers)
@@ -95,7 +98,7 @@ export default function MembersDialog({
           {error && <p className="text-destructive text-xs">{error}</p>}
           {link && (
             <div className="bg-muted/30 rounded-md border p-2.5">
-              <p className="text-muted-foreground mb-1 text-xs">Share this invite link:</p>
+              <p className="text-muted-foreground mb-1 text-xs">{inviteNote(sent)}</p>
               <code className="text-xs break-all">{link}</code>
             </div>
           )}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -170,12 +171,15 @@ func (p *Panel) launchSelfUpdate(id, commit string) {
 }
 
 // pushTouchesSelf reports whether a push changed anything outside the marketing site (web/site/); an unknown/empty file list conservatively counts as a change.
+// siteDirs are the websites deployed as their own projects, so a push that only touches them leaves the panel alone.
+var siteDirs = []string{"web/site/", "web/docs/"}
+
 func (p *Panel) pushTouchesSelf(paths []string) bool {
 	if len(paths) == 0 {
 		return true
 	}
 	for _, f := range paths {
-		if !strings.HasPrefix(f, "web/site/") {
+		if !slices.ContainsFunc(siteDirs, func(d string) bool { return strings.HasPrefix(f, d) }) {
 			return true
 		}
 	}

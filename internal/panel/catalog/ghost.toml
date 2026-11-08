@@ -1,0 +1,23 @@
+name = "Ghost"
+category = "Publishing"
+blurb = "A blog and newsletter platform, with a MySQL database included."
+image = "ghost:5-alpine"
+memory = "1 GB"
+setup = "Open /ghost on your site right away and create the owner account. The first visitor sets it up."
+port = 2368
+timeout = 300
+database = "mysql"
+database_var = "database__connection__password"
+
+[[volumes]]
+name = "content"
+path = "/var/lib/ghost/content"
+
+[env]
+url = "{{url}}"
+database__client = "mysql"
+database__connection__host = "{{db.host}}"
+database__connection__port = "{{db.port}}"
+database__connection__user = "{{db.user}}"
+database__connection__password = "{{db.password}}"
+database__connection__database = "{{db.name}}"

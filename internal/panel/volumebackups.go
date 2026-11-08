@@ -393,7 +393,16 @@ func (p *Panel) handleVolumeBackups(w http.ResponseWriter, r *http.Request) {
 		volume := r.URL.Query().Get("volume")
 		known := false
 		for _, v := range p.volumeDefs(src) {
-			known = known || v.Name == volume
+			if v.Name != volume {
+				continue
+			}
+			known = true
+			// A shared volume's backups live with the service holding it.
+			if v.Owner != "" {
+				if holder, ok := getSource(v.Owner); ok && holder.Team == src.Team {
+					app, src = holder.App, holder
+				}
+			}
 		}
 		if !known {
 			http.Error(w, "no such volume", http.StatusNotFound)
@@ -527,7 +536,7 @@ func (p *Panel) volumeBackupLoop() {
 					continue
 				}
 				for _, v := range p.volumeDefs(src) {
-					if now-lastVolumeBackupAt(src.App, v.Name) < 24*3600 {
+					if v.Owner != "" || now-lastVolumeBackupAt(src.App, v.Name) < 24*3600 {
 						continue
 					}
 					if p.volumeSizes()[config.VolumeName(src.App, v.Name)] == 0 {

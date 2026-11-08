@@ -158,12 +158,14 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 	var ctxDir string
 	var childEnv []string
 	if src.Image != "" {
+		if user, pass, ok := getRegistryCreds(src.App); ok {
+			childEnv = append(childEnv, "SKIFF_REGISTRY_USER="+user, "SKIFF_REGISTRY_PASSWORD="+pass)
+		}
+	}
+	if src.Image != "" && !mountsFromRepo(src.MountedFiles) {
 		if ctxDir = p.imageWorkDir(src); ctxDir == "" {
 			finish("✗ couldn't prepare the deploy")
 			return
-		}
-		if user, pass, ok := getRegistryCreds(src.App); ok {
-			childEnv = append(childEnv, "SKIFF_REGISTRY_USER="+user, "SKIFF_REGISTRY_PASSWORD="+pass)
 		}
 	} else {
 		var ok bool
@@ -175,7 +177,14 @@ func (p *Panel) runDeploy(src Source, authURL, commit, message, trigger, id stri
 			setDeploySHA(src.App, id, sha)
 		}
 	}
-	tomlPath, cleanToml, err := writeDeployConfig(projectToml(src, deployEnv(src), appNetwork(src), p.volumeDefs(src)))
+	build := src
+	if src.MountedFiles != "" {
+		if err := prepareMountedFiles(&build, filepath.Join(p.buildsDir, sanitizeName(src.App)), ctxDir); err != nil {
+			finish("✗ " + err.Error())
+			return
+		}
+	}
+	tomlPath, cleanToml, err := writeDeployConfig(projectToml(build, deployEnv(src), appNetwork(src), p.volumeDefs(src)))
 	if err != nil {
 		finish("✗ couldn't prepare the deploy: " + err.Error())
 		return
@@ -624,6 +633,9 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if c := stackCommand(src); len(c) > 0 {
 		fmt.Fprintf(&b, "command = %s\n", tomlList(c))
 	}
+	if src.RunOptions != "" {
+		fmt.Fprintf(&b, "run_options = %s\n", tomlQuote(src.RunOptions))
+	}
 	if strings.TrimSpace(src.Release) != "" {
 		fmt.Fprintf(&b, "release = %s\n", tomlQuote(src.Release))
 	}
@@ -666,6 +678,9 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	}
 	for _, v := range volumes {
 		fmt.Fprintf(&b, "\n[[volumes]]\nname = %s\npath = %s\n", tomlQuote(v.Name), tomlQuote(v.Path))
+		if v.Owner != "" {
+			fmt.Fprintf(&b, "owner = %s\n", tomlQuote(v.Owner))
+		}
 	}
 	return b.String()
 }

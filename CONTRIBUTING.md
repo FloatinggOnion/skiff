@@ -81,6 +81,18 @@ and sync the embedded copy, and commit the result:
 make dash        # builds web/dash and copies it into internal/panel/dist
 ```
 
+### Adding a one-click app
+
+Each one-click app is a file in `internal/panel/catalog/`, named for its id,
+like `uptime-kuma.toml`. Copy one that's close to yours. Pin the image to a
+version, and write `setup` as the first thing someone must do after
+installing. Then check it installs, starts and answers:
+
+```bash
+go test ./internal/panel -run Catalog
+SKIFF_CATALOG=1 SKIFF_CATALOG_ONLY=uptime-kuma go test -tags e2e -run '^TestCatalog$' ./e2e/
+```
+
 ### Tests
 
 Prefer table-driven tests with `t.Run` subtests, and keep them dependency-free

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -224,5 +225,43 @@ func TestServerHostIsValidated(t *testing.T) {
 	p := write(t, "skiff.toml", "name = \"a\"\n[server]\nhost = \"-oProxyCommand=id\"\n")
 	if _, err := Load(p); err == nil {
 		t.Error("Load should refuse an option-shaped host")
+	}
+}
+
+func TestWorkersAndJobs(t *testing.T) {
+	c, err := Load(write(t, "skiff.toml", `name = "shop"
+
+[[workers]]
+name = "queue"
+command = "node queue.js"
+replicas = 2
+
+[[jobs]]
+name = "report"
+schedule = "0 3 * * *"
+command = "node report.js"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Workers) != 1 || c.Workers[0] != (Worker{Name: "queue", Command: "node queue.js", Replicas: 2}) {
+		t.Errorf("workers = %+v", c.Workers)
+	}
+	if len(c.Jobs) != 1 || c.Jobs[0] != (Job{Name: "report", Schedule: "0 3 * * *", Command: "node report.js"}) {
+		t.Errorf("jobs = %+v", c.Jobs)
+	}
+
+	for body, want := range map[string]string{
+		"[[workers]]\nname = \"Queue\"\ncommand = \"x\"":                                         "worker name",
+		"[[workers]]\nname = \"q\"\ncommand = \"\"":                                              "needs a command",
+		"[[workers]]\nname = \"q\"\ncommand = \"x\"\nreplicas = 11":                              "replicas",
+		"[[workers]]\nname = \"q\"\ncommand = \"x\"\n[[workers]]\nname = \"q\"\ncommand = \"y\"": "listed twice",
+		"[[jobs]]\nname = \"r\"\nschedule = \"whenever\"\ncommand = \"x\"":                       "cron syntax",
+		"[[jobs]]\nname = \"r\"\nschedule = \"@daily\"":                                          "needs a command",
+	} {
+		_, err := Load(write(t, "skiff.toml", "name = \"shop\"\n\n"+body+"\n"))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: got %v, want an error about %s", body, err, want)
+		}
 	}
 }

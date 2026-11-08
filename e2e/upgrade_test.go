@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -129,6 +130,7 @@ func upgradeFrom(t *testing.T, tag, current string) {
 	}
 	var backup struct{ ID string }
 	postJSON(t, b.c, b.url("/api/backups?db="+d.id), "", &backup)
+	checkKinds := seedKinds(t, b)
 	var before struct {
 		Deploys []struct {
 			ID string `json:"id"`
@@ -159,9 +161,10 @@ func upgradeFrom(t *testing.T, tag, current string) {
 	// Everything from before is there, and still signed in.
 	var vars []struct{ Key, Value string }
 	getJSON(t, b.c, b.url("/api/env?app="+app), &vars)
-	if len(vars) != 1 || vars[0].Value != secret {
+	if !slices.ContainsFunc(vars, func(v struct{ Key, Value string }) bool { return v.Key == "UPGRADE_SECRET" && v.Value == secret }) {
 		t.Errorf("the secret after upgrading: %+v", vars)
 	}
+	checkKinds(false)
 	if hasVolume {
 		if got := dockerExec(t, appContainer(t, app), "cat /data/note"); got != "kept" {
 			t.Errorf("the volume after upgrading: %q", got)
@@ -194,6 +197,7 @@ func upgradeFrom(t *testing.T, tag, current string) {
 			t.Errorf("the volume in the new version: %q", got)
 		}
 	}
+	checkKinds(true)
 
 	// Then the router updates too, and a version from before the upgrade can still be rolled back to.
 	b.stopRouter()

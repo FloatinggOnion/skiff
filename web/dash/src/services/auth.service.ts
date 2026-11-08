@@ -56,7 +56,7 @@ class AuthService extends BaseService {
   }
 
   invite(email: string, role: string) {
-    return this.post<{ link: string }>('/teams/invite', { email, role })
+    return this.post<{ link: string; emailed?: boolean }>('/teams/invite', { email, role })
   }
 
   removeMember(userId: string) {

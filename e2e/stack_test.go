@@ -765,3 +765,480 @@ func TestComposeStackFollowsPushes(t *testing.T) {
 		t.Fatalf("the hold stayed: %q", got)
 	}
 }
+
+// TestComposeStackPostgres18 runs the Postgres image that moved its data folder, and checks data survives a restart.
+func TestComposeStackPostgres18(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-pg18"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	const file = `services:\n  db:\n    image: postgres:18-alpine\n    environment: {POSTGRES_USER: app, POSTGRES_PASSWORD: pw, POSTGRES_DB: shop}\n`
+	resp, err := c.Post(base, "application/json", strings.NewReader(`{"name":"`+stack+`","compose":"`+file+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	container := func() string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.stack="+stack, "--filter", "label=skiff.kind=database", "--filter", "status=running").Output()
+		return strings.TrimSpace(string(out))
+	}
+	ready := func() bool {
+		id := container()
+		if id == "" {
+			return false
+		}
+		// Over TCP, because the server Postgres runs during first-time setup only listens on its socket.
+		return exec.Command("docker", "exec", id, "pg_isready", "-h", "127.0.0.1", "-U", "app", "-d", "shop").Run() == nil
+	}
+	eventually(t, 3*time.Minute, ready)
+	dockerExec(t, container(), "psql -U app -d shop -c 'create table kept (id int)'")
+	if out, err := exec.Command("docker", "restart", container()).CombinedOutput(); err != nil {
+		t.Fatalf("restart: %v %s", err, out)
+	}
+	eventually(t, time.Minute, ready)
+	if got := dockerExec(t, container(), "psql -U app -d shop -tAc \"select to_regclass('kept')\""); got != "kept" {
+		t.Fatalf("the data didn't survive a restart: %q", got)
+	}
+}
+
+// TestComposeStackMounts deploys a stack that mounts files from its own repository, and checks each kind of mount does what its file asked.
+func TestComposeStackMounts(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	repo, push := gitServer(t, root)
+	work := filepath.Join(root, "work")
+	for path, content := range map[string]string{
+		"deploy/compose.yml": `services:
+  web:
+    image: busybox:1.36
+    command: httpd -f -p 3000 -h /www
+    ports: ["3000"]
+    volumes:
+      - ./conf/app.conf:/etc/app.conf:ro
+      - ./site:/www:ro
+      - ./seed:/seed
+      - ./data:/data
+      - ..:/whole-repo:ro
+  built:
+    build: ../api
+    command: sleep 100000
+    volumes: ["./conf/app.conf:/etc/app.conf"]
+`,
+		"deploy/conf/app.conf":   "from-the-repo\n",
+		"deploy/site/index.html": "<h1>mounted site</h1>\n",
+		"deploy/seed/start.txt":  "seeded\n",
+		"api/Dockerfile":         "FROM busybox:1.36\nRUN echo built > /marker\n",
+	} {
+		full := filepath.Join(work, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	push("v1")
+
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_ALLOW_PRIVATE_ENDPOINTS=1"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-mounts"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	body := fmt.Sprintf(`{"name":%q,"git":%q,"path":"deploy/compose.yml"}`, stack, repo)
+	resp, err := c.Post(base, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	running := func(app string) string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+app, "--filter", "status=running").Output()
+		if f := strings.Fields(string(out)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	eventually(t, 5*time.Minute, func() bool { return running(stack+"-web") != "" && running(stack+"-built") != "" })
+
+	web := running(stack + "-web")
+	if got := dockerExec(t, web, "cat /etc/app.conf"); got != "from-the-repo" {
+		t.Errorf("a repository file: %q", got)
+	}
+	if got := dockerExec(t, web, "wget -qO- http://127.0.0.1:3000/"); !strings.Contains(got, "mounted site") {
+		t.Errorf("a read-only folder: %q", got)
+	}
+	if got := dockerExec(t, web, "cat /seed/start.txt"); got != "seeded" {
+		t.Errorf("a writable folder should start with the repository's copy: %q", got)
+	}
+	if got := dockerExec(t, web, "ls -A /data | wc -l"); got != "0" {
+		t.Errorf("a folder the repository doesn't have should start empty: %q", got)
+	}
+	if got := dockerExec(t, web, "ls -a /whole-repo"); strings.Contains(got, ".git") || !strings.Contains(got, "api") {
+		t.Errorf("the whole repository, without .git: %q", got)
+	}
+	built := running(stack + "-built")
+	if got := dockerExec(t, built, "cat /marker /etc/app.conf"); got != "built\nfrom-the-repo" {
+		t.Errorf("a file on top of the service's own Dockerfile: %q", got)
+	}
+
+	// Data written to a volume outlives the deploy that carries the repository's next version.
+	dockerExec(t, web, "echo mine > /data/note; echo changed > /seed/start.txt")
+	if err := os.WriteFile(filepath.Join(work, "deploy/conf/app.conf"), []byte("second-version\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	push("v2")
+	redeploy, err := c.Post("http://"+panel+"/api/redeploy?app="+stack+"-web", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redeploy.Body.Close()
+	eventually(t, 3*time.Minute, func() bool {
+		id := running(stack + "-web")
+		if id == "" {
+			return false
+		}
+		out, err := exec.Command("docker", "exec", id, "cat", "/etc/app.conf").Output()
+		return err == nil && strings.TrimSpace(string(out)) == "second-version"
+	})
+	web = running(stack + "-web")
+	if got := dockerExec(t, web, "cat /data/note /seed/start.txt"); got != "mine\nchanged" {
+		t.Errorf("volumes should keep their changes across a deploy: %q", got)
+	}
+}
+
+// TestComposeStackRunSettings checks a container starts the way its Compose file asks.
+func TestComposeStackRunSettings(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-run"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	const file = `services:
+  app:
+    image: busybox:1.36
+    entrypoint: ["sh", "-c", "echo started-by-entrypoint > /scratch/mark; exec sleep 100000"]
+    user: "1000:1000"
+    working_dir: /scratch
+    init: true
+    read_only: true
+    shm_size: 32m
+    tmpfs: ["/scratch:mode=1777"]
+    ulimits: {nofile: 4096}
+    extra_hosts: ["db.local:10.9.8.7"]
+    stop_grace_period: 7s
+  skipped:
+    image: busybox:1.36
+    profiles: [debug]
+`
+	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(file)
+	resp, err := c.Post(base, "application/json", strings.NewReader(`{"name":"`+stack+`","compose":"`+quoted+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	container := func() string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+stack+"-app", "--filter", "status=running").Output()
+		return strings.TrimSpace(string(out))
+	}
+	eventually(t, 3*time.Minute, func() bool { return container() != "" })
+	id := container()
+	eventually(t, 30*time.Second, func() bool {
+		return exec.Command("docker", "exec", container(), "test", "-f", "/scratch/mark").Run() == nil
+	})
+	id = container()
+	for script, want := range map[string]string{
+		"cat /scratch/mark":                "started-by-entrypoint",
+		"id -u":                            "1000",
+		"pwd":                              "/scratch",
+		"ulimit -n":                        "4096",
+		"grep db.local /etc/hosts | wc -l": "1",
+		"df -m /dev/shm | tail -1 | awk '{print $2}'":           "32",
+		"touch /nope 2>/dev/null && echo wrote || echo refused": "refused",
+	} {
+		if got := dockerExec(t, id, script); got != want {
+			t.Errorf("%s = %q, want %q", script, got, want)
+		}
+	}
+	out, err := exec.Command("docker", "inspect", "-f", "{{.HostConfig.Init}} {{.Config.StopTimeout}}", id).Output()
+	if err != nil || strings.TrimSpace(string(out)) != "true 7" {
+		t.Errorf("init and stop timeout: %q %v", out, err)
+	}
+	if out, _ := exec.Command("docker", "ps", "-aq", "--filter", "label=skiff.app="+stack+"-skipped").Output(); strings.TrimSpace(string(out)) != "" {
+		t.Errorf("a service behind a profile started: %s", out)
+	}
+}
+
+const sharedVolumeFile = `services:
+  web:
+    image: busybox:1.36
+    command: sleep 100000
+    volumes: ["uploads:/files"]
+  reader:
+    image: busybox:1.36
+    command: sleep 100001
+    volumes: ["uploads:/incoming"]
+volumes: {uploads: {}}
+`
+
+// TestComposeStackSharedVolume shares a volume between two services and checks it stays in one place through updates, backups and removal.
+func TestComposeStackSharedVolume(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-sharedvol"
+	removed := false
+	t.Cleanup(func() {
+		if removed {
+			return
+		}
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	body := func(file string) string {
+		quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(file)
+		return `{"name":"` + stack + `","compose":"` + quoted + `"}`
+	}
+	send := func(method, url, b string) (int, string) {
+		t.Helper()
+		req, _ := http.NewRequest(method, url, strings.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		msg, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(msg)
+	}
+	if code, msg := send(http.MethodPost, base, body(sharedVolumeFile)); code != http.StatusCreated {
+		t.Fatalf("create: %d %s", code, msg)
+	}
+	running := func(service string) string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+stack+"-"+service, "--filter", "status=running").Output()
+		if f := strings.Fields(string(out)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	eventually(t, 3*time.Minute, func() bool { return running("web") != "" && running("reader") != "" })
+	dockerExec(t, running("web"), "echo shared > /files/note")
+	if got := dockerExec(t, running("reader"), "cat /incoming/note"); got != "shared" {
+		t.Fatalf("the other service should see the file: %q", got)
+	}
+	volumes := func() string {
+		out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "name=skiff-"+stack).Output()
+		return strings.Join(strings.Fields(string(out)), " ")
+	}
+	if got := volumes(); got != "skiff-"+stack+"-web_uploads" {
+		t.Fatalf("there should be one volume, held by the first service: %q", got)
+	}
+
+	// Writing the services in the other order changes nothing.
+	reordered := strings.Replace(sharedVolumeFile, "  web:\n    image: busybox:1.36\n    command: sleep 100000\n    volumes: [\"uploads:/files\"]\n", "", 1)
+	reordered = strings.Replace(reordered, "volumes: {uploads: {}}", "  web:\n    image: busybox:1.36\n    command: sleep 100000\n    volumes: [\"uploads:/files\"]\nvolumes: {uploads: {}}", 1)
+	code, msg := send(http.MethodPost, base+"/changes", body(reordered))
+	if code != http.StatusOK || !strings.Contains(msg, `"changes":[]`) && !strings.Contains(msg, `"changes":null`) {
+		t.Fatalf("reordering should be no change: %d %s", code, msg)
+	}
+
+	// The service holding the volume can't leave while another still uses it.
+	withoutHolder := "services:\n  reader:\n    image: busybox:1.36\n    command: sleep 100001\n    volumes: [\"uploads:/incoming\"]\nvolumes: {uploads: {}}\n"
+	code, msg = send(http.MethodPost, base+"/changes", body(withoutHolder))
+	if code != http.StatusOK || !strings.Contains(msg, "held by web") {
+		t.Fatalf("removing the holder should be refused: %d %s", code, msg)
+	}
+
+	// A backup asked for through either service is the same volume's.
+	backup := func(service string) {
+		t.Helper()
+		if code, msg := send(http.MethodPost, "http://"+panel+"/api/volumes/backups?app="+stack+"-"+service+"&volume=uploads", ""); code != http.StatusOK {
+			t.Fatalf("backup through %s: %d %s", service, code, msg)
+		}
+	}
+	backup("reader")
+	var list []struct{ ID string }
+	getJSON(t, c, "http://"+panel+"/api/volumes/backups?app="+stack+"-web&volume=uploads", &list)
+	if len(list) != 1 {
+		t.Fatalf("the holder should list the backup: %+v", list)
+	}
+
+	if code, msg := send(http.MethodDelete, base+"?name="+stack, ""); code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", code, msg)
+	}
+	removed = true
+	eventually(t, time.Minute, func() bool { return volumes() == "" })
+}
+
+// TestComposeStackSecretsAndConfigs checks secrets and configs reach the services that ask for them, a database takes its password from a secret file, and a service can extend another.
+func TestComposeStackSecretsAndConfigs(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	bin := filepath.Join(root, "skiff")
+	run(t, "", nil, "go", "build", "-o", bin, "..")
+	repo, push := gitServer(t, root)
+	work := filepath.Join(root, "work")
+	for path, content := range map[string]string{
+		"compose.yml": `services:
+  web:
+    image: busybox:1.36
+    command: httpd -f -p 3000 -h /etc
+    ports: ["3000"]
+    environment: {FROM_BASE: "yes"}
+    depends_on: [db]
+    secrets: [db-password]
+    configs: [{source: greeting, target: /etc/greeting}]
+  helper:
+    extends: web
+    environment: {ROLE: helper}
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db-password
+    secrets: [db-password]
+secrets:
+  db-password: {file: ./db/password.txt}
+configs:
+  greeting: {content: "hello from compose"}
+`,
+		"db/password.txt": "s3cret-pw\n",
+	} {
+		full := filepath.Join(work, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	push("v1")
+
+	protectExisting(t, home)
+	panel := freeAddr(t)
+	start(t, []string{"HOME=" + home, "SKIFF_PANEL_PASSWORD=e2e-setup", "SKIFF_ALLOW_PRIVATE_ENDPOINTS=1"}, bin, "panel", "--addr", panel, "--domain", "localhost")
+	waitHTTP(t, "http://"+panel+"/api/me")
+	c := client(t)
+	post(t, c, "http://"+panel+"/api/auth/setup", `{"secret":"e2e-setup","email":"e2e@example.com","name":"E2E","password":"e2e-password-1"}`)
+
+	base := "http://" + panel + "/api/stacks"
+	const stack = "e2e-secrets"
+	t.Cleanup(func() {
+		req, _ := http.NewRequest(http.MethodDelete, base+"?name="+stack, nil)
+		if resp, err := c.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	})
+	resp, err := c.Post(base, "application/json", strings.NewReader(fmt.Sprintf(`{"name":%q,"git":%q}`, stack, repo)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("creating the stack: %d %s", resp.StatusCode, msg)
+	}
+	running := func(app string) string {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.app="+app, "--filter", "status=running").Output()
+		if f := strings.Fields(string(out)); len(f) > 0 {
+			return f[0]
+		}
+		return ""
+	}
+	eventually(t, 5*time.Minute, func() bool { return running(stack+"-web") != "" && running(stack+"-helper") != "" })
+
+	web := running(stack + "-web")
+	if got := dockerExec(t, web, "cat /run/secrets/db-password /etc/greeting"); got != "s3cret-pw\nhello from compose" {
+		t.Errorf("the secret and the config: %q", got)
+	}
+	helper := running(stack + "-helper")
+	if got := dockerExec(t, helper, `cat /etc/greeting; echo; echo "$FROM_BASE $ROLE"`); got != "hello from compose\nyes helper" {
+		t.Errorf("a service that extends another: %q", got)
+	}
+
+	nets, err := exec.Command("docker", "inspect", "-f", "{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}", web).Output()
+	if err != nil || len(strings.Fields(string(nets))) == 0 {
+		t.Fatalf("the web service's network: %v %s", err, nets)
+	}
+	network := strings.Fields(string(nets))[0]
+	eventually(t, 2*time.Minute, func() bool {
+		return exec.Command("docker", "run", "--rm", "--network", network, "postgres:16-alpine",
+			"psql", "postgresql://postgres:s3cret-pw@db:5432/postgres", "-c", "select 1").Run() == nil
+	})
+}

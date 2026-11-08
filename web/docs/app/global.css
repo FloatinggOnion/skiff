@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* Skiff's Waterline palette, the same tokens as useskiff.xyz: hull green, off-white topsides, a copper accent. */
+:root {
+  --color-fd-background: #f6f8f5;
+  --color-fd-foreground: #12302c;
+  --color-fd-muted: #e9efeb;
+  --color-fd-muted-foreground: #4b655f;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #12302c;
+  --color-fd-card: #ffffff;
+  --color-fd-card-foreground: #12302c;
+  --color-fd-border: #d5dfda;
+  --color-fd-primary: #a4531f;
+  --color-fd-primary-foreground: #f6f8f5;
+  --color-fd-secondary: #e9efeb;
+  --color-fd-secondary-foreground: #12302c;
+  --color-fd-accent: #e3ebe6;
+  --color-fd-accent-foreground: #12302c;
+  --color-fd-ring: #a4531f;
+  --color-fd-info: #0b6491;
+  --color-fd-success: #0f6b4a;
+  --color-fd-warning: #7f6200;
+  --color-fd-error: #b3261e;
+  --color-fd-idea: #a4531f;
+}
+
+.dark {
+  --color-fd-background: #142c29;
+  --color-fd-foreground: #f0f4f1;
+  --color-fd-muted: #1e3a36;
+  --color-fd-muted-foreground: #a6bcb6;
+  --color-fd-popover: #19332f;
+  --color-fd-popover-foreground: #f0f4f1;
+  --color-fd-card: #19332f;
+  --color-fd-card-foreground: #f0f4f1;
+  --color-fd-border: #2d4a45;
+  --color-fd-primary: #e39155;
+  --color-fd-primary-foreground: #1a1109;
+  --color-fd-secondary: #1e3a36;
+  --color-fd-secondary-foreground: #f0f4f1;
+  --color-fd-accent: #1c3834;
+  --color-fd-accent-foreground: #f0f4f1;
+  --color-fd-ring: #e39155;
+  --color-fd-info: #8ccbe8;
+  --color-fd-success: #8fdcb9;
+  --color-fd-warning: #f0d878;
+  --color-fd-error: #f4978e;
+  --color-fd-idea: #e39155;
+}
+
+.dark #nd-sidebar {
+  --color-fd-muted: #1e3a36;
+  --color-fd-secondary: #1e3a36;
+  --color-fd-muted-foreground: #a6bcb6;
+}
+
+@theme inline {
+  --font-sans: var(--font-brand-sans), system-ui, sans-serif;
+  --font-mono: var(--font-brand-mono), ui-monospace, monospace;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-fd-foreground) 16%, transparent);
+}
+
+/* Headings in Bricolage, as on the site. */
+.prose :is(h1, h2, h3, h4),
+#nd-page h1 {
+  font-family: var(--font-brand-display), system-ui, sans-serif;
+  letter-spacing: -0.012em;
+}
+
+.prose :where(a):not(:where(.not-prose *)) {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}

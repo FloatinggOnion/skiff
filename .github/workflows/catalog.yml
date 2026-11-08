@@ -1,0 +1,47 @@
+name: catalog
+
+# Installs each one-click app through the dashboard and checks it starts and answers. Runs when a recipe changes, and weekly, since a pinned image can still disappear.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "internal/panel/catalog/**"
+      - "internal/panel/catalog.go"
+      - "e2e/catalog_test.go"
+      - ".github/workflows/catalog.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.apps.outputs.apps }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: apps
+        run: echo "apps=$(ls internal/panel/catalog/*.toml | xargs -n1 basename | sed 's/\.toml$//' | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  install:
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.list.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: install ${{ matrix.app }}
+        env:
+          SKIFF_CATALOG: "1"
+          SKIFF_CATALOG_ONLY: ${{ matrix.app }}
+        run: go test -tags e2e -count=1 -timeout 25m -v -run '^TestCatalog$' ./e2e/...

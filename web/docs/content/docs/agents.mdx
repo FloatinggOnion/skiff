@@ -1,0 +1,83 @@
+---
+title: AI agents (MCP)
+description: "skiff mcp serves your projects over the Model Context Protocol, so an assistant in your editor or terminal can ship and debug them with you."
+---
+
+## Connect an assistant
+
+<Steps>
+<Step>
+### Create an API token
+
+In the dashboard, open **Settings → Integrations** and create one. It's shown once and acts for that team only.
+</Step>
+<Step>
+### Add Skiff as an MCP server
+
+Most clients take a block like this:
+
+```json title="mcp config"
+{
+  "mcpServers": {
+    "skiff": {
+      "command": "skiff",
+      "args": ["mcp"],
+      "env": {
+        "SKIFF_URL": "https://dash.example.com",
+        "SKIFF_TOKEN": "skiff_..."
+      }
+    }
+  }
+}
+```
+
+From a terminal client, the same thing is usually one command:
+
+```sh title="shell"
+claude mcp add skiff \
+  --env SKIFF_URL=https://dash.example.com \
+  --env SKIFF_TOKEN=skiff_... \
+  -- skiff mcp
+```
+</Step>
+<Step>
+### Ask
+
+*“Why is checkout throwing 500s since this morning?”* — *“Deploy the API and tell me if it comes up.”* — *“Roll the site back to yesterday's build.”*
+</Step>
+</Steps>
+
+## What it can do
+
+- **list_projects**, **get_project** — state, URL, replicas and the last deploy.
+- **deploy** — build the latest commit and wait for it, returning the end of the build log.
+- **list_deploys**, **deploy_log**, **rollback** — history, build output, and putting an earlier build back without rebuilding.
+- **app_logs** — the running app's recent output.
+- **app_traffic** — requests, error rate, latency, top paths, error paths, the deploys in that window, and uptime incidents.
+- **get_env**, **set_env** — read and change environment variables. Values stay hidden unless the assistant asks for one variable by name. Changes merge with what's there and apply on the next deploy.
+- **list_workers**, **set_worker**, **remove_worker**: background workers and how many copies run.
+- **list_jobs**, **add_job**, **run_job**, **remove_job**: scheduled jobs, and running one now to see its output.
+- **list_databases**, **create_database**, **attach_database**, **detach_database**, and the same four for buckets: create them and give a project their address and keys.
+- **list_volumes**, **add_volume**: storage that keeps its data across deploys.
+
+No tool deletes a database, bucket or volume, so an assistant can't lose your data. Do that yourself in the dashboard or with the CLI. Attaching and detaching need the sign-in from `skiff login`; a token made in the dashboard is refused.
+
+Logs, build output and traffic include text written by visitors and repo authors. Skiff fences it and tells the assistant to treat it as data, but a read-only connection is the safer default for an assistant that reads logs.
+
+## Read-only mode
+
+Start the server with `--read-only`, or set `SKIFF_MCP_READONLY=1`, and every tool that changes something is left out: deploys, rollbacks, variables, workers, jobs, databases, buckets and volumes. The assistant can still look at projects, logs and traffic.
+
+```sh title="shell"
+claude mcp add skiff \
+  --env SKIFF_URL=https://dash.example.com \
+  --env SKIFF_TOKEN=skiff_... \
+  --env SKIFF_MCP_READONLY=1 \
+  -- skiff mcp
+```
+
+<Callout>
+
+The token can deploy, roll back and read secrets for its whole team. Give each assistant its own token so you can see its actions in **Activity** and revoke it on its own.
+
+</Callout>

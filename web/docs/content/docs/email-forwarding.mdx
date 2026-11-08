@@ -1,0 +1,70 @@
+---
+title: Email forwarding
+description: "Point your domain's mail at your server and Skiff hands every message straight on to the inbox you already use. No mailboxes to host, no IMAP, nothing to back up."
+---
+
+## Set up a forward
+
+<Steps>
+<Step>
+### Add the address
+
+In the dashboard, open **Email** and fill in the address you want (`hello`), your domain, and the inbox it should land in. Several inboxes work too — separate them with commas.
+</Step>
+<Step>
+### Point MX at your server
+
+Add the MX record the page shows you, at your DNS provider:
+
+```text title="dns"
+MX    @    mx.example.com    (priority 10)
+```
+
+Mail follows MX records, so remove any others on that domain — otherwise messages keep going wherever those point.
+</Step>
+<Step>
+### Add the SPF record
+
+The `TXT` record on the same page tells the receiving side that your server is allowed to pass mail along. Without it, forwarded messages are more likely to be treated as spam. If you already have an SPF record, add the `ip4:` term to that one rather than creating a second.
+</Step>
+</Steps>
+
+The page turns green once it sees the records. DNS usually propagates in a few minutes — it rechecks on its own.
+
+## Addresses you can forward
+
+- **A single address** — `hello@example.com` to your inbox.
+- **A catch-all** — use `*` as the address to take everything sent to the domain, whatever the recipient.
+- **Tagged addresses** — `hello+invoices@example.com` follows the `hello` forward, so you can filter on the tag in your inbox.
+
+<Callout>
+
+Forwarding is one-way: it delivers mail *to* your inbox, it doesn't let you send *as* the address. Replies go out from whatever inbox you read them in.
+
+</Callout>
+
+## How delivery works
+
+Your server accepts mail on port 25 (over TLS when the sender offers it), for your forwarded addresses only — it will never relay for anyone else. Each message is passed on while the sender is still connected, so nothing queues up on your server: if the destination is temporarily unavailable, the sending server is asked to retry and does the waiting for you.
+
+The message itself is handed over untouched, so it arrives from the original sender. Only the envelope is rewritten, which is what keeps SPF checks passing at the far end.
+
+## If your provider blocks port 25
+
+Many hosts block outbound port 25 on new accounts, which stops forwarded mail from leaving the server. You can either ask your provider to unblock it, or send through an SMTP relay — the same settings Skiff uses for alert emails:
+
+```text title="/etc/skiff/skiff.env"
+SKIFF_SMTP_HOST=smtp.provider.com
+SKIFF_SMTP_PORT=587
+SKIFF_SMTP_USER=...
+SKIFF_SMTP_PASS=...
+SKIFF_SMTP_FROM=forward@example.com
+```
+
+Then restart the router with `systemctl restart skiff-router`. Relays refuse to send as domains they don't own, so messages arrive from your relay address as *“Sender via hello@example.com”*, with `Reply-To` set to the original sender — replying still reaches them.
+
+## Troubleshooting
+
+- **Nothing arrives:** check port 25 is reachable from outside, and watch the router log while you send a test — `journalctl -u skiff-router -f | grep mail`.
+- **Mail lands in spam:** add the SPF record, and set reverse DNS (PTR) for your server's IP to `mx.example.com` in your provider's control panel.
+- **The sender gets a bounce:** a “relaying denied” or “no such user” reply means the address isn't forwarded — check for a typo, or add a catch-all.

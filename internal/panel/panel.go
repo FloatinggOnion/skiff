@@ -53,6 +53,9 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	}
 	reconcileStuckDeploys()
 	writeMailFile()
+	if domain != "" && domain != "localhost" {
+		dashboardURL = "https://dash." + domain
+	}
 	home, _ := os.UserHomeDir()
 	branch := os.Getenv("SKIFF_SELF_BRANCH")
 	if branch == "" {
@@ -198,6 +201,7 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("/api/tokens", p.protected(p.handleTokens))
 
 	mux.HandleFunc("GET /api/v1/apps", p.apiAuth(p.apiListApps))
+	mux.HandleFunc("GET /api/v1/workloads", p.apiAuth(p.apiWorkloads))
 	mux.HandleFunc("GET /api/v1/apps/{name}", p.apiAuth(p.apiGetApp))
 	mux.HandleFunc("POST /api/v1/apps/{name}/deploy", p.apiAuth(p.apiDeploy))
 	mux.HandleFunc("GET /api/v1/apps/{name}/env", p.apiAuth(p.apiEnv))
@@ -211,9 +215,28 @@ func (p *Panel) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/apps/{name}/previews", p.apiAuth(p.apiRemovePreview))
 	mux.HandleFunc("GET /api/v1/apps/{name}/insights", p.apiAuth(p.apiInsights))
 	mux.HandleFunc("POST /api/v1/cli/deploys", p.apiAuth(p.apiCLIDeploy))
+	mux.HandleFunc("GET /api/v1/apps/{name}/workers", p.apiAuth(p.apiWorkers))
+	mux.HandleFunc("PUT /api/v1/apps/{name}/workers/{worker}", p.apiAuth(p.apiSetWorker))
+	mux.HandleFunc("DELETE /api/v1/apps/{name}/workers/{worker}", p.apiAuth(p.apiRemoveWorker))
+	mux.HandleFunc("GET /api/v1/apps/{name}/jobs", p.apiAuth(p.apiJobs))
+	mux.HandleFunc("POST /api/v1/apps/{name}/jobs", p.apiAuth(p.apiCreateJob))
+	mux.HandleFunc("DELETE /api/v1/apps/{name}/jobs/{id}", p.apiAuth(p.apiRemoveJob))
+	mux.HandleFunc("POST /api/v1/apps/{name}/jobs/{id}/run", p.apiAuth(p.apiRunJob))
 	mux.HandleFunc("GET /api/v1/databases", p.apiAuth(p.apiListDatabases))
 	mux.HandleFunc("GET /api/v1/databases/{name}/connection", p.apiAuth(p.apiDatabaseConnection))
 	mux.HandleFunc("GET /api/v1/databases/{name}/tunnel", p.apiAuth(p.apiDatabaseTunnel))
+	mux.HandleFunc("POST /api/v1/databases", p.apiAuth(p.apiCreateDatabase))
+	mux.HandleFunc("DELETE /api/v1/databases/{name}", p.apiAuth(p.apiRemoveDatabase))
+	mux.HandleFunc("PUT /api/v1/databases/{name}/apps/{app}", p.apiAuth(p.apiAttachDatabase))
+	mux.HandleFunc("DELETE /api/v1/databases/{name}/apps/{app}", p.apiAuth(p.apiAttachDatabase))
+	mux.HandleFunc("GET /api/v1/buckets", p.apiAuth(p.apiListBuckets))
+	mux.HandleFunc("POST /api/v1/buckets", p.apiAuth(p.apiCreateBucket))
+	mux.HandleFunc("DELETE /api/v1/buckets/{name}", p.apiAuth(p.apiRemoveBucket))
+	mux.HandleFunc("PUT /api/v1/buckets/{name}/apps/{app}", p.apiAuth(p.apiAttachBucket))
+	mux.HandleFunc("DELETE /api/v1/buckets/{name}/apps/{app}", p.apiAuth(p.apiAttachBucket))
+	mux.HandleFunc("GET /api/v1/apps/{name}/volumes", p.apiAuth(p.apiVolumes))
+	mux.HandleFunc("POST /api/v1/apps/{name}/volumes", p.apiAuth(p.apiAddVolume))
+	mux.HandleFunc("DELETE /api/v1/apps/{name}/volumes/{volume}", p.apiAuth(p.apiRemoveVolume))
 	mux.HandleFunc("/api/deploy", p.protected(p.handleDeploy))
 	mux.HandleFunc("/api/logs", p.protected(p.handleLogs))
 	mux.HandleFunc("/api/logs/history", p.protected(p.handleLogHistory))

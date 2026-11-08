@@ -71,6 +71,7 @@ func TestGitDeployLifecycle(t *testing.T) {
 	expectServed(t, routerAddr, "v1")
 
 	checkSecretsStayOutOfImage(t, c, panelAddr, routerAddr)
+	checkWorkAPI(t, c, panelAddr)
 	checkMCP(t, c, bin, panelAddr, routerAddr, project.Deploys[0].ID)
 	checkVolumes(t, c, home, panelAddr, routerAddr, "v2")
 	checkHealthCheck(t, c, panelAddr, routerAddr)
@@ -88,6 +89,85 @@ func TestGitDeployLifecycle(t *testing.T) {
 	}
 	if out, _ := exec.Command("docker", "volume", "ls", "-q", "--filter", "label=skiff.volume.app="+app).Output(); strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("volumes left after teardown: %s", out)
+	}
+}
+
+// checkWorkAPI manages a worker and a job with an API token, and checks another team's token can't see them.
+func checkWorkAPI(t *testing.T, c *http.Client, panelAddr string) {
+	t.Helper()
+	var tok struct{ Token string }
+	postJSON(t, c, "http://"+panelAddr+"/api/tokens", `{"name":"e2e-work"}`, &tok)
+	call := func(method, path, body string, into any) int {
+		t.Helper()
+		req, _ := http.NewRequest(method, "http://"+panelAddr+"/api/v1/apps/"+app+path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+tok.Token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if into != nil {
+			_ = json.NewDecoder(resp.Body).Decode(into)
+		}
+		return resp.StatusCode
+	}
+
+	var wk struct {
+		Name     string `json:"name"`
+		Replicas int    `json:"replicas"`
+	}
+	if code := call(http.MethodPut, "/workers/queue", `{"command":"sleep 100000","replicas":2}`, &wk); code != http.StatusOK || wk.Name != "queue" || wk.Replicas != 2 {
+		t.Fatalf("setting a worker: %d %+v", code, wk)
+	}
+	workers := func() int {
+		out, _ := exec.Command("docker", "ps", "-q", "--filter", "label=skiff.worker.app="+app).Output()
+		return len(strings.Fields(string(out)))
+	}
+	eventually(t, time.Minute, func() bool { return workers() == 2 })
+	var list []struct{ Name string }
+	if code := call(http.MethodGet, "/workers", "", &list); code != http.StatusOK || len(list) != 1 {
+		t.Fatalf("listing workers: %d %+v", code, list)
+	}
+	if code := call(http.MethodPut, "/workers/queue", `{"command":""}`, nil); code != http.StatusBadRequest {
+		t.Errorf("a worker with no command: %d", code)
+	}
+	if code := call(http.MethodDelete, "/workers/queue", "", nil); code != http.StatusNoContent {
+		t.Fatalf("removing the worker: %d", code)
+	}
+	eventually(t, time.Minute, func() bool { return workers() == 0 })
+
+	var job struct{ ID, Name string }
+	if code := call(http.MethodPost, "/jobs", `{"name":"report","schedule":"0 3 * * *","command":"echo job-ran"}`, &job); code != http.StatusCreated || job.ID == "" {
+		t.Fatalf("creating a job: %d %+v", code, job)
+	}
+	if code := call(http.MethodPost, "/jobs", `{"schedule":"whenever","command":"true"}`, nil); code != http.StatusBadRequest {
+		t.Errorf("a job with a bad schedule: %d", code)
+	}
+	var ran struct {
+		OK     bool   `json:"ok"`
+		Output string `json:"output"`
+	}
+	if code := call(http.MethodPost, "/jobs/"+job.ID+"/run", "", &ran); code != http.StatusOK || !ran.OK || !strings.Contains(ran.Output, "job-ran") {
+		t.Fatalf("running the job: %d %+v", code, ran)
+	}
+	if code := call(http.MethodDelete, "/jobs/"+job.ID, "", nil); code != http.StatusNoContent {
+		t.Fatalf("removing the job: %d", code)
+	}
+	if code := call(http.MethodPost, "/jobs/"+job.ID+"/run", "", nil); code != http.StatusNotFound {
+		t.Errorf("running a removed job: %d", code)
+	}
+
+	var activity []struct{ Action string }
+	getJSON(t, c, "http://"+panelAddr+"/api/audit", &activity)
+	seen := map[string]bool{}
+	for _, a := range activity {
+		seen[a.Action] = true
+	}
+	for _, want := range []string{"worker.set", "worker.delete", "job.set", "job.run", "job.delete"} {
+		if !seen[want] {
+			t.Errorf("Activity is missing %s", want)
+		}
 	}
 }
 

@@ -89,6 +89,14 @@ func loadComposePlan(path, name string) (*compose.Plan, error) {
 			p = filepath.Join(dir, p)
 		}
 		return os.ReadFile(p)
+	}, func(p string) compose.PathKind {
+		switch info, err := os.Stat(filepath.Join(dir, p)); {
+		case err != nil:
+			return compose.PathMissing
+		case info.IsDir():
+			return compose.PathDir
+		}
+		return compose.PathFile
 	}), nil
 }
 

@@ -1,117 +1,77 @@
 package panel
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/nuelScript/skiff/internal/config"
 )
 
-// recipe is a one-click app: an image with what it needs to run. Env values may use {{secret}}, {{url}}, {{host}} and, with a database, {{db.url}}, {{db.host}}, {{db.port}}, {{db.user}}, {{db.password}} and {{db.name}}.
+// recipe is a one-click app: an image with what it needs to run, from a file in catalog/. Env values may use {{secret}}, {{url}}, {{host}} and, with a database, {{db.url}}, {{db.host}}, {{db.port}}, {{db.user}}, {{db.password}} and {{db.name}}.
 type recipe struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Blurb    string `json:"blurb"`
-	Category string `json:"category"`
-	Image    string `json:"image"`
+	ID       string `json:"id" toml:"-"` // the file's name
+	Name     string `json:"name" toml:"name"`
+	Blurb    string `json:"blurb" toml:"blurb"`
+	Category string `json:"category" toml:"category"`
+	Image    string `json:"image" toml:"image"`
 	// Memory is roughly what it needs to run, including any database, to show before installing.
-	Memory string `json:"memory"`
+	Memory string `json:"memory" toml:"memory"`
 	// Database is the managed engine it needs, if any.
-	Database string `json:"database,omitempty"`
+	Database string `json:"database,omitempty" toml:"database"`
 	// Setup is the first thing to do after installing; on most of these the first visitor becomes the admin.
-	Setup string `json:"setup"`
+	Setup string `json:"setup" toml:"setup"`
 
-	port    int
-	timeout int // seconds to wait for a first start, which can include migrations
-	volumes []config.Volume
-	env     map[string]string
-	dbVar   string // the env var that holds the database connection, to record the attachment
+	Port    int               `json:"-" toml:"port"`
+	Timeout int               `json:"-" toml:"timeout"` // seconds to wait for a first start, which can include migrations
+	Volumes []config.Volume   `json:"-" toml:"volumes"`
+	Env     map[string]string `json:"-" toml:"env"`
+	DBVar   string            `json:"-" toml:"database_var"` // the env var that holds the database connection, to record the attachment
 }
 
-var catalog = []recipe{
-	{
-		ID: "uptime-kuma", Name: "Uptime Kuma", Category: "Monitoring",
-		Blurb: "Status pages and uptime monitoring for your sites and services.",
-		Image: "louislam/uptime-kuma:1", Memory: "256 MB",
-		Setup: "Open it right away and create the admin account. The first visitor sets it up.",
-		port:  3001, timeout: 120,
-		volumes: []config.Volume{{Name: "data", Path: "/app/data"}},
-	},
-	{
-		ID: "n8n", Name: "n8n", Category: "Automation",
-		Blurb: "Workflow automation that connects your apps and APIs.",
-		Image: "n8nio/n8n:1.100.1", Memory: "512 MB",
-		Setup: "Open it right away and create the owner account. The first visitor sets it up.",
-		port:  5678, timeout: 180,
-		volumes: []config.Volume{{Name: "data", Path: "/home/node/.n8n"}},
-		env: map[string]string{
-			"N8N_ENCRYPTION_KEY":  "{{secret}}",
-			"N8N_HOST":            "{{host}}",
-			"N8N_PROTOCOL":        "https",
-			"WEBHOOK_URL":         "{{url}}/",
-			"N8N_RUNNERS_ENABLED": "true",
-			"N8N_PROXY_HOPS":      "1",
-		},
-	},
-	{
-		ID: "ghost", Name: "Ghost", Category: "Publishing",
-		Blurb: "A blog and newsletter platform, with a MySQL database included.",
-		Image: "ghost:5-alpine", Memory: "1 GB", Database: "mysql",
-		Setup: "Open /ghost on your site right away and create the owner account. The first visitor sets it up.",
-		port:  2368, timeout: 300,
-		volumes: []config.Volume{{Name: "content", Path: "/var/lib/ghost/content"}},
-		dbVar:   "database__connection__password",
-		env: map[string]string{
-			"url":                            "{{url}}",
-			"database__client":               "mysql",
-			"database__connection__host":     "{{db.host}}",
-			"database__connection__port":     "{{db.port}}",
-			"database__connection__user":     "{{db.user}}",
-			"database__connection__password": "{{db.password}}",
-			"database__connection__database": "{{db.name}}",
-		},
-	},
-	{
-		ID: "umami", Name: "Umami", Category: "Analytics",
-		Blurb: "Privacy-friendly website analytics, with a Postgres database included.",
-		Image: "ghcr.io/umami-software/umami:postgresql-v2.19.0", Memory: "512 MB", Database: "postgres",
-		Setup: "Sign in straight away with username admin and password umami, then change the password. Until you do, anyone can sign in.",
-		port:  3000, timeout: 240,
-		dbVar: "DATABASE_URL",
-		env: map[string]string{
-			"DATABASE_URL":  "{{db.url}}",
-			"DATABASE_TYPE": "postgresql",
-			"APP_SECRET":    "{{secret}}",
-		},
-	},
-	{
-		ID: "vaultwarden", Name: "Vaultwarden", Category: "Security",
-		Blurb: "A lightweight password manager that works with the Bitwarden apps.",
-		Image: "vaultwarden/server:1.34.1", Memory: "128 MB",
-		Setup: "Create your account, then set SIGNUPS_ALLOWED to false under Environment and redeploy. Until you do, anyone can sign up.",
-		port:  80, timeout: 120,
-		volumes: []config.Volume{{Name: "data", Path: "/data"}},
-		env:     map[string]string{"DOMAIN": "{{url}}"},
-	},
-	{
-		ID: "gitea", Name: "Gitea", Category: "Development",
-		Blurb: "Self-hosted Git with issues, pull requests and a package registry.",
-		Image: "gitea/gitea:1.24", Memory: "256 MB",
-		Setup: "Open it right away and finish the install screen, creating the admin account there. The first visitor sets it up.",
-		port:  3000, timeout: 120,
-		volumes: []config.Volume{{Name: "data", Path: "/data"}},
-		env: map[string]string{
-			"GITEA__server__ROOT_URL":         "{{url}}/",
-			"GITEA__server__DISABLE_SSH":      "true",
-			"GITEA__database__DB_TYPE":        "sqlite3",
-			"GITEA__security__SECRET_KEY":     "{{secret}}",
-			"GITEA__security__INTERNAL_TOKEN": "{{secret}}",
-		},
-	},
+//go:embed catalog/*.toml
+var catalogFiles embed.FS
+
+// catalog is every one-click app, by name. TestCatalogRecipesAreValid checks each file can be installed as written.
+var catalog = mustLoadCatalog(catalogFiles)
+
+func mustLoadCatalog(fsys fs.FS) []recipe {
+	out, err := loadCatalog(fsys)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+// loadCatalog reads every recipe, refusing a key it doesn't know so a typo can't quietly drop a setting.
+func loadCatalog(fsys fs.FS) ([]recipe, error) {
+	entries, err := fs.Glob(fsys, "catalog/*.toml")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]recipe, 0, len(entries))
+	for _, path := range entries {
+		var r recipe
+		md, err := toml.DecodeFS(fsys, path, &r)
+		if err != nil {
+			return nil, fmt.Errorf("catalog: %s: %w", path, err)
+		}
+		if extra := md.Undecoded(); len(extra) > 0 {
+			return nil, fmt.Errorf("catalog: %s: unknown keys %v", path, extra)
+		}
+		r.ID = strings.TrimSuffix(filepath.Base(path), ".toml")
+		out = append(out, r)
+	}
+	slices.SortFunc(out, func(a, b recipe) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	return out, nil
 }
 
 func catalogRecipe(id string) (recipe, bool) {
@@ -221,25 +181,25 @@ func (p *Panel) installRecipe(rec recipe, name, team string) (string, error) {
 		}
 	}
 	src := Source{
-		App: name, Team: team, Image: rec.Image, Port: strconv.Itoa(rec.port),
-		HealthTimeout: rec.timeout, Catalog: rec.ID,
+		App: name, Team: team, Image: rec.Image, Port: strconv.Itoa(rec.Port),
+		HealthTimeout: rec.Timeout, Catalog: rec.ID,
 	}
 	if err := putSource(src); err != nil {
 		undo()
 		return "", err
 	}
-	if err := setEnv(name, renderRecipeEnv(rec.env, "https://"+name+"."+p.domain, db, randToken)); err != nil {
+	if err := setEnv(name, renderRecipeEnv(rec.Env, "https://"+name+"."+p.domain, db, randToken)); err != nil {
 		undo()
 		return "", err
 	}
-	for _, v := range rec.volumes {
+	for _, v := range rec.Volumes {
 		if err := addVolume(name, v); err != nil {
 			undo()
 			return "", err
 		}
 	}
 	if row.ID != "" {
-		_ = attachDB(row.ID, name, rec.dbVar)
+		_ = attachDB(row.ID, name, rec.DBVar)
 	}
 	id := newDeployID()
 	go p.runDeploy(src, "", "", "", "manual", id)

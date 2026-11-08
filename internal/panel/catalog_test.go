@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/nuelScript/skiff/internal/config"
 )
@@ -24,24 +25,24 @@ func TestCatalogRecipesAreValid(t *testing.T) {
 		if strings.HasSuffix(r.Image, ":latest") || !strings.Contains(r.Image, ":") {
 			t.Errorf("%s: pin the image to a version, so an install tomorrow matches what was tested", r.ID)
 		}
-		if err := config.ValidateVolumes(r.volumes); err != nil {
+		if err := config.ValidateVolumes(r.Volumes); err != nil {
 			t.Errorf("%s: %v", r.ID, err)
 		}
-		if err := config.ValidateHealth("", r.timeout); err != nil {
+		if err := config.ValidateHealth("", r.Timeout); err != nil {
 			t.Errorf("%s: %v", r.ID, err)
 		}
-		if r.port == 0 || r.Setup == "" || r.Blurb == "" || r.Memory == "" {
+		if r.Port == 0 || r.Setup == "" || r.Blurb == "" || r.Memory == "" {
 			t.Errorf("%s: missing port, setup note, blurb or memory", r.ID)
 		}
 		if r.Database != "" {
 			if _, ok := dbEngines[r.Database]; !ok {
 				t.Errorf("%s: unknown database %q", r.ID, r.Database)
 			}
-			if _, ok := r.env[r.dbVar]; !ok {
-				t.Errorf("%s: dbVar %q isn't in its env", r.ID, r.dbVar)
+			if _, ok := r.Env[r.DBVar]; !ok {
+				t.Errorf("%s: dbVar %q isn't in its env", r.ID, r.DBVar)
 			}
 		}
-		for k, v := range r.env {
+		for k, v := range r.Env {
 			if sanitizeEnvKey(k) != k {
 				t.Errorf("%s: env key %q would be changed when saved", r.ID, k)
 			}
@@ -104,5 +105,24 @@ func TestProjectViewCarriesSetupNote(t *testing.T) {
 func TestRecipeDBName(t *testing.T) {
 	if got := recipeDBName("my-blog-2"); got != "my_blog_2" {
 		t.Fatalf("recipeDBName = %q", got)
+	}
+}
+
+func TestLoadCatalogRefusesMistakes(t *testing.T) {
+	for name, body := range map[string]string{
+		"unknown key": "name = \"X\"\nmemroy = \"1 GB\"\n",
+		"bad toml":    "name = \n",
+	} {
+		_, err := loadCatalog(fstest.MapFS{"catalog/x.toml": {Data: []byte(body)}})
+		if err == nil {
+			t.Errorf("%s: loaded without an error", name)
+		}
+	}
+	got, err := loadCatalog(fstest.MapFS{
+		"catalog/b-app.toml": {Data: []byte("name = \"beta\"\nport = 80\n")},
+		"catalog/a-app.toml": {Data: []byte("name = \"Alpha\"\n")},
+	})
+	if err != nil || len(got) != 2 || got[0].ID != "a-app" || got[1].ID != "b-app" || got[1].Port != 80 {
+		t.Errorf("loadCatalog = %+v, %v", got, err)
 	}
 }

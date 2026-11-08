@@ -1,0 +1,22 @@
+name = "Stirling PDF"
+blurb = "Tools to merge, split, convert, compress and edit PDF files in your browser."
+category = "Productivity"
+image = "stirlingtools/stirling-pdf:3.3.0-ultra-lite"
+port = 8080
+memory = "2 GB"
+timeout = 180
+setup = "There is no sign-in, so anyone who has the address can use it. Keep the address private."
+
+[[volumes]]
+name = "configs"
+path = "/configs"
+
+[[volumes]]
+name = "logs"
+path = "/logs"
+
+[env]
+DISABLE_ADDITIONAL_FEATURES = "true"
+SECURITY_ENABLELOGIN = "false"
+ENDPOINTS_GROUPS_TO_REMOVE = "CLI"
+SYSTEM_MAXFILESIZE = "50"

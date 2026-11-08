@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nuelScript/skiff/internal/config"
 )
 
 func TestParsePercent(t *testing.T) {
@@ -130,7 +132,7 @@ func TestDockerignoreKeepsConfigOut(t *testing.T) {
 	_ = os.WriteFile(path, []byte(own), 0o644)
 	clean = ensureDockerignore(dir)
 	b, _ = os.ReadFile(path)
-	if !strings.HasPrefix(string(b), own) || !strings.HasSuffix(string(b), "\n.git\nskiff.toml\n") {
+	if !strings.HasPrefix(string(b), own) || !strings.HasSuffix(string(b), "\n.git\nskiff.toml\n!.skiff-mounts\n!.skiff-mounts/**\n") {
 		t.Fatalf("during the build = %q", b)
 	}
 	clean()
@@ -149,7 +151,7 @@ func TestSortDeployTagsNewestFirst(t *testing.T) {
 }
 
 func TestAppContainersAreLimitedAndLocal(t *testing.T) {
-	args := strings.Join((&Engine{}).runArgs(RunSpec{Name: "a-1", App: "a", Image: "img", ContainerPort: 3000, Memory: "256m"}), " ")
+	args := strings.Join((&Engine{}).runArgs(RunSpec{Name: "a-1", App: "a", Image: "img", ContainerPort: 3000, Settings: Settings{Memory: "256m"}}), " ")
 	for _, want := range []string{
 		"--pids-limit 4096", "-p 127.0.0.1::3000",
 	} {
@@ -172,5 +174,41 @@ func TestRunBindsLoopbackUnlessPublic(t *testing.T) {
 	}
 	if got := strings.Join(e.runArgs(RunSpec{Name: "a", Image: "i", ContainerPort: 3000, Public: true}), " "); !strings.Contains(got, "-p 0.0.0.0::3000") {
 		t.Errorf("public bind: %s", got)
+	}
+}
+
+func TestSettingsMeanTheSameEverywhere(t *testing.T) {
+	e := &Engine{}
+	s := Settings{
+		Memory: "256m", CPU: "0.5", Network: "net", Env: map[string]string{"A": "1"},
+		Volumes: []Mount{{Name: "vol", Destination: "/data"}},
+		Options: config.RunOptions{User: "app", WorkingDir: "/srv"},
+	}
+	shared := strings.Join(e.settingsArgs(s), " ")
+	for _, want := range []string{"--pids-limit 4096", "--memory 256m", "--cpus 0.5", "--network net", "-e A=1", "--user app", "--workdir /srv", "/data"} {
+		if !strings.Contains(shared, want) {
+			t.Errorf("missing %q in: %s", want, shared)
+		}
+	}
+	if app := strings.Join(e.runArgs(RunSpec{Settings: s, Name: "a", App: "a", Image: "i", ContainerPort: 3000}), " "); !strings.Contains(app, shared) {
+		t.Errorf("an app's container doesn't get the shared settings:\n%s\nwant %s", app, shared)
+	}
+}
+
+func TestPullHint(t *testing.T) {
+	for _, tc := range []struct {
+		out   string
+		creds bool
+		want  string
+	}{
+		{"no matching manifest for linux/amd64 in the manifest list entries", false, "no build for the server's platform"},
+		{"Error response from daemon: Head \"https://localhost:5000/v2/x/manifests/1\": no basic auth credentials", false, "sign in to its registry"},
+		{"unauthorized: authentication required", true, "refused the username and password"},
+		{"Error response from daemon: manifest for x:9 not found: manifest unknown", false, "no image with that name and tag"},
+		{"dial tcp: lookup registry.example.com: no such host", false, ""},
+	} {
+		if got := PullHint(tc.out, tc.creds); tc.want == "" && got != "" || !strings.Contains(got, tc.want) {
+			t.Errorf("%q: %q, want it to mention %q", tc.out, got, tc.want)
+		}
 	}
 }

@@ -13,7 +13,7 @@ import { useConfirm } from '@/providers/confirm-provider'
 import { projectsService, type Job } from '@/services/api.service'
 import { jobSchema, type JobInput } from '@/validations/job'
 
-export function JobsPanel({ app }: { app: string }) {
+export function JobsPanel({ app, cli }: { app: string; cli: boolean }) {
   const qc = useQueryClient()
   const confirm = useConfirm()
   const { data: jobs = [] } = useQuery<Job[]>({
@@ -71,10 +71,12 @@ export function JobsPanel({ app }: { app: string }) {
         <div>
           <h2 className="text-sm font-semibold">Scheduled jobs</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Run a command on a cron schedule in a one-off container, with this app's environment.
+            {cli
+              ? "Commands on a cron schedule, with this app's environment. They come from the [[jobs]] section of its skiff.toml."
+              : "Run a command on a cron schedule in a one-off container, with this app's environment."}
           </p>
         </div>
-        {!adding && (
+        {!cli && !adding && (
           <Button size="sm" onClick={() => setAdding(true)} className="shrink-0">
             <Plus />
             New job
@@ -164,13 +166,16 @@ export function JobsPanel({ app }: { app: string }) {
                   >
                     <Play className="h-3.5 w-3.5" />
                   </button>
-                  <button
-                    onClick={() => del(j.id)}
-                    title="Delete"
-                    className="text-muted-foreground p-1.5 transition hover:text-danger"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {!cli && (
+                    <button
+                      onClick={() => del(j.id)}
+                      title="Delete"
+                      aria-label={`Delete ${j.name}`}
+                      className="text-muted-foreground cursor-pointer p-1.5 transition hover:text-danger"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
                 <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
                   <span>next {fmtWhen(j.next)}</span>

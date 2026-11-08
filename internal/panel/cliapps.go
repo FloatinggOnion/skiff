@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/config"
+	"github.com/nuelScript/skiff/internal/docker"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -48,14 +50,7 @@ func adoptCLIApps(apps map[string]registry.App, team string) []string {
 }
 
 // recordCLIDeploy adds the running version of a CLI app to its deploy history the first time the panel sees it.
-func (p *Panel) recordCLIDeploy(a registry.App) {
-	if a.Container == "" {
-		return
-	}
-	meta, err := p.eng.ContainerMeta(a.Container)
-	if err != nil {
-		return
-	}
+func (p *Panel) recordCLIDeploy(a registry.App, meta docker.ContainerMeta) {
 	id := sanitizeID(meta.Labels["skiff.deploy"])
 	if id == "" {
 		id = "cli-" + sanitizeID(a.Container)
@@ -95,9 +90,16 @@ func (p *Panel) syncCLIApps() {
 		recordAudit(team, AuditEntry{Actor: "cli", Action: "project.adopt", Target: name, Detail: "deployed from the CLI"})
 	}
 	for name, a := range apps {
-		if src, ok := getSource(name); ok && src.Origin == originCLI {
-			p.recordCLIDeploy(a)
+		src, ok := getSource(name)
+		if !ok || src.Origin != originCLI || a.Container == "" {
+			continue
 		}
+		meta, err := p.eng.ContainerMeta(a.Container)
+		if err != nil {
+			continue
+		}
+		p.recordCLIDeploy(a, meta)
+		syncTomlWork(src, meta.Labels)
 	}
 }
 
@@ -109,6 +111,21 @@ func (p *Panel) cliAppLoop() {
 }
 
 // appRuntime is the env and network to start more of an app's containers with. A CLI app's config lives in the skiff.toml on the machine that deployed it, so its running container is the only copy the server has.
+// appSettings is what the app's workers and jobs run with: its environment, network, volumes, limits and start settings. A CLI app's limits come from its skiff.toml, recorded on its running container. The network is created if it's missing.
+func (p *Panel) appSettings(src Source) docker.Settings {
+	env, net := p.appRuntime(src)
+	_ = p.eng.EnsureNetwork(net)
+	var container string
+	if apps, err := registry.Load(); err == nil {
+		container = apps[src.App].Container
+	}
+	memory, cpu := p.replicaLimits(src, container)
+	return docker.Settings{
+		Env: env, Network: net, Volumes: p.appMounts(src),
+		Memory: memory, CPU: cpu, Options: config.DecodeRunOptions(src.RunOptions),
+	}
+}
+
 func (p *Panel) appRuntime(src Source) (map[string]string, string) {
 	if src.Origin == originCLI {
 		if apps, err := registry.Load(); err == nil {

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/docker"
 	"github.com/nuelScript/skiff/internal/registry"
 )
 
@@ -308,7 +309,7 @@ func workerNames(app string) []string {
 func workerOf(app, container string, names []string) string {
 	best := ""
 	for _, n := range names {
-		if strings.HasPrefix(container, workerPrefix(app, n)) && len(n) > len(best) {
+		if strings.HasPrefix(container, docker.WorkerPrefix(app, n)) && len(n) > len(best) {
 			best = n
 		}
 	}

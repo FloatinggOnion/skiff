@@ -15,7 +15,7 @@ import { projectsService, type Worker } from '@/services/api.service'
 import { workerSchema, type WorkerInput } from '@/validations/worker'
 import { Stepper } from './stepper'
 
-export function WorkersPanel({ app }: { app: string }) {
+export function WorkersPanel({ app, cli }: { app: string; cli: boolean }) {
   const qc = useQueryClient()
   const confirm = useConfirm()
   const { data: workers = [] } = useQuery<Worker[]>({
@@ -63,11 +63,12 @@ export function WorkersPanel({ app }: { app: string }) {
         <div>
           <h2 className="text-sm font-semibold">Background workers</h2>
           <p className="text-muted-foreground mt-1 text-xs">
-            Long-running processes from this app's image with a different command and no HTTP port —
-            recreated on every deploy. For scheduled one-offs, use Jobs.
+            {cli
+              ? "Long-running processes from this app's image. They come from the [[workers]] section of its skiff.toml and restart on every skiff deploy."
+              : "Long-running processes from this app's image with a different command and no HTTP port — recreated on every deploy. For scheduled one-offs, use Jobs."}
           </p>
         </div>
-        {!adding && (
+        {!cli && !adding && (
           <Button size="sm" onClick={() => setAdding(true)} className="shrink-0">
             <Plus />
             New worker
@@ -175,13 +176,16 @@ export function WorkersPanel({ app }: { app: string }) {
                 >
                   <Terminal className="h-3.5 w-3.5" />
                 </button>
-                <button
-                  onClick={() => del(wk.id)}
-                  title="Delete"
-                  className="text-muted-foreground p-1.5 transition hover:text-danger"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {!cli && (
+                  <button
+                    onClick={() => del(wk.id)}
+                    title="Delete"
+                    aria-label={`Delete ${wk.name}`}
+                    className="text-muted-foreground cursor-pointer p-1.5 transition hover:text-danger"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

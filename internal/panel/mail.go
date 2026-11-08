@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/auth"
+	"github.com/nuelScript/skiff/internal/mail"
 )
 
 type MailForward struct {
@@ -211,7 +212,7 @@ func (p *Panel) handleMail(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		forwards := teamForwards(team)
 		ip := serverPublicIP(p.domain)
-		_, relay := smtpConfig()
+		relay := mail.RelayFromEnv() != nil
 		writeJSON(w, mailResponse{
 			MXHost:   p.mxHost(),
 			ServerIP: ip,

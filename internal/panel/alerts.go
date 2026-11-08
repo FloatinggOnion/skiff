@@ -2,18 +2,18 @@ package panel
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"net/smtp"
 	"net/url"
-	"os"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/nuelScript/skiff/internal/mail"
 	"github.com/nuelScript/skiff/internal/registry"
 	"github.com/nuelScript/skiff/internal/seal"
 )
@@ -94,45 +94,30 @@ func dispatchAlert(ev alertEvent) {
 	}
 }
 
-type smtpSettings struct {
-	Host, Addr, User, Pass, From string
-}
-
-func smtpConfig() (smtpSettings, bool) {
-	host := os.Getenv("SKIFF_SMTP_HOST")
-	from := os.Getenv("SKIFF_SMTP_FROM")
-	if host == "" || from == "" {
-		return smtpSettings{}, false
-	}
-	port := os.Getenv("SKIFF_SMTP_PORT")
-	if port == "" {
-		port = "587"
-	}
-	return smtpSettings{
-		Host: host,
-		Addr: host + ":" + port,
-		User: os.Getenv("SKIFF_SMTP_USER"),
-		Pass: os.Getenv("SKIFF_SMTP_PASS"),
-		From: from,
-	}, true
-}
+// dashboardURL is where emails link back to; empty when the panel has no public domain.
+var dashboardURL string
 
 func sendEmail(to string, ev alertEvent) error {
-	s, ok := smtpConfig()
-	if !ok {
+	relay := mail.RelayFromEnv()
+	if relay == nil {
 		return fmt.Errorf("email needs SMTP configured on the server (SKIFF_SMTP_*)")
 	}
-	var auth smtp.Auth
-	if s.User != "" {
-		auth = smtp.PlainAuth("", s.User, s.Pass, s.Host)
+	l := mail.Letter{Subject: ev.Title, Heading: ev.Title, Body: []string{ev.Detail}}
+	if dashboardURL != "" && ev.App != "" {
+		project := ev.App
+		if src, ok := getSource(ev.App); ok && src.Parent != "" {
+			project = src.Parent
+		}
+		l.Button, l.URL = "Open "+project, dashboardURL+"/projects/"+url.PathEscape(project)
 	}
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "From: Skiff <%s>\r\n", s.From)
-	fmt.Fprintf(&b, "To: %s\r\n", to)
-	fmt.Fprintf(&b, "Subject: [Skiff] %s\r\n", ev.Title)
-	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n")
-	b.WriteString(ev.Detail + "\r\n")
-	return smtp.SendMail(s.Addr, auth, s.From, []string{to}, b.Bytes())
+	var team string
+	_ = sqlDB.QueryRow(`SELECT name FROM teams WHERE id=?`, ev.Team).Scan(&team)
+	if team != "" {
+		l.Reason = "You're getting this because " + to + " receives alerts for the " + team + " team. Team owners can change this in Settings, under Alerts."
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	return relay.Send(ctx, to, l)
 }
 
 func postSlack(url string, ev alertEvent) error {
@@ -249,7 +234,7 @@ func (p *Panel) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		if !p.isOwner(r) {
 			cfg.SlackURL, cfg.WebhookURL = maskURL(cfg.SlackURL), maskURL(cfg.WebhookURL)
 		}
-		_, smtpOK := smtpConfig()
+		smtpOK := mail.RelayFromEnv() != nil
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(struct {
 			AlertConfig

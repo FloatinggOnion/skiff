@@ -298,20 +298,49 @@ func (p *Panel) handleStorage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		for _, app := range bucketAttachments(id) {
-			for _, k := range s3EnvKeys {
-				deleteEnvVar(app, k)
-			}
-		}
-		_ = p.eng.Stop(b.Container)
-		_ = p.eng.Remove(b.Container)
-		_ = p.eng.RemoveVolume(b.Container + "-data")
-		deleteBucketRow(id)
+		p.removeBucket(b)
 		p.audit(r, "bucket.delete", b.Name, "")
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// removeBucket deletes the store and its data, and takes the S3 variables out of every app it was attached to.
+func (p *Panel) removeBucket(b bucketRow) {
+	for _, app := range bucketAttachments(b.ID) {
+		for _, k := range s3EnvKeys {
+			deleteEnvVar(app, k)
+		}
+	}
+	_ = p.eng.Stop(b.Container)
+	_ = p.eng.Remove(b.Container)
+	_ = p.eng.RemoveVolume(b.Container + "-data")
+	deleteBucketRow(b.ID)
+}
+
+func (p *Panel) attachBucket(b bucketRow, app string) error {
+	if err := p.linkResource(b.Container, teamNetwork(b.Team), app); err != nil {
+		return err
+	}
+	for k, v := range bucketEnv(b) {
+		if err := upsertEnvVar(app, k, v, false); err != nil {
+			return err
+		}
+	}
+	_, err := sqlDB.Exec(`INSERT INTO bucket_attachments(bucket_id,app) VALUES(?,?)
+		ON CONFLICT(bucket_id,app) DO NOTHING`, b.ID, app)
+	return err
+}
+
+func (p *Panel) detachBucket(b bucketRow, app string) {
+	for _, k := range s3EnvKeys {
+		deleteEnvVar(app, k)
+	}
+	_, _ = sqlDB.Exec(`DELETE FROM bucket_attachments WHERE bucket_id=? AND app=?`, b.ID, app)
+	if src, ok := getSource(app); ok {
+		p.unlinkResource(b.Container, teamNetwork(b.Team), appNetwork(src), bucketAttachments(b.ID))
 	}
 }
 
@@ -331,29 +360,15 @@ func (p *Panel) handleStorageAttach(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodPost:
-		if err := p.linkResource(b.Container, teamNetwork(b.Team), app); err != nil {
+		if err := p.attachBucket(b, app); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		for k, v := range bucketEnv(b) {
-			if err := upsertEnvVar(app, k, v, false); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-		_, _ = sqlDB.Exec(`INSERT INTO bucket_attachments(bucket_id,app) VALUES(?,?)
-			ON CONFLICT(bucket_id,app) DO NOTHING`, id, app)
 		p.audit(r, "bucket.attach", b.Name, app)
 		w.WriteHeader(http.StatusNoContent)
 
 	case http.MethodDelete:
-		for _, k := range s3EnvKeys {
-			deleteEnvVar(app, k)
-		}
-		_, _ = sqlDB.Exec(`DELETE FROM bucket_attachments WHERE bucket_id=? AND app=?`, id, app)
-		if src, ok := getSource(app); ok {
-			p.unlinkResource(b.Container, teamNetwork(b.Team), appNetwork(src), bucketAttachments(id))
-		}
+		p.detachBucket(b, app)
 		p.audit(r, "bucket.detach", b.Name, app)
 		w.WriteHeader(http.StatusNoContent)
 

@@ -1,12 +1,13 @@
 import { Logo } from "@/components/logo";
 import { GitHubStars } from "@/components/github-star";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DOCS_URL } from "@/lib/site";
 
 const links = [
   { href: "/#why", label: "Why Skiff" },
   { href: "/#features", label: "Features" },
   { href: "/#how", label: "How it works" },
-  { href: "/docs", label: "Docs" },
+  { href: DOCS_URL, label: "Docs" },
 ];
 
 export function SiteNav() {
@@ -28,7 +29,7 @@ export function SiteNav() {
             <GitHubStars />
           </span>
           <ThemeToggle />
-          <a href="/docs" className="btn-brand rounded-lg px-4 py-2 text-sm font-semibold">
+          <a href={DOCS_URL} className="btn-brand rounded-lg px-4 py-2 text-sm font-semibold">
             Get started
           </a>
         </div>

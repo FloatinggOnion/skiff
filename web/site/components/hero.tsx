@@ -5,6 +5,7 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ArrowRight, Copy } from "lucide-react";
 import { LogoMark } from "@/components/logo";
+import { DOCS_URL } from "@/lib/site";
 
 gsap.registerPlugin(useGSAP);
 
@@ -53,7 +54,7 @@ export function Hero() {
             infrastructure, without piecing together separate tools.
           </p>
           <div className="hero-item mt-8 flex flex-wrap items-center gap-3">
-            <a href="/docs" className="btn-brand rounded-lg px-5 py-2.5 text-sm font-semibold">
+            <a href={DOCS_URL} className="btn-brand rounded-lg px-5 py-2.5 text-sm font-semibold">
               Get started
             </a>
             <a

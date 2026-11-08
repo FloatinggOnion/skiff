@@ -1,0 +1,62 @@
+---
+title: Persistent volumes
+description: "Every deploy starts your app in a fresh container, so anything it wrote to disk is gone. A volume is a directory that stays: a SQLite database, user uploads or a cache survive deploys, rollbacks, restarts and sleep."
+---
+
+## Add one from the dashboard
+
+<Steps>
+<Step>
+### Open the project's Settings
+
+Under **Volumes**, choose **Add volume**.
+</Step>
+<Step>
+### Name it and pick where it mounts
+
+For example `data` at `/data`. The path is where your app reads and writes, so point your database file or upload folder inside it.
+</Step>
+<Step>
+### Redeploy
+
+The volume is mounted from the next deploy on. Its size shows next to it once it's in use.
+</Step>
+</Steps>
+
+## Or in skiff.toml
+
+Apps deployed with `skiff deploy` list their volumes in `skiff.toml`, up to five per app:
+
+```toml title="skiff.toml"
+[[volumes]]
+name = "data"
+path = "/data"
+
+[[volumes]]
+name = "uploads"
+path = "/app/public/uploads"
+```
+
+## Or from the terminal
+
+```sh title="shell"
+skiff volume add shop-api data /data
+skiff volume ls shop-api
+skiff volume rm shop-api data --yes
+```
+
+## Where they're mounted
+
+- **Every replica** mounts the same volume, including ones added by autoscaling. Several replicas writing the same SQLite file at once can lock each other out, so keep a SQLite app at one replica.
+- **Workers, jobs and the release command** see the same files, so a migration in the release command runs against the live database.
+- **Previews** mount the same paths on empty volumes of their own. A preview never reads or changes production's files, and its volumes are deleted with it.
+
+## Deleting
+
+Deleting a volume from the dashboard removes its files on the next deploy, once no container uses it. Deleting a project deletes its volumes too. `skiff down` keeps them, so redeploying the same app picks its files back up.
+
+<Callout>
+
+Volumes are backed up daily and can be copied to an offsite bucket, so you can restore them from the project's Settings. See [backups and encryption](/backups).
+
+</Callout>

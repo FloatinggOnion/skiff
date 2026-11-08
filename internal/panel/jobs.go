@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -124,11 +125,9 @@ func (p *Panel) execJob(j jobRow) (string, error) {
 	if !p.eng.ImageExists(image) {
 		return "", fmt.Errorf("deploy the app before running jobs")
 	}
-	env, net := p.appRuntime(src)
-	_ = p.eng.EnsureNetwork(net)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	out, err := p.eng.RunOnce(ctx, image, env, net, p.appMounts(src), j.Command)
+	out, err := p.eng.RunOnce(ctx, image, j.Command, p.appSettings(src))
 	setJobRun(j.ID, time.Now().Unix(), err == nil)
 	return out, err
 }
@@ -183,31 +182,22 @@ func (p *Panel) handleJobs(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		if workLocked(app) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
+			return
+		}
 		var body struct{ Name, Schedule, Command string }
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		body.Schedule = strings.TrimSpace(body.Schedule)
-		body.Command = strings.TrimSpace(body.Command)
-		if body.Command == "" {
-			http.Error(w, "a command is required", http.StatusBadRequest)
+		j, problem := newJob(app, body.Name, body.Schedule, body.Command)
+		if problem != "" {
+			http.Error(w, problem, http.StatusBadRequest)
 			return
-		}
-		if _, err := cron.ParseStandard(body.Schedule); err != nil {
-			http.Error(w, "invalid schedule — use cron syntax like \"0 3 * * *\"", http.StatusBadRequest)
-			return
-		}
-		src, _ := getSource(app)
-		name := strings.TrimSpace(body.Name)
-		if name == "" {
-			name = "job"
-		}
-		j := jobRow{
-			ID: randToken()[:12], App: app, Team: src.Team, Name: name,
-			Schedule: body.Schedule, Command: body.Command, LastOk: 1, Created: time.Now().Unix(),
 		}
 		if err := putJob(j); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		p.audit(r, "job.set", app, j.Name)
 		writeJSON(w, toJob(j))
 
 	case http.MethodDelete:
@@ -216,12 +206,33 @@ func (p *Panel) handleJobs(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		if workLocked(j.App) {
+			http.Error(w, tomlOwned, http.StatusBadRequest)
+			return
+		}
 		_, _ = sqlDB.Exec(`DELETE FROM jobs WHERE id=?`, j.ID)
+		p.audit(r, "job.delete", j.App, j.Name)
 		w.WriteHeader(http.StatusNoContent)
 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// newJob checks a scheduled job's settings, the same for the dashboard and the API.
+func newJob(app, name, schedule, command string) (jobRow, string) {
+	schedule, command = strings.TrimSpace(schedule), strings.TrimSpace(command)
+	if command == "" {
+		return jobRow{}, "a command is required"
+	}
+	if _, err := cron.ParseStandard(schedule); err != nil {
+		return jobRow{}, "invalid schedule — use cron syntax like \"0 3 * * *\""
+	}
+	src, _ := getSource(app)
+	return jobRow{
+		ID: randToken()[:12], App: app, Team: src.Team, Name: cmp.Or(strings.TrimSpace(name), "job"),
+		Schedule: schedule, Command: command, LastOk: 1, Created: time.Now().Unix(),
+	}, ""
 }
 
 func (p *Panel) handleJobRun(w http.ResponseWriter, r *http.Request) {
@@ -239,6 +250,7 @@ func (p *Panel) handleJobRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer releaseJob(j.ID)
+	p.audit(r, "job.run", j.App, j.Name)
 	out, err := p.execJob(j)
 	writeJSON(w, map[string]any{"ok": err == nil, "output": out})
 }

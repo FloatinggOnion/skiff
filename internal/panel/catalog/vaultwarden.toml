@@ -1,0 +1,15 @@
+name = "Vaultwarden"
+category = "Security"
+blurb = "A lightweight password manager that works with the Bitwarden apps."
+image = "vaultwarden/server:1.34.1"
+memory = "128 MB"
+setup = "Create your account, then set SIGNUPS_ALLOWED to false under Environment and redeploy. Until you do, anyone can sign up."
+port = 80
+timeout = 120
+
+[[volumes]]
+name = "data"
+path = "/data"
+
+[env]
+DOMAIN = "{{url}}"
