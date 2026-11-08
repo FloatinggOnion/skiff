@@ -37,6 +37,7 @@ function DialogOverlay({
   )
 }
 
+// Below md a dialog is a drawer from the bottom of the screen, dragged down by its handle to close; from md up it's a centred modal.
 function DialogContent({
   className,
   children,
@@ -46,13 +47,23 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const close = React.useRef<HTMLButtonElement>(null)
+  const sheet = React.useRef<HTMLDivElement>(null)
+  const drag = React.useRef<{ y: number; dy: number } | null>(null)
+  const move = (dy: number) => {
+    if (sheet.current) sheet.current.style.translate = dy > 0 ? `0 ${dy}px` : ''
+  }
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={sheet}
         data-slot="dialog-content"
         className={cn(
-          'bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl p-4 text-sm ring-1 duration-100 outline-none sm:max-w-sm',
+          'bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 fixed z-50 grid w-full gap-4 overflow-y-auto p-4 text-sm ring-1 outline-none',
+          'inset-x-0 bottom-0 max-h-[90dvh] rounded-t-2xl pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] duration-200 data-closed:slide-out-to-bottom data-open:slide-in-from-bottom max-md:max-w-none!',
+          'md:inset-x-auto md:top-1/2 md:bottom-auto md:left-1/2 md:max-h-[calc(100dvh-2rem)] sm:max-w-sm md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-xl md:pt-4 md:pb-4 md:duration-100 md:data-closed:zoom-out-95 md:data-closed:[--tw-exit-translate-y:0] md:data-open:zoom-in-95 md:data-open:[--tw-enter-translate-y:0]',
           className,
         )}
         onInteractOutside={(e) => {
@@ -63,7 +74,33 @@ function DialogContent({
         }}
         {...props}
       >
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 flex h-7 cursor-grab touch-none justify-center pt-2.5 md:hidden"
+          onPointerDown={(e) => {
+            drag.current = { y: e.clientY, dy: 0 }
+            e.currentTarget.setPointerCapture(e.pointerId)
+          }}
+          onPointerMove={(e) => {
+            if (!drag.current) return
+            drag.current.dy = e.clientY - drag.current.y
+            move(drag.current.dy)
+          }}
+          onPointerUp={() => {
+            const dy = drag.current?.dy ?? 0
+            drag.current = null
+            if (dy > 80) close.current?.click()
+            else move(0)
+          }}
+          onPointerCancel={() => {
+            drag.current = null
+            move(0)
+          }}
+        >
+          <span className="bg-foreground/20 h-1 w-10 rounded-full" />
+        </div>
         {children}
+        <DialogPrimitive.Close ref={close} className="hidden" tabIndex={-1} aria-hidden />
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button variant="ghost" className="absolute top-2 right-2" size="icon-sm">
@@ -95,7 +132,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        'bg-muted/50 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t p-4 sm:flex-row sm:justify-end',
+        'bg-muted/50 -mx-4 -mb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col-reverse gap-2 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end md:-mb-4 md:rounded-b-xl md:pb-4',
         className,
       )}
       {...props}
