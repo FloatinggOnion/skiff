@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -675,8 +676,18 @@ func compatAnswer(app string, it compose.Item) string {
 	if len(f) == 0 {
 		return it.Service + " has no network"
 	}
+	// A private service with no HTTP health check may not speak HTTP at all (a game server, gRPC), so, like Skiff, it counts once its port opens.
+	tcp := !it.Public && it.HealthPath == ""
 	var last string
 	for deadline := time.Now().Add(3 * time.Minute); time.Now().Before(deadline); time.Sleep(5 * time.Second) {
+		if tcp {
+			got, err := exec.Command("docker", "run", "--rm", "--network", f[0], "busybox:1.36", "nc", "-z", "-w", "10", it.Service, strconv.Itoa(it.Port)).CombinedOutput()
+			if err == nil {
+				return ""
+			}
+			last = "port closed " + strings.Join(strings.Fields(string(got)), " ")
+			continue
+		}
 		got, _ := exec.Command("docker", "run", "--rm", "--network", f[0], "busybox:1.36", "wget", "-S", "-T", "10", "-O", "/dev/null", fmt.Sprintf("http://%s:%d/", it.Service, it.Port)).CombinedOutput()
 		last = strings.Join(strings.Fields(string(got)), " ")
 		if m := compatStatus.FindStringSubmatch(last); m != nil && m[1] < "500" {
