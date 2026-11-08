@@ -53,6 +53,9 @@ func New(setupSecret, domain string, eng *docker.Engine) (*Panel, error) {
 	}
 	reconcileStuckDeploys()
 	writeMailFile()
+	if domain != "" && domain != "localhost" {
+		dashboardURL = "https://dash." + domain
+	}
 	home, _ := os.UserHomeDir()
 	branch := os.Getenv("SKIFF_SELF_BRANCH")
 	if branch == "" {

@@ -6,6 +6,7 @@ import { errText } from '@/lib/errors'
 import { Button } from '@/components/ui/button'
 import { useConfirm } from '@/providers/confirm-provider'
 import { Section, inputCls } from './ui'
+import { inviteNote, type InviteSent } from '@/lib/invites'
 
 export function MembersSection({
   members,
@@ -20,12 +21,14 @@ export function MembersSection({
 }) {
   const [email, setEmail] = useState('')
   const [link, setLink] = useState('')
+  const [sent, setSent] = useState<InviteSent>({ to: '' })
   const confirm = useConfirm()
 
   const inviteMut = useMutation({
     mutationFn: () => authService.invite(email.trim(), 'member'),
     onSuccess: (r) => {
       setLink(r.link)
+      setSent({ to: email.trim(), emailed: r.emailed })
       setEmail('')
       onChange()
     },
@@ -116,6 +119,7 @@ export function MembersSection({
               Invite
             </Button>
           </div>
+          {link && <p className="text-muted-foreground text-xs">{inviteNote(sent)}</p>}
           {link && (
             <div className="flex items-center gap-2 rounded-[6px] border border-foreground/8 bg-inset px-3 py-2">
               <span className="text-foreground/80 min-w-0 flex-1 truncate font-mono text-xs">

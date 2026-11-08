@@ -64,6 +64,20 @@ Click **Deploy**, paste a Git repository URL (or connect GitHub), pick a name an
 
 For push-to-deploy — a `git push` rebuilds and ships automatically, and branches can spin up preview environments — install the Skiff GitHub App from **Settings → Integrations** in the dashboard and pick which repos it can access. Without it, you can still deploy any public repo (or a private one with a token) by pasting its URL.
 
+## Send email (optional)
+
+Skiff can email team invites and alerts. Add an SMTP relay to `/etc/skiff/skiff.env`:
+
+```text title="/etc/skiff/skiff.env"
+SKIFF_SMTP_HOST=smtp.provider.com
+SKIFF_SMTP_PORT=587
+SKIFF_SMTP_USER=...
+SKIFF_SMTP_PASS=...
+SKIFF_SMTP_FROM=skiff@example.com
+```
+
+Then restart Skiff with `systemctl restart skiff-router skiff-panel@7070`. Emails arrive from **Skiff** at the `SKIFF_SMTP_FROM` address. Without a relay, an invite gives you a link to share yourself, and alerts can still go to Slack or a webhook.
+
 ## Updating
 
 Re-run the installer any time to update to the latest release. Your data, apps, and setup key are preserved — it swaps the binary and restarts the services:
