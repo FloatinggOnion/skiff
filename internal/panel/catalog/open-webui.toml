@@ -1,0 +1,17 @@
+name = "Open WebUI"
+blurb = "A chat interface for language models, for any OpenAI-compatible API or an Ollama server."
+category = "Development"
+image = "ghcr.io/open-webui/open-webui:v0.12.5"
+port = 8080
+memory = "2 GB"
+timeout = 600
+setup = "Open it right away and create the admin account. The first visitor sets it up, and sign-up closes once it exists. Then add a model connection under Admin Settings, Connections."
+
+[[volumes]]
+name = "data"
+path = "/app/backend/data"
+
+[env]
+WEBUI_SECRET_KEY = "{{secret}}"
+WEBUI_URL = "{{url}}"
+ENABLE_OLLAMA_API = "false"

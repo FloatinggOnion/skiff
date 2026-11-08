@@ -39,11 +39,19 @@ Don't skip the first-run step. These apps are on the public internet from the mo
 | Umami | Website analytics, with Postgres | 512 MB | Sign in as admin / umami and change the password |
 | Vaultwarden | Password manager for the Bitwarden apps | 128 MB | Create your account, then turn off sign-ups |
 | Gitea | Git hosting with issues and pull requests | 256 MB | Finish the install screen and create the admin |
+| FreshRSS | Feed reader | 256 MB | Finish the install screen and create the admin |
+| Hasura | GraphQL APIs over Postgres, with Postgres | 1 GB | Sign in to /console with the generated admin secret |
+| Linkwarden | Bookmark manager that saves each page, with Postgres | 1 GB | Sign up, then turn off sign-ups |
+| NocoDB | Spreadsheet-style database, with Postgres | 1 GB | Create the super admin account |
+| Open WebUI | Chat interface for language models | 2 GB | Create the admin account, then add a model connection |
+| Phoenix | Tracing and evaluation for LLM apps, with Postgres | 1 GB | Sign in as admin@localhost with the generated password |
+| Stirling PDF | PDF tools in the browser | 2 GB | None, but anyone with the address can use it |
+| WordPress | Sites and blogs, with MySQL | 1 GB | Finish the install screen and choose the admin |
 
 ## After installing
 
 - **It's a normal project.** Logs, metrics, domains, limits and rollback all work, and its settings are yours to change.
-- **Files and databases stay across deploys.** App data sits on a [persistent volume](/volumes) or in a managed database. Back up anything you can't lose: managed databases get daily backups, and volumes don't.
+- **Files and databases stay across deploys.** App data sits on a [persistent volume](/volumes) or in a managed database. Managed databases and volumes both get [daily backups](/backups).
 - **Upgrades are up to you.** The version is pinned, so an app only changes when you change its image under **Settings** and redeploy. Check the app's release notes first.
-- **Adding a custom domain?** Ghost, n8n, Vaultwarden and Gitea store their address in an environment variable, such as `url`, `WEBHOOK_URL`, `DOMAIN` or `GITEA__server__ROOT_URL`. Update it under **Environment** and redeploy.
+- **Adding a custom domain?** Several apps store their address in an environment variable: Ghost (`url`), n8n (`WEBHOOK_URL`), Vaultwarden (`DOMAIN`), Gitea (`GITEA__server__ROOT_URL`), NocoDB (`NC_SITE_URL`), Open WebUI (`WEBUI_URL`), Linkwarden (`NEXTAUTH_URL`) and WordPress (`WORDPRESS_CONFIG_EXTRA`). Update it under **Environment** and redeploy.
 - **Deleting the project keeps its database.** Delete that separately under **Databases** when you're sure you don't need the data.

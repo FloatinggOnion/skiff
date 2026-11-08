@@ -1,0 +1,17 @@
+name = "Hasura"
+blurb = "Instant GraphQL APIs over a Postgres database, with the database included."
+category = "Development"
+image = "hasura/graphql-engine:v2.51.4"
+database = "postgres"
+database_var = "HASURA_GRAPHQL_METADATA_DATABASE_URL"
+port = 8080
+memory = "1 GB"
+timeout = 180
+setup = "Open /console and sign in with the admin secret in HASURA_GRAPHQL_ADMIN_SECRET under Environment. To query the included database, connect it under Data using the PG_DATABASE_URL environment variable."
+
+[env]
+HASURA_GRAPHQL_METADATA_DATABASE_URL = "{{db.url}}"
+PG_DATABASE_URL = "{{db.url}}"
+HASURA_GRAPHQL_ADMIN_SECRET = "{{secret}}"
+HASURA_GRAPHQL_ENABLE_CONSOLE = "true"
+HASURA_GRAPHQL_ENABLED_LOG_TYPES = "startup, http-log, webhook-log, websocket-log, query-log"

@@ -1,0 +1,21 @@
+name = "WordPress"
+blurb = "The widely used publishing platform for sites and blogs, with a MySQL database included."
+category = "Publishing"
+image = "wordpress:7.1.4-php8.4-apache"
+database = "mysql"
+database_var = "WORDPRESS_DB_PASSWORD"
+port = 80
+memory = "1 GB"
+timeout = 180
+setup = "Open it right away and finish the install screen, choosing the admin username and password there. The first visitor sets it up."
+
+[[volumes]]
+name = "html"
+path = "/var/www/html"
+
+[env]
+WORDPRESS_DB_HOST = "{{db.host}}:{{db.port}}"
+WORDPRESS_DB_USER = "{{db.user}}"
+WORDPRESS_DB_PASSWORD = "{{db.password}}"
+WORDPRESS_DB_NAME = "{{db.name}}"
+WORDPRESS_CONFIG_EXTRA = "$_SERVER['HTTPS'] = 'on'; define('WP_HOME', '{{url}}'); define('WP_SITEURL', '{{url}}');"

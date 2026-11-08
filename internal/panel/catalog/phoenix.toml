@@ -1,0 +1,21 @@
+name = "Phoenix"
+blurb = "Tracing and evaluation for LLM apps, with a Postgres database included."
+category = "Monitoring"
+image = "arizephoenix/phoenix:version-21.0.0"
+database = "postgres"
+database_var = "PHOENIX_POSTGRES_PASSWORD"
+port = 6006
+memory = "1 GB"
+timeout = 240
+setup = "Sign in as admin@localhost with the password in PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD under Environment, then set a new one. Create an API key in Settings for your apps to send traces."
+
+[env]
+PHOENIX_POSTGRES_HOST = "{{db.host}}"
+PHOENIX_POSTGRES_PORT = "{{db.port}}"
+PHOENIX_POSTGRES_USER = "{{db.user}}"
+PHOENIX_POSTGRES_PASSWORD = "{{db.password}}"
+PHOENIX_POSTGRES_DB = "{{db.name}}"
+PHOENIX_ENABLE_AUTH = "true"
+PHOENIX_SECRET = "{{secret}}"
+PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD = "{{secret}}"
+PHOENIX_USE_SECURE_COOKIES = "true"

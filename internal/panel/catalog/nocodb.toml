@@ -1,0 +1,19 @@
+name = "NocoDB"
+blurb = "An open source Airtable alternative that turns a database into a spreadsheet, with a Postgres database included."
+category = "Development"
+image = "nocodb/nocodb:2026.10.1"
+database = "postgres"
+database_var = "NC_DB"
+port = 8080
+memory = "1 GB"
+timeout = 240
+setup = "Open it right away and create the super admin account. The first visitor sets it up."
+
+[[volumes]]
+name = "data"
+path = "/usr/app/data"
+
+[env]
+NC_DB = "pg://{{db.host}}:{{db.port}}?u={{db.user}}&p={{db.password}}&d={{db.name}}"
+NC_AUTH_JWT_SECRET = "{{secret}}"
+NC_SITE_URL = "{{url}}"

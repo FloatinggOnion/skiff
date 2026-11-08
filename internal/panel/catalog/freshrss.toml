@@ -1,0 +1,20 @@
+name = "FreshRSS"
+blurb = "A self-hosted feed reader that collects the sites you follow in one place."
+category = "Publishing"
+image = "freshrss/freshrss:1.30.4"
+port = 80
+memory = "256 MB"
+timeout = 120
+setup = "Open it right away and finish the install screen, creating the admin account there. The first visitor sets it up."
+
+[[volumes]]
+name = "data"
+path = "/var/www/FreshRSS/data"
+
+[[volumes]]
+name = "extensions"
+path = "/var/www/FreshRSS/extensions"
+
+[env]
+CRON_MIN = "3,33"
+TRUSTED_PROXY = "172.16.0.1/12 192.168.0.1/16"
