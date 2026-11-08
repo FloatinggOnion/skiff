@@ -1,0 +1,26 @@
+name = "Directus"
+category = "Development"
+blurb = "A headless CMS and data studio with a REST and GraphQL API, with a Postgres database included."
+image = "directus/directus:12.6.1"
+database = "postgres"
+database_var = "DB_DATABASE"
+port = 8055
+memory = "512 MB"
+timeout = 300
+setup = "Sign in with ADMIN_EMAIL and ADMIN_PASSWORD under Environment, then change the email and password in your profile."
+
+[[volumes]]
+name = "uploads"
+path = "/directus/uploads"
+
+[env]
+SECRET = "{{secret}}"
+PUBLIC_URL = "{{url}}"
+DB_CLIENT = "pg"
+DB_HOST = "{{db.host}}"
+DB_PORT = "{{db.port}}"
+DB_DATABASE = "{{db.name}}"
+DB_USER = "{{db.user}}"
+DB_PASSWORD = "{{db.password}}"
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_PASSWORD = "{{secret}}"

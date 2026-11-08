@@ -1,0 +1,17 @@
+name = "Grafana"
+category = "Monitoring"
+blurb = "Dashboards and alerts for metrics, logs and traces from the data sources you connect."
+image = "grafana/grafana:13.3.0"
+port = 3000
+memory = "256 MB"
+timeout = 180
+setup = "Sign in as admin, with the password in GF_SECURITY_ADMIN_PASSWORD under Environment."
+
+[[volumes]]
+name = "data"
+path = "/var/lib/grafana"
+
+[env]
+GF_SECURITY_ADMIN_PASSWORD = "{{secret}}"
+GF_SERVER_ROOT_URL = "{{url}}"
+GF_USERS_ALLOW_SIGN_UP = "false"

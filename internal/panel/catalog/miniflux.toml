@@ -1,0 +1,18 @@
+name = "Miniflux"
+category = "Publishing"
+blurb = "A minimal, fast RSS reader, with a Postgres database included."
+image = "miniflux/miniflux:2.3.5"
+database = "postgres"
+database_var = "DATABASE_URL"
+port = 8080
+memory = "128 MB"
+timeout = 180
+setup = "Sign in as admin, with the password in ADMIN_PASSWORD under Environment."
+
+[env]
+DATABASE_URL = "{{db.url}}"
+RUN_MIGRATIONS = "1"
+CREATE_ADMIN = "1"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "{{secret}}"
+BASE_URL = "{{url}}"

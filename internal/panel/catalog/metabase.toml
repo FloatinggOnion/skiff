@@ -1,0 +1,19 @@
+name = "Metabase"
+category = "Analytics"
+blurb = "Dashboards and questions over your databases, for people who don't write SQL. Its own settings live in a Postgres database included here."
+image = "metabase/metabase:v0.65.3"
+database = "postgres"
+database_var = "MB_DB_DBNAME"
+port = 3000
+memory = "1.5 GB"
+timeout = 480
+setup = "Open it right away and go through the setup, which creates the admin account."
+
+[env]
+MB_DB_TYPE = "postgres"
+MB_DB_HOST = "{{db.host}}"
+MB_DB_PORT = "{{db.port}}"
+MB_DB_DBNAME = "{{db.name}}"
+MB_DB_USER = "{{db.user}}"
+MB_DB_PASS = "{{db.password}}"
+MB_SITE_URL = "{{url}}"

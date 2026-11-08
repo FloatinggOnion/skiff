@@ -1,0 +1,12 @@
+name = "Memos"
+category = "Productivity"
+blurb = "A lightweight place for notes and short posts, written in Markdown."
+image = "neosmemo/memos:26.11.0"
+port = 5230
+memory = "128 MB"
+timeout = 120
+setup = "Open it right away and sign up. The first account becomes the admin."
+
+[[volumes]]
+name = "data"
+path = "/var/opt/memos"

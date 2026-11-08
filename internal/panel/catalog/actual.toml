@@ -1,0 +1,12 @@
+name = "Actual Budget"
+category = "Finance"
+blurb = "Personal budgeting that syncs across your devices, using envelope budgeting."
+image = "actualbudget/actual-server:26.11.0"
+port = 5006
+memory = "256 MB"
+timeout = 120
+setup = "Open it right away and set the server password. Until you do, anyone who visits can set it."
+
+[[volumes]]
+name = "data"
+path = "/data"

@@ -1,0 +1,23 @@
+name = "Mattermost"
+category = "Communication"
+blurb = "Team chat with channels, threads and calls, with a Postgres database included."
+image = "mattermost/mattermost-team-edition:12.1.0"
+database = "postgres"
+database_var = "MM_SQLSETTINGS_DATASOURCE"
+port = 8065
+memory = "2 GB"
+timeout = 420
+setup = "Open it right away and create the first account. That account becomes the system admin."
+
+[[volumes]]
+name = "data"
+path = "/mattermost/data"
+
+[[volumes]]
+name = "plugins"
+path = "/mattermost/plugins"
+
+[env]
+MM_SQLSETTINGS_DRIVERNAME = "postgres"
+MM_SQLSETTINGS_DATASOURCE = "{{db.url}}"
+MM_SERVICESETTINGS_SITEURL = "{{url}}"
