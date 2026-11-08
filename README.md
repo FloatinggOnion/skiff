@@ -107,7 +107,7 @@ platform in the browser:
   management too.
 - **Backups and encryption** — volumes are backed up daily too, every restore can be
   undone, and stored secrets are encrypted. See the
-  [guide](https://useskiff.xyz/docs/backups).
+  [guide](https://docs.useskiff.xyz/backups).
 - **Object storage** — S3-compatible buckets, with a file browser in the dashboard.
 - **Email forwarding** — point a domain's MX at your server and send
   `hello@yourdomain.com` to any inbox, catch-all included.
@@ -214,7 +214,7 @@ curl -fsSL https://useskiff.xyz/install | sh -s -- --domain example.com
 
 Point `*.example.com` at the box, open `https://dash.example.com`, and log in with
 the setup key it prints. The full walkthrough is in the
-[self-hosting guide](https://useskiff.xyz/docs/self-hosting).
+[self-hosting guide](https://docs.useskiff.xyz/self-hosting).
 
 Prefer the CLI? `skiff server setup user@host` bootstraps Docker on a box so you
 can `skiff deploy` to it over SSH.

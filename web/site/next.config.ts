@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
       { source: "/cli", destination: "/cli.sh" },
     ];
   },
+  // The docs moved to their own subdomain; old links land on the same page there.
+  async redirects() {
+    return [
+      { source: "/docs", destination: "https://docs.useskiff.xyz", permanent: true },
+      { source: "/docs/:slug*", destination: "https://docs.useskiff.xyz/:slug*", permanent: true },
+    ];
+  },
   async headers() {
     const plain = [{ key: "Content-Type", value: "text/plain; charset=utf-8" }];
     return [

@@ -50,6 +50,24 @@ For a game server, message broker or anything else over raw TCP, open a **Public
 - **Background work:** workers and scheduled jobs run from your app's image.
 - **Real-time:** WebSockets and server-sent events work. When a new version goes live, new requests go to it, and the old version keeps running until its open requests finish, for up to 5 minutes. Set `drain_timeout` under `[deploy]` in `skiff.toml` to change that (in seconds, up to 3600, or 0 to stop it straight away). After that, the app gets a stop signal and 30 seconds to exit, so clients holding a connection open longer still need to reconnect.
 
+## Workers and jobs in skiff.toml
+
+An app deployed with `skiff deploy` lists its workers and jobs in `skiff.toml`. Each deploy restarts the workers on the new version, and the dashboard shows them and runs the jobs on schedule, in the server's time zone.
+
+```toml title="skiff.toml"
+[[workers]]
+name = "queue"
+command = "node queue.js"
+replicas = 2
+
+[[jobs]]
+name = "report"
+schedule = "0 3 * * *"
+command = "node report.js"
+```
+
+For these apps, `skiff.toml` decides, so the dashboard, the API and `skiff worker` or `skiff job` can't change them. Running a job now still works. A deploy without a `[[workers]]` section stops the app's workers.
+
 ## From the terminal
 
 After `skiff login`, the CLI manages the same things as the dashboard. Attached databases and buckets reach an app on its next deploy.
