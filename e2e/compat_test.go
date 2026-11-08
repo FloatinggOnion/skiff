@@ -450,10 +450,19 @@ func compatGet(c *http.Client, url string, into any) error {
 	return json.NewDecoder(resp.Body).Decode(into)
 }
 
+// compatLogTail prefers the last line that reads like an error, since the final lines are often noise.
 func compatLogTail(id string) string {
-	out, _ := exec.Command("docker", "logs", "--tail", "3", id).CombinedOutput()
-	s := strings.Join(strings.Fields(string(out)), " ")
-	return s[:min(len(s), 240)]
+	out, _ := exec.Command("docker", "logs", "--tail", "40", id).CombinedOutput()
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	s := strings.Join(lines[max(0, len(lines)-3):], " ")
+	for _, l := range slices.Backward(lines) {
+		if low := strings.ToLower(l); strings.Contains(low, "error") || strings.Contains(low, "fatal") || strings.Contains(low, "panic") {
+			s = l
+			break
+		}
+	}
+	s = strings.Join(strings.Fields(s), " ")
+	return s[:min(len(s), 400)]
 }
 
 // compatWhy finds the reason something isn't running: its own last words, or the end of its deploy log.
@@ -478,8 +487,19 @@ func compatWhy(c *http.Client, panel, stack string, members []stackMember) strin
 		if resp, err := c.Do(req); err == nil {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
+			var errs []string
+			for line := range strings.Lines(string(body)) {
+				if low := strings.ToLower(line); strings.Contains(low, "error") || strings.Contains(low, "fatal") || strings.Contains(low, "failed to") {
+					errs = append(errs, strings.Join(strings.Fields(line), " "))
+				}
+			}
 			text := strings.Join(strings.Fields(string(body)), " ")
-			why = append(why, m.App+": "+text[max(0, len(text)-300):])
+			detail := text[max(0, len(text)-300):]
+			if len(errs) > 0 {
+				first := strings.Join(errs[:min(len(errs), 3)], " / ")
+				detail = first[:min(len(first), 600)] + " … " + detail
+			}
+			why = append(why, m.App+": "+detail)
 		}
 		cancel()
 		break

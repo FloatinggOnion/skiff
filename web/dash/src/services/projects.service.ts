@@ -44,6 +44,7 @@ export type ProjectDetail = {
   previewProtected: boolean
   healthPath: string
   healthTimeout: number
+  defaultHealthTimeout: number
   image?: string
   maxReplicas: number
   setupNote?: string

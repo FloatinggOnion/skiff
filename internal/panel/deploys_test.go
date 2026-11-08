@@ -55,6 +55,38 @@ func TestProjectToml(t *testing.T) {
 	}
 }
 
+// A Compose service can restart for a while until a dependency finishes its own setup, so it gets longer to come up unless someone chose otherwise.
+func TestStackServicesGetLongerToStart(t *testing.T) {
+	timeout := func(src Source) int {
+		path := filepath.Join(t.TempDir(), "skiff.toml")
+		if err := os.WriteFile(path, []byte(projectToml(src, nil, teamNetwork(""), nil)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := config.Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.Deploy.HealthTimeout
+	}
+	for _, c := range []struct {
+		name string
+		src  Source
+		want int
+	}{
+		{"an ordinary project keeps the default", Source{App: "web", Port: "8080"}, 0},
+		{"a stack service gets longer", Source{App: "c-apisix", Port: "9080", Stack: "c"}, stackHealthTimeout},
+		{"a chosen timeout wins", Source{App: "c-apisix", Port: "9080", Stack: "c", HealthTimeout: 45}, 45},
+		{"a chosen timeout wins outside a stack too", Source{App: "web", Port: "8080", HealthTimeout: 45}, 45},
+	} {
+		if got := timeout(c.src); got != c.want {
+			t.Errorf("%s: health_timeout = %d, want %d", c.name, got, c.want)
+		}
+		if got := defaultHealthTimeout(c.src); c.src.Stack != "" && got != stackHealthTimeout || c.src.Stack == "" && got != 30 {
+			t.Errorf("%s: defaultHealthTimeout = %d", c.name, got)
+		}
+	}
+}
+
 func TestInjectToken(t *testing.T) {
 	if got := injectToken("https://github.com/acme/api.git", "tok"); got != "https://tok@github.com/acme/api.git" {
 		t.Fatalf("https inject = %q", got)

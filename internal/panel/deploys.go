@@ -2,6 +2,7 @@ package panel
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/nuelScript/skiff/internal/config"
+	"github.com/nuelScript/skiff/internal/health"
 )
 
 // inflightBuild is the app's currently-building deploy; a newer deploy supersedes (cancels) an older one still building instead of racing it.
@@ -639,13 +641,11 @@ func projectToml(src Source, env []EnvVar, network string, volumes []config.Volu
 	if strings.TrimSpace(src.Release) != "" {
 		fmt.Fprintf(&b, "release = %s\n", tomlQuote(src.Release))
 	}
-	if hc := healthOf(src); hc.HealthPath != "" || hc.HealthTimeout > 0 {
-		if hc.HealthPath != "" {
-			fmt.Fprintf(&b, "health_path = %s\n", tomlQuote(hc.HealthPath))
-		}
-		if hc.HealthTimeout > 0 {
-			fmt.Fprintf(&b, "health_timeout = %d\n", hc.HealthTimeout)
-		}
+	if hc := healthOf(src); hc.HealthPath != "" {
+		fmt.Fprintf(&b, "health_path = %s\n", tomlQuote(hc.HealthPath))
+	}
+	if t := cmp.Or(healthOf(src).HealthTimeout, defaultHealthTimeout(src)); t != int(health.DefaultTimeout/time.Second) {
+		fmt.Fprintf(&b, "health_timeout = %d\n", t)
 	}
 	if hc := healthOf(src); hc.Memory != "" || hc.CPU != "" {
 		b.WriteString("\n[resources]\n")
@@ -692,4 +692,14 @@ func envList(m map[string]string) []EnvVar {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
+}
+
+// stackHealthTimeout is how long a Compose service gets to come up. Compose itself never gives up on a service that restarts until its dependencies are ready, and those restarts back off, so a service that starts before (say) etcd has finished its own setup can need a minute.
+const stackHealthTimeout = 120
+
+func defaultHealthTimeout(src Source) int {
+	if healthOf(src).Stack != "" {
+		return stackHealthTimeout
+	}
+	return int(health.DefaultTimeout / time.Second)
 }

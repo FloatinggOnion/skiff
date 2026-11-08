@@ -6,6 +6,10 @@ on:
   schedule:
     - cron: "0 5 * * 1"
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Project names to run, comma-separated (empty runs all)"
+        required: false
   pull_request:
     paths:
       - "e2e/compat_test.go"
@@ -35,6 +39,7 @@ jobs:
           SKIFF_COMPAT_KIND: ${{ matrix.kind }}
           SKIFF_COMPAT_OUT: compat-out
           SKIFF_COMPAT_PRUNE: "1"
+          SKIFF_COMPAT_ONLY: ${{ inputs.only }}
         run: go test -tags e2e -count=1 -timeout 340m -v -run '^TestCompatRun$' ./e2e/...
       - name: report
         if: always()

@@ -50,6 +50,7 @@ export function SettingsForm({
   sleepAfter,
   healthPath,
   healthTimeout,
+  defaultHealthTimeout = 30,
   image = '',
   maxReplicas = 10,
   memory = '',
@@ -75,6 +76,7 @@ export function SettingsForm({
   sleepAfter: number
   healthPath: string
   healthTimeout: number
+  defaultHealthTimeout?: number
   image?: string
   maxReplicas?: number
   memory?: string
@@ -469,7 +471,7 @@ export function SettingsForm({
                 type="number"
                 min={0}
                 max={600}
-                placeholder="30"
+                placeholder={String(defaultHealthTimeout)}
                 className="font-mono"
                 aria-invalid={!!formState.errors.healthTimeout}
                 {...register('healthTimeout', {
@@ -477,7 +479,7 @@ export function SettingsForm({
                 })}
               />
               <FieldError errors={[formState.errors.healthTimeout]} />
-              <FieldDescription>0 uses the default, 30.</FieldDescription>
+              <FieldDescription>0 uses the default, {defaultHealthTimeout}.</FieldDescription>
             </Field>
           </div>
         )}

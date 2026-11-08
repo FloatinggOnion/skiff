@@ -131,6 +131,8 @@ type projectView struct {
 	HealthPath  string        `json:"healthPath"`
 	// HealthTimeout is in seconds; 0 means the default.
 	HealthTimeout int `json:"healthTimeout"`
+	// DefaultHealthTimeout is what 0 means for this project.
+	DefaultHealthTimeout int `json:"defaultHealthTimeout"`
 	// PreviewProtected means its previews ask visitors for a password.
 	PreviewProtected bool `json:"previewProtected"`
 	MaxReplicas      int  `json:"maxReplicas"`
@@ -180,7 +182,7 @@ func (p *Panel) handleProject(w http.ResponseWriter, r *http.Request) {
 			Release: src.Release, Autoscale: src.Autoscale, ScaleMin: src.ScaleMin, ScaleMax: src.ScaleMax, ScaleCPU: src.ScaleCPU,
 			Deploys: deploys, Previews: p.buildPreviews(app), Origin: src.Origin, Parent: src.Parent,
 			SleepAfter: src.SleepAfter, Sleeping: isSleeping(app),
-			HealthPath: src.HealthPath, HealthTimeout: src.HealthTimeout,
+			HealthPath: src.HealthPath, HealthTimeout: src.HealthTimeout, DefaultHealthTimeout: defaultHealthTimeout(src),
 			PreviewProtected: previewPasswordHash(app) != "",
 			Image:            src.Image,
 			MaxReplicas:      maxReplicas(),

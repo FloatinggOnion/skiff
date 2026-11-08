@@ -33,7 +33,7 @@ Values like `${DB_PASSWORD}` come from what you enter here, then from a `.env` f
 <Step>
 ### Create it
 
-Databases start first, then apps deploy in `depends_on` order.
+Databases start first, then apps deploy in `depends_on` order. Each service gets two minutes to come up, since some restart a few times while a dependency finishes its own setup. Change that per service with the health check timeout in its settings.
 </Step>
 </Steps>
 

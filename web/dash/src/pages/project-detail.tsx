@@ -418,6 +418,7 @@ export default function ProjectDetailPage() {
             sleepAfter={project.sleepAfter}
             healthPath={project.healthPath}
             healthTimeout={project.healthTimeout}
+            defaultHealthTimeout={project.defaultHealthTimeout}
             image={project.image}
             maxReplicas={project.maxReplicas}
             isPrivate={project.private}
