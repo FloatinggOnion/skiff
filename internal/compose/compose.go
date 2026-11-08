@@ -153,7 +153,7 @@ func Parse(data []byte, lookup func(string) (string, bool)) (*File, error) {
 		return nil, errors.New("the Compose file is empty")
 	}
 	f := &File{Services: map[string]Service{}, Extra: map[string][]string{}}
-	expandMerges(&doc, map[*yaml.Node]bool{})
+	expandAliases(&doc, map[*yaml.Node]bool{})
 	stripMergeTags(&doc, map[*yaml.Node]bool{})
 	if err := interpolate(&doc, lookup, f, map[*yaml.Node]bool{}); err != nil {
 		return nil, err
@@ -426,18 +426,21 @@ func mapValue(n *yaml.Node, key string) *yaml.Node {
 	return nil
 }
 
-// stripMergeTags reads Compose's !reset as empty and !override as the plain value, since Skiff reads one file with nothing to merge.
-// expandMerges writes YAML merge keys (<<: *anchor) out as ordinary keys, so every later step sees what Compose sees. Keys written beside the merge win, and earlier sources in a list win over later ones.
-func expandMerges(n *yaml.Node, seen map[*yaml.Node]bool) {
+// expandAliases writes YAML aliases (*anchor) and merge keys (<<: *anchor) out in place, so every later step sees the values Compose sees rather than the anchor's name. Keys written beside a merge win, and earlier sources in a list win over later ones.
+func expandAliases(n *yaml.Node, seen map[*yaml.Node]bool) {
 	if seen[n] {
 		return
 	}
 	seen[n] = true
 	if n.Alias != nil {
-		expandMerges(n.Alias, seen)
+		expandAliases(n.Alias, seen)
 	}
-	for _, c := range n.Content {
-		expandMerges(c, seen)
+	for i, c := range n.Content {
+		expandAliases(c, seen)
+		for c.Kind == yaml.AliasNode && c.Alias != nil {
+			c = c.Alias
+		}
+		n.Content[i] = c
 	}
 	if n.Kind != yaml.MappingNode {
 		return
@@ -479,6 +482,7 @@ func expandMerges(n *yaml.Node, seen map[*yaml.Node]bool) {
 	n.Content = own
 }
 
+// stripMergeTags reads Compose's !reset as empty and !override as the plain value, since Skiff reads one file with nothing to merge.
 func stripMergeTags(n *yaml.Node, seen map[*yaml.Node]bool) {
 	if seen[n] {
 		return

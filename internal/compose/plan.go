@@ -139,10 +139,10 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 
 	resolved := map[string]Service{}
 	files := map[string][]PlanFile{}
-	engines := map[string]string{} // decided before mounts are resolved, which can drop the setup scripts that rule a database out
+	// Decided once env files are read and before mounts are resolved, which can drop the setup scripts that rule a database out.
+	engines, ordinary := map[string]string{}, map[string]string{}
 	for _, name := range f.Order {
 		s := f.Services[name]
-		engines[name] = managedEngine(s)
 		env := map[string]string{}
 		for _, file := range s.EnvFiles {
 			data, err := readFile(file)
@@ -158,6 +158,10 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 			env[k] = v
 		}
 		s.Environment = env
+		engines[name] = managedEngine(s)
+		if stockEngine(s) != "" {
+			ordinary[name] = unmanageable(s)
+		}
 		if engines[name] == "" {
 			s.Volumes, files[name] = resolveMounts(name, s.Volumes, repoPath, p)
 		}
@@ -212,8 +216,8 @@ func BuildPlan(stack string, f *File, readFile func(string) ([]byte, error), rep
 			byName[name] = &it
 			continue
 		}
-		if stockEngine(s) != "" {
-			p.Notes = append(p.Notes, name+": runs its own setup scripts, so it runs as an ordinary private app instead of a managed database. Its data is covered by volume backups")
+		if why := ordinary[name]; why != "" {
+			p.Notes = append(p.Notes, name+": "+why+", so it runs as an ordinary private app instead of a managed database. Its data is covered by volume backups")
 		}
 
 		web := slices.IndexFunc(s.Ports, func(pt Port) bool { return !plainTCPPorts[pt.Target] })
@@ -437,18 +441,37 @@ func withFileValues(s Service, readFile func(string) ([]byte, error)) map[string
 	return env
 }
 
-// managedEngine is the engine a stock database image becomes. One that mounts its own setup scripts runs as an ordinary app, so the image still runs them on first start.
+// managedEngine is the engine a stock database image becomes, unless the file asks for something a managed database can't keep.
 func managedEngine(s Service) string {
-	if setupScripts(s) {
+	if unmanageable(s) != "" {
 		return ""
 	}
 	return stockEngine(s)
 }
 
-func setupScripts(s Service) bool {
-	return slices.ContainsFunc(s.Volumes, func(m Mount) bool {
+// unmanageable says why a database must run as the file wrote it: its own setup scripts only run on the image's first start, and one left without a password has apps that connect without one, which a managed database's generated password would lock out.
+func unmanageable(s Service) string {
+	if slices.ContainsFunc(s.Volumes, func(m Mount) bool {
 		return m.Target == initScriptsDir || strings.HasPrefix(m.Target, initScriptsDir+"/")
-	})
+	}) {
+		return "runs its own setup scripts"
+	}
+	env := s.Environment
+	switch stockEngine(s) {
+	case "postgres":
+		if env["POSTGRES_HOST_AUTH_METHOD"] == "trust" {
+			return "lets apps in without a password"
+		}
+	case "mysql":
+		if env["MYSQL_ALLOW_EMPTY_PASSWORD"] != "" && env["MYSQL_PASSWORD"] == "" && env["MYSQL_ROOT_PASSWORD"] == "" {
+			return "lets apps in without a password"
+		}
+	case "mongodb":
+		if env["MONGO_INITDB_ROOT_USERNAME"] == "" && env["MONGO_INITDB_ROOT_USERNAME_FILE"] == "" {
+			return "lets apps in without a password"
+		}
+	}
+	return ""
 }
 
 const initScriptsDir = "/docker-entrypoint-initdb.d"

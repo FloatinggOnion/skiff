@@ -239,7 +239,7 @@ func TestStockAndCustomDatabases(t *testing.T) {
 		"postgres": "postgres", "postgres:16-alpine": "postgres", "docker.io/library/postgres:15": "postgres", "mysql:8": "mysql",
 		"mongo:7": "mongodb", "redis:7": "redis", "pgvector/pgvector:pg16": "", "bitnami/redis": "", "mariadb:11": "", "registry.example.com/postgres:15": "",
 	} {
-		if got := managedEngine(Service{Image: image}); got != want {
+		if got := stockEngine(Service{Image: image}); got != want {
 			t.Errorf("%s = %q, want %q", image, got, want)
 		}
 	}
@@ -704,5 +704,71 @@ volumes:
 	}
 	if !slices.ContainsFunc(p.Notes, func(n string) bool { return strings.Contains(n, "setup scripts") }) {
 		t.Errorf("notes = %v", p.Notes)
+	}
+}
+
+func TestAliases(t *testing.T) {
+	p := plan(t, `
+x-db-credentials: &db-credentials
+  POSTGRES_USER: &db-user listmonk
+  POSTGRES_PASSWORD: &db-password secret
+  POSTGRES_DB: &db-name listmonk
+x-command: &cmd ["./serve", "--port", "9000"]
+services:
+  app:
+    image: app:1
+    ports: ["9000:9000"]
+    command: *cmd
+    environment:
+      DB_USER: *db-user
+      DB_PASSWORD: *db-password
+      DB_NAME: *db-name
+  db:
+    image: postgres:17-alpine
+    environment:
+      <<: *db-credentials
+`)
+	app := item(t, p, "app")
+	if app.Env["DB_USER"] != "listmonk" || app.Env["DB_PASSWORD"] != "secret" || app.Env["DB_NAME"] != "listmonk" {
+		t.Errorf("an alias in environment gave the anchor's name, not its value: %v", app.Env)
+	}
+	if strings.Join(app.Command, " ") != "./serve --port 9000" {
+		t.Errorf("command = %v", app.Command)
+	}
+	if db := item(t, p, "db"); db.DBUser != "listmonk" || db.DBPassword != "secret" || db.DB != "listmonk" {
+		t.Errorf("database credentials = %q %q %q", db.DBUser, db.DBPassword, db.DB)
+	}
+}
+
+func TestDatabasesWithoutPasswords(t *testing.T) {
+	p := plan(t, `
+services:
+  pg-trust:
+    image: postgres:15
+    environment: {POSTGRES_DB: db, POSTGRES_HOST_AUTH_METHOD: trust}
+  mysql-open:
+    image: mysql:8
+    environment: {MYSQL_ALLOW_EMPTY_PASSWORD: "yes", MYSQL_DATABASE: app}
+  mongo-open:
+    image: mongo:7
+  mongo-auth:
+    image: mongo:7
+    environment: {MONGO_INITDB_ROOT_USERNAME: root, MONGO_INITDB_ROOT_PASSWORD: secret}
+  pg:
+    image: postgres:15
+    environment: {POSTGRES_PASSWORD: secret}
+`)
+	for _, name := range []string{"pg-trust", "mysql-open", "mongo-open"} {
+		if it := item(t, p, name); it.Kind != KindApp {
+			t.Errorf("%s has no password but became %s", name, it.Kind)
+		}
+		if !slices.ContainsFunc(p.Notes, func(n string) bool { return strings.HasPrefix(n, name+": lets apps in without a password") }) {
+			t.Errorf("no note for %s: %v", name, p.Notes)
+		}
+	}
+	for _, name := range []string{"mongo-auth", "pg"} {
+		if it := item(t, p, name); it.Kind != KindDatabase {
+			t.Errorf("%s = %s, want a managed database", name, it.Kind)
+		}
 	}
 }
