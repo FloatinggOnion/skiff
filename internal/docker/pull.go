@@ -96,3 +96,33 @@ func (e *Engine) ImageDigest(image string) string {
 	}
 	return ""
 }
+
+// Platforms reports the platform an image was built for and the one the server runs, both as os/arch like linux/amd64, or empty when either can't be read.
+func (e *Engine) Platforms(image string) (imagePlatform, serverPlatform string) {
+	img, err := e.command("image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image).Output()
+	if err != nil {
+		return "", ""
+	}
+	srv, err := e.command("version", "--format", "{{.Server.Os}}/{{.Server.Arch}}").Output()
+	if err != nil {
+		return "", ""
+	}
+	return strings.TrimSpace(string(img)), strings.TrimSpace(string(srv))
+}
+
+// PullHint says in plain words why a pull failed, from what docker printed, or "" when it's not a case it knows.
+func PullHint(output string, withCredentials bool) string {
+	out := strings.ToLower(output)
+	switch {
+	case strings.Contains(out, "no matching manifest"):
+		return "this image has no build for the server's platform. Use a tag built for it, or build for both with docker buildx build --platform linux/amd64,linux/arm64"
+	case strings.Contains(out, "unauthorized"), strings.Contains(out, "denied"), strings.Contains(out, "authentication required"), strings.Contains(out, "no basic auth credentials"):
+		if withCredentials {
+			return "the registry refused the username and password, so check them and that they can read this image"
+		}
+		return "for a private image, sign in to its registry first (docker login), or set SKIFF_REGISTRY_USER and SKIFF_REGISTRY_PASSWORD"
+	case strings.Contains(out, "manifest unknown"), strings.Contains(out, "not found"):
+		return "the registry has no image with that name and tag, so check both"
+	}
+	return ""
+}

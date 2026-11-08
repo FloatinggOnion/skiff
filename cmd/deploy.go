@@ -215,8 +215,8 @@ func pullPrebuilt(ctx context.Context, eng *docker.Engine, ref, image string, ti
 			if s := strings.TrimSpace(out.String()); s != "" {
 				fmt.Println(s)
 			}
-			if auth == nil {
-				ui.Note("for a private image, sign in to its registry first (docker login), or set SKIFF_REGISTRY_USER and SKIFF_REGISTRY_PASSWORD")
+			if hint := docker.PullHint(out.String(), auth != nil); hint != "" {
+				ui.Note(hint)
 			}
 		}
 		return err
@@ -227,6 +227,9 @@ func pullPrebuilt(ctx context.Context, eng *docker.Engine, ref, image string, ti
 	}
 	if d := eng.ImageDigest(ref); d != "" {
 		ui.Field("digest", d)
+	}
+	if img, srv := eng.Platforms(image); img != "" && srv != "" && img != srv {
+		ui.Note(fmt.Sprintf("this image is built for %s and the server runs %s, so it only starts if the server can emulate %s", img, srv, img))
 	}
 	ui.Done("Pulled " + ref)
 	return nil

@@ -61,6 +61,7 @@ The response has the deploy's `id`; poll `/api/v1/deploys/<id>` for its status. 
 - **No previews.** Previews deploy a branch of a repository, so an image project doesn't have them. The [preview environments](/previews) guide covers projects that build from Git.
 - **Environment variables** are all set when the container starts. There's no build step to pass them to.
 - **Rollback** keeps the last five images you deployed, so it works even after a tag has moved on in the registry.
+- **The image has to be built for your server.** Most servers are `linux/amd64`, and some are `linux/arm64`. An image built for only the other one won't pull, or won't start, and the deploy says which. To cover both, build with `docker buildx build --platform linux/amd64,linux/arm64`.
 
 <Callout>
 

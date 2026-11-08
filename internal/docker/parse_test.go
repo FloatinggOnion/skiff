@@ -194,3 +194,21 @@ func TestSettingsMeanTheSameEverywhere(t *testing.T) {
 		t.Errorf("an app's container doesn't get the shared settings:\n%s\nwant %s", app, shared)
 	}
 }
+
+func TestPullHint(t *testing.T) {
+	for _, tc := range []struct {
+		out   string
+		creds bool
+		want  string
+	}{
+		{"no matching manifest for linux/amd64 in the manifest list entries", false, "no build for the server's platform"},
+		{"Error response from daemon: Head \"https://localhost:5000/v2/x/manifests/1\": no basic auth credentials", false, "sign in to its registry"},
+		{"unauthorized: authentication required", true, "refused the username and password"},
+		{"Error response from daemon: manifest for x:9 not found: manifest unknown", false, "no image with that name and tag"},
+		{"dial tcp: lookup registry.example.com: no such host", false, ""},
+	} {
+		if got := PullHint(tc.out, tc.creds); tc.want == "" && got != "" || !strings.Contains(got, tc.want) {
+			t.Errorf("%q: %q, want it to mention %q", tc.out, got, tc.want)
+		}
+	}
+}
