@@ -1,0 +1,65 @@
+---
+title: Log drains
+description: "Skiff keeps seven days of logs for each project. A log drain also sends them to a service of your choice, so you can keep them longer, search across projects or alert on them."
+---
+
+## Set one up
+
+<Steps>
+<Step>
+### Get an ingest URL from your log service
+
+Most log services have an HTTP ingest endpoint and a token. Better Stack, Axiom and Datadog all do, or use your own endpoint.
+</Step>
+<Step>
+### Open Settings → Team → Log drain
+
+Team owners can add one drain per team. It covers every project in the team, previews included.
+</Step>
+<Step>
+### Enter the URL and header
+
+The URL must start with `https://`. If the service wants a token, put it in a header, such as `Authorization` with `Bearer your-token`, or `DD-API-KEY` for Datadog. The value is never shown again.
+</Step>
+<Step>
+### Send a test line
+
+**Send test** posts one line and tells you whether the service accepted it.
+</Step>
+</Steps>
+
+## What gets sent
+
+Lines go out in batches of up to 500 as a JSON array, within seconds of an app writing them. Each one looks like this:
+
+```json title="POST body"
+[
+  {
+    "timestamp": "2026-11-02T10:15:30.123456789Z",
+    "message": "GET /cart 200 12ms",
+    "app": "shop",
+    "stream": "out",
+    "container": "shop-3fa9c2"
+  }
+]
+```
+
+`stream` is `out` or `err`. A message longer than 64 KB is cut off at that length.
+
+## When the service is down
+
+Skiff only moves on once the service answers with a 2xx. Until then it keeps retrying, up to every five minutes, and the Log drain section shows the error. Sending picks up from the same line afterwards, including after a Skiff restart.
+
+- **Duplicates are possible.** If a response gets lost after the service saved a batch, that batch is sent again.
+- **An outage longer than seven days loses lines,** because that's how long Skiff keeps them.
+- **The daily limit applies.** Skiff saves up to 50 MB of logs per project per day, and lines past that aren't saved or sent.
+
+<Callout>
+
+Your logs leave your server once a drain is on, including anything your apps print, so keep secrets out of them. A new drain only sends what apps write from then on, not what's already saved.
+
+</Callout>
+
+## Drains on a private network
+
+By default, drains can only reach public addresses over HTTPS, so a teammate can't point one at something inside your server's network. If you run your own collector on a private address, set `SKIFF_ALLOW_PRIVATE_ENDPOINTS=1` in the panel's environment. That allows private addresses and plain HTTP for every team on the server, and private addresses for offsite backups too.

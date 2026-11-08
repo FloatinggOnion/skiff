@@ -1,0 +1,108 @@
+---
+title: Backups and encryption
+description: "Skiff backs up your databases and volumes every day and encrypts the secrets it stores. This page covers what that protects, what it doesn't, and the two things to set up yourself."
+---
+
+<Callout>
+
+Backups start on the same server as your apps, so a dead server takes them with it until you add an offsite bucket. Daily backups also mean you can lose up to 24 hours of data, unless you turn on point-in-time recovery for a Postgres database.
+
+</Callout>
+
+## What gets backed up
+
+- **Databases:** Postgres, MySQL, MongoDB and Redis, daily. Skiff keeps the last 10 on your server.
+- **Volumes:** daily, keeping the last 3 on your server. Previews aren't backed up, because they use empty copies of their project's volumes.
+- **Skiff itself:** its database and settings, sealed with your recovery key. See [self-hosting](/self-hosting).
+
+You can also take a backup at any time. For a database, open **Backups** on it. For a volume, open the project's Settings and use the backups button beside the volume.
+
+Your app pauses briefly while a volume is copied, so files like SQLite databases stay consistent. Requests wait during the pause. Volumes over 1 GB are copied while the app runs, because the pause would be too long, and are labelled *copied while running*. If your app writes constantly, check that those copies restore cleanly. A backup is skipped when it could fill the disk.
+
+## Restore checks
+
+A backup you've never restored might not work. So each day, Skiff loads the newest backup of each database into a throwaway copy with no network access, using the same steps as a real restore, then deletes the copy. Your database isn't touched. The database shows when a backup last restored cleanly, and you can test any backup yourself with the shield button under **Backups**.
+
+A check fails if the restore fails, or if the backup loads empty while your database has data, and your alert channels hear about it. Skiff also alerts you when a daily backup can't be taken. If the server is short of disk or memory, the check is skipped and tried again the next day, and that doesn't count as a failure.
+
+<Callout>
+
+A passing check means the backup loads and contains tables, collections or keys. It doesn't check that the contents are what your app expects. It tests the copy on your server, not the one in your offsite bucket, and volumes and previews aren't checked.
+
+</Callout>
+
+## Point-in-time recovery
+
+Daily backups can lose up to 24 hours of data. For a Postgres database, turn on **Point-in-time recovery** under **Backups**, and you can return it to any moment since its oldest snapshot, which is usually two to three days back. It's made for mistakes like a bad migration or an accidental delete. It's off by default.
+
+- **Turning it on or off** restarts the database for a few seconds. Your apps will reconnect.
+- **Returning to a time** recovers into a separate copy first, so a failure leaves your database as it was. Once the copy has started, Skiff backs up the current data, then restarts the database on the recovered copy. Undo it by restoring the *before restore* backup. The history then starts again from that point.
+- **Disk:** Skiff keeps a daily snapshot and every change in between, so a database that writes a lot uses a lot more disk. If the server runs low, Skiff stops keeping history and deletes it rather than fill the disk, and alerts you. Daily backups keep running, and it starts again when there's room.
+
+With an offsite bucket, the history and snapshots are copied there too, usually within a minute or two of the write. Without one, they stay on the same server as your database, so they won't help if you lose it. Add a bucket to protect against that. If you then lose the server, the database comes back with everything that reached the bucket, usually losing only the last minute or two of writes. Returning to an earlier time isn't offered on the new server, because its history starts again from there. Turning recovery off removes its history from the bucket too, and deleting a database leaves it there.
+
+<Callout>
+
+The database has to be running to return it to a time. Snapshots and history aren't encrypted. Previews and adopted databases without a named volume don't support it. Turning it on recreates an adopted database's container, so published ports and extra mounts you set up yourself don't carry over.
+
+</Callout>
+
+## Add an offsite bucket
+
+<Steps>
+<Step>
+### Create a private bucket
+
+Any S3-compatible storage works. Keep it private, because database and volume backups are stored there unencrypted.
+</Step>
+<Step>
+### Add it in Settings
+
+Enter the endpoint, bucket and keys in the offsite section. New backups are copied there, and the bucket keeps up to 30 per database or volume.
+</Step>
+</Steps>
+
+## Restoring
+
+A restore returns the database or volume to exactly what's in the backup. Anything created after it is removed, including new tables and files. Before every restore, Skiff backs up the current data, so you can undo it. That backup is listed as *before restore*. If it can't be taken, the restore doesn't run.
+
+- **Postgres** restores in one transaction, so a failure changes nothing. Other connections are closed first, so your apps will reconnect.
+- **MySQL and MongoDB** can't do this in one step, so a failure partway can leave them incomplete. If that happens, restore the *before restore* backup.
+- **Redis** stops briefly. The file is checked first, so a damaged backup causes no downtime.
+- **Volumes** unpack while your app keeps running, and it restarts for a moment when the files are swapped. If the swap fails, the original files go back. If the backup is no longer on your server, Skiff fetches it from your bucket.
+
+After moving to a new server, managed databases come back on their own, from their offsite history if they have one and otherwise from their newest offsite backup. Volumes don't: redeploy the app, then restore the volume from its backups.
+
+Deleting a database or volume also deletes its backups from your server. Copies in your bucket stay, so without a bucket a delete is final.
+
+## What's encrypted
+
+These are encrypted in Skiff's database with a key derived from your recovery key:
+
+- Environment variables, including shared and preview ones
+- Database passwords, and bucket and offsite keys
+- Registry passwords
+- Alert URLs, and log drain URLs and headers
+- Two-factor secrets
+
+Login sessions and invite links are stored as hashes, so they can't be read back. Passwords and API tokens are hashed too.
+
+### What this protects against
+
+It protects a copy of the database file on its own, such as one left in a stray backup or on an old disk. It doesn't protect against someone with root on your server, or anyone who copies all of `~/.skiff`, because the key is kept there too. Your apps also receive their secrets as ordinary environment variables while they run.
+
+These aren't encrypted: database and volume backups, the GitHub and email settings files in `~/.skiff`, and any data your apps store themselves.
+
+## Save your recovery key
+
+Find it in the dashboard under **Server**, in the control-plane backup section, and keep it somewhere off the server, such as a password manager.
+
+<Callout>
+
+Without this key, stored secrets can't be recovered. If `recovery.key` goes missing or doesn't match, the panel refuses to start rather than create a new one. Put the original file back to fix it.
+
+</Callout>
+
+## Downgrading
+
+Older versions can't read encrypted secrets, so going back to a version before v0.6.0 will break them. When the upgrade converts your secrets, Skiff first writes a sealed copy of the old database to `~/.skiff/pre-encryption-*.skiffbackup` and keeps it for 14 days. `skiff server restore` can read it.

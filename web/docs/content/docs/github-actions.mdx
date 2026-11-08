@@ -1,0 +1,110 @@
+---
+title: GitHub Actions
+description: "Deploy from a workflow once your tests pass, or give each pull request its own environment to test against. The step waits for the deploy, and fails if the deploy fails."
+---
+
+## Set it up
+
+<Steps>
+<Step>
+### Create an API token
+
+In the dashboard, open **Settings → Integrations** and create one. It can reach everything in that team.
+</Step>
+<Step>
+### Add two repository secrets
+
+In GitHub, add `SKIFF_SERVER` with your dashboard address and `SKIFF_TOKEN` with the token.
+</Step>
+<Step>
+### Turn off automatic deploys
+
+So a push doesn't deploy before your tests finish, turn off automatic deploys in the project's settings.
+</Step>
+</Steps>
+
+## Deploy after your tests pass
+
+```yaml title=".github/workflows/deploy.yml"
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm test
+      - uses: nuelScript/skiff@v0
+        with:
+          server: ${{ secrets.SKIFF_SERVER }}
+          token: ${{ secrets.SKIFF_TOKEN }}
+          app: shop-api
+```
+
+<Callout>
+
+Skiff deploys the newest commit on the project's branch. If someone pushes while your tests run, that newer commit is what goes out, and the step adds a notice saying so.
+
+</Callout>
+
+## Deploy a prebuilt image
+
+For a project that [runs a prebuilt image](/images), pass the tag you just pushed:
+
+```yaml title="step"
+- uses: nuelScript/skiff@v0
+  with:
+    server: ${{ secrets.SKIFF_SERVER }}
+    token: ${{ secrets.SKIFF_TOKEN }}
+    app: shop-api
+    image: ghcr.io/you/shop-api:${{ github.sha }}
+```
+
+## Test each pull request in a preview
+
+Create a preview of the branch, run your tests against its address, then remove it. Each preview gets empty copies of its project's volumes and uses the project's environment variables, so [give previews their own database](/previews) to keep tests away from production.
+
+```yaml title=".github/workflows/preview.yml"
+on: pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: preview
+        uses: nuelScript/skiff@v0
+        with:
+          server: ${{ secrets.SKIFF_SERVER }}
+          token: ${{ secrets.SKIFF_TOKEN }}
+          app: shop-api
+          command: preview
+      - run: npm run test:e2e
+        env:
+          BASE_URL: ${{ steps.preview.outputs.url }}
+      - uses: nuelScript/skiff@v0
+        if: always()
+        with:
+          server: ${{ secrets.SKIFF_SERVER }}
+          token: ${{ secrets.SKIFF_TOKEN }}
+          app: shop-api
+          command: remove-preview
+```
+
+## Inputs
+
+- `server`, `token` and `app` are required.
+- `command` is `deploy` (the default), `preview` or `remove-preview`.
+- `image` is a new image for a project that runs one.
+- `branch` is the preview's branch. It defaults to the branch the workflow runs on.
+- `timeout` is how many seconds to wait. The default is 900.
+
+## Outputs
+
+- `url` is the app's public address.
+- `app` is the name of what deployed, which for a preview is its own name.
+- `commit` and `deploy-id` identify the deploy.
+
+Your server has to be reachable from GitHub's runners. Anything else can use the [API](/api) directly.

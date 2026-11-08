@@ -1,0 +1,51 @@
+---
+title: Debugging
+description: "Where to look when something is wrong: a deploy that failed, an app misbehaving, or data you need to check."
+---
+
+## A deploy failed
+
+Open the deploy in **Deployments** and read its log. If the new version never became healthy, your old version keeps serving, and the log ends with the reason and the last 30 lines your app printed. Skiff removes the failed container, so this log is the record of what happened.
+
+- **The app kept exiting:** the output above it usually says why, such as a missing variable or a database it couldn't reach.
+- **It kept running but never answered:** check that it listens on `0.0.0.0` and on the port in your settings, not `127.0.0.1`.
+
+<Callout>
+
+Deploy logs can include whatever your app printed, and the [GitHub Action](/github-actions) repeats a failed deploy's log in your pipeline. On a public repository, anyone can read that, so don't print secrets at startup.
+
+</Callout>
+
+## Read logs
+
+Choose **Logs** on a project. Live output comes from every copy of the app and its workers, with each line labelled when there's more than one. History keeps the last 7 days, and you can search it or show only errors. Each deploy also has a Logs link for the 30 minutes after it went out.
+
+From your terminal, after `skiff login`:
+
+```sh title="shell"
+skiff logs shop-api          # the last 100 lines
+skiff logs shop-api -f       # keep streaming
+skiff logs shop-api -n 500   # more history
+```
+
+## Open a shell
+
+**Console** on a project opens a shell inside the running app. Workers have their own console button under **Jobs & workers**. If your app has several copies, you get the first one. Images without a shell, such as distroless ones, can't open a console.
+
+Changes you make there are lost on the next deploy. Every team member can open a console, and each one is recorded under **Activity**.
+
+## Reach a database
+
+**Shell** on a database opens `psql`, `redis-cli` or your engine's own client, already signed in, with nothing exposed to the internet. This is also recorded under Activity.
+
+To use a desktop client or a local script, sign in with `skiff login` and open a private tunnel. The database stays closed to the internet, and traffic travels over your dashboard's HTTPS address.
+
+```sh title="shell"
+skiff db ls                   # your team's databases
+skiff db connect orders       # prints an address on 127.0.0.1, press Ctrl-C to close
+skiff db connect orders -p 15432   # choose the local port
+```
+
+Only a token from `skiff login` can open a tunnel, so tokens you create for CI can't. Activity records each one, and revoking the token closes its tunnels within a minute. When the dashboard itself restarts, open connections drop and your client reconnects through the same tunnel.
+
+If something outside your machine has to connect, turn on **Public access** and copy the public address. Your database then accepts connections from the whole internet, protected by its password, so turn it off when you finish. Turning it on or off restarts the database briefly.

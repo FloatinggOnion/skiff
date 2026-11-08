@@ -1,0 +1,126 @@
+---
+title: skiff.toml reference
+description: Every setting an app deployed with skiff deploy can have.
+---
+
+`skiff deploy` reads `skiff.toml` from the folder you run it in. Only `name` is required.
+
+```toml title="skiff.toml"
+name = "shop-api"
+replicas = 2
+
+[server]
+host = "root@203.0.113.10"
+
+[build]
+port = 3000
+
+[deploy]
+release = "npm run migrate"
+health_path = "/healthz"
+
+[resources]
+memory = "512m"
+cpu = "0.5"
+
+[env]
+LOG_LEVEL = "info"
+
+[secrets]
+STRIPE_KEY = "sk_live_..."
+
+[[volumes]]
+name = "uploads"
+path = "/app/uploads"
+
+[[workers]]
+name = "queue"
+command = "node queue.js"
+replicas = 2
+
+[[jobs]]
+name = "report"
+schedule = "0 3 * * *"
+command = "node report.js"
+```
+
+## Top level
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `name` | required | The app's name, and its address: `<name>.<your domain>`. |
+| `replicas` | `1` | How many copies of the app run. Each must pass its health check before the old version stops. |
+
+## [server]
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `host` | none | The server to deploy to over SSH, like `root@203.0.113.10`. Leave `[server]` out to deploy to Docker on this machine. |
+
+## [build]
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `dockerfile` | `Dockerfile` | The Dockerfile to build from. |
+| `port` | `8080` | The port the app listens on. With `image` set and no `port`, the port the image exposes is used. |
+| `image` | none | A prebuilt image to deploy instead of building, like `ghcr.io/you/api:1.4`. See [Prebuilt images](/images). |
+| `base`, `install`, `build`, `start`, `static` | none | Build steps for an app with no Dockerfile. Setting `start` or `static` skips detection and builds from these instead. |
+
+## [deploy]
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `release` | none | A command run once before the new version goes live, such as migrations. If it fails, the deploy stops and the old version keeps serving. |
+| `health_path` | none | A path that must answer 2xx or 3xx before the new version takes traffic, like `/healthz`. Without it, any reply at `/` counts. |
+| `health_timeout` | `30` | Seconds the new version has to become healthy, from 5 to 600. |
+| `health_mode` | HTTP | `tcp` accepts any open port, for services that don't speak HTTP. `none` skips the check, for a service with no port. |
+| `drain_timeout` | `300` | Seconds the replaced version may keep finishing open requests, up to 3600. `0` stops it straight away. |
+| `network` | `skiff` | The Docker network the app joins to reach databases by name. |
+| `aliases` | none | Extra names other services on the network can reach the app by. |
+| `command` | the image's | A list that replaces the image's default command, like `["node", "server.js"]`. |
+
+## [resources]
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `memory` | 75% of the server | Memory each replica may use, like `512m` or `2g`, at least `16m`. |
+| `cpu` | no limit | CPU cores each replica may use, like `0.5` or `2`. |
+
+Workers and the release command run with the same limits as the app.
+
+## [env] and [secrets]
+
+`[env]` sets environment variables at build time and when the app runs. `[secrets]` sets them only when the app runs, so they never end up in the image. A `.env` file beside `skiff.toml` is read too, and `[env]` wins where both set a variable.
+
+If you're signed in with `skiff login`, variables set in the dashboard are added wherever `skiff.toml` doesn't set them.
+
+## [[volumes]]
+
+Directories that keep their files across deploys, up to 5 per app. See [Persistent volumes](/volumes).
+
+| Key | What it does |
+| --- | --- |
+| `name` | 1 to 32 lowercase letters, digits or dashes. |
+| `path` | Where it's mounted, an absolute path like `/data`. |
+
+## [[workers]]
+
+Long-running processes from the app's build, such as a queue consumer. Each deploy restarts them on the new version.
+
+| Key | What it does |
+| --- | --- |
+| `name` | 1 to 32 lowercase letters, digits or dashes. |
+| `command` | What it runs, through `sh -c`. |
+| `replicas` | How many copies run, from 1 to 10. The default is 1. |
+
+## [[jobs]]
+
+Commands from the app's build that run on a schedule. The dashboard runs them, so they need Skiff's dashboard on the server.
+
+| Key | What it does |
+| --- | --- |
+| `name` | 1 to 32 lowercase letters, digits or dashes. |
+| `schedule` | Cron syntax in the server's time zone, like `0 3 * * *` for 3am every day. |
+| `command` | What it runs, through `sh -c`. |
+
+For an app deployed this way, `skiff.toml` decides its workers and jobs, so the dashboard and the API can't change them. Running a job now still works.

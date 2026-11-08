@@ -1,0 +1,67 @@
+---
+title: Preview environments
+description: "Every branch can get its own copy of a project at its own URL, with its own certificate, so you can click through a change before it reaches production."
+---
+
+## Turn them on
+
+<Steps>
+<Step>
+### Connect GitHub
+
+Install the Skiff GitHub App from **Settings → Integrations** and give it the repositories you deploy from.
+</Step>
+<Step>
+### Enable previews on the project
+
+In the project's **Settings**, switch on **Preview deployments**.
+</Step>
+<Step>
+### Push a branch
+
+A push to any branch other than the production one builds a preview at `<project>-<branch>.<your domain>`. Later pushes to that branch redeploy it.
+</Step>
+</Steps>
+
+You can also create one by hand from the project's **Deployments** tab for any branch.
+
+## On your pull requests
+
+- **A comment with the link.** Skiff posts the preview URL on the branch's pull request, whether the pull request is opened before or after the preview is built, and keeps that one comment up to date on every push.
+- **A status next to your checks.** Every deploy reports on its commit as `Skiff / <project>` (or `… preview`): building, then live with a link to the app, or failed with a link to the build log. It works for production deploys too.
+
+<Callout>
+
+Both need the GitHub App to have **Pull requests** and **Commit statuses** set to read and write. New installs ask for them; an older install shows a link under **Settings → Integrations** to grant them.
+
+</Callout>
+
+Closing or merging a pull request removes its branch's previews, as does deleting the branch. A push to the branch brings a project's automatic preview back. For previews of a whole stack, see [Docker Compose](/compose).
+
+## Only what the branch changed
+
+If a repository holds several projects, each in its own root directory, a branch only gets previews for the projects whose directory it touched. A branch that only changes the API doesn't build a preview of the website.
+
+## Keep previews away from production data
+
+Previews use the project's environment variables, read fresh on every deploy. Anything under **Environment → Preview overrides** replaces a variable of the same name for previews only. Point `DATABASE_URL` at a staging database there, or switch an API key to test mode, and a preview never touches what production uses.
+
+### Give each preview its own database
+
+Skiff can do this for you. On the project's **Deployments** tab, choose what a preview gets for each database attached to the project:
+
+- **Share the project's settings** is the default. A preview connects to whatever its environment variables say, so set a preview override if that's production.
+- **An empty database** starts each preview with a new, empty one.
+- **A copy of the latest backup** starts each preview with real data, up to a day old. Anyone who can open the preview can reach what its app shows, so set a preview password below and don't use this for data your previews shouldn't show.
+
+The preview's connection variable, like `DATABASE_URL`, is set for you. Its database keeps its data across pushes to the branch, isn't backed up, and is deleted with the preview. If it can't be set up, the deploy fails rather than connecting to the project's database. Only databases attached in Skiff are covered, not addresses you typed in yourself.
+
+If the project has [volumes](/volumes), a preview mounts them at the same paths, on empty volumes of its own.
+
+## Password protection
+
+On the project's **Deployments** tab, set a password and every preview of the project asks for it before showing anything. Your production URL stays public. A visitor stays signed in to a preview for a week; changing the password signs everyone out. Repeated wrong guesses from one address are blocked for a few minutes.
+
+## Cleaning up
+
+Deleting a branch removes its previews: containers, images and routes. If your repository deletes branches when a pull request merges, previews take care of themselves. You can also remove one from the **Deployments** tab at any time.

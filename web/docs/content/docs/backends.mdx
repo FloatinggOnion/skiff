@@ -1,0 +1,72 @@
+---
+title: APIs and backends
+description: "A backend usually needs more than one public URL: internal services, a database, background work, and protection from too much traffic. Here's how those fit together on Skiff."
+---
+
+## Private services
+
+Turn on **Private service** under a project's **Settings → Access** and it stops being reachable from the internet within seconds. The router answers as if it doesn't exist, no certificate is issued for it, and its previews are private too.
+
+## Calling one service from another
+
+Every project has a stable internal address, shown on its overview. It works from your team's other projects, workers and jobs, stays the same across deploys, and spreads calls across replicas:
+
+```sh title="from another project"
+curl http://billing-api:8080/invoices
+```
+
+Traffic stays on your team's private network, and other teams on the server can't reach it. A project needs one deploy after upgrading Skiff for its internal address to work. Apps deployed with `skiff deploy` also need an up-to-date CLI, and their network comes from `[deploy]` in `skiff.toml`.
+
+<Callout>
+
+An internal address has no authentication of its own. Anything on your team's network can call it, so keep checking credentials in the service if that matters.
+
+</Callout>
+
+## Rate limits
+
+Set a limit under **Settings → Access**, in requests a minute per visitor. A visitor can use a minute's allowance in one burst, and it refills steadily. Past that they get a `429` with a `Retry-After` header, before the request reaches your app. Calls over internal addresses aren't counted.
+
+A visitor is an IP address, or an IPv6 /64. If you put a CDN like Cloudflare in front of Skiff, all its traffic comes from a few addresses and would share one allowance, so set limits at the CDN instead.
+
+## gRPC
+
+gRPC services work with no setting to change, including streaming. Clients connect over HTTPS as usual, and Skiff speaks plain-text HTTP/2 to your app, so have the server listen without TLS on its port. A service with no web page passes its deploy check by answering over HTTP/2. Set the project's port yourself if the image exposes more than one. gRPC calls count toward a rate limit like any other request, and over an internal address they go directly to the service.
+
+## Services that don't speak HTTP
+
+For a game server, message broker or anything else over raw TCP, open a **Public TCP port** in the project's Settings, then redeploy. Skiff holds that port and forwards it to your app, so the address stays the same across deploys, and it counts your app as ready once its port opens. A deploy doesn't move open connections: they end when the old version retires, and clients reconnect to the new one.
+
+- Your app sees connections coming from Skiff, not the client's address.
+- A connection that sends nothing in either direction for an hour is closed, so keep long-lived clients alive with pings.
+- You may also need to allow the port in your provider's firewall.
+- Connections aren't encrypted by Skiff, so use your service's own TLS and passwords.
+- UDP isn't supported yet.
+
+## The rest of a backend
+
+- **Databases:** managed Postgres, MySQL, MongoDB and Redis, with the connection URL added for you, all with [daily backups](/backups).
+- **Migrations:** a release command runs before each new version goes live, and a failure stops the deploy.
+- **Background work:** workers and scheduled jobs run from your app's image.
+- **Real-time:** WebSockets and server-sent events work. When a new version goes live, new requests go to it, and the old version keeps running until its open requests finish, for up to 5 minutes. Set `drain_timeout` under `[deploy]` in `skiff.toml` to change that (in seconds, up to 3600, or 0 to stop it straight away). After that, the app gets a stop signal and 30 seconds to exit, so clients holding a connection open longer still need to reconnect.
+
+## From the terminal
+
+After `skiff login`, the CLI manages the same things as the dashboard. Attached databases and buckets reach an app on its next deploy.
+
+```sh title="shell"
+skiff db create orders --engine postgres
+skiff db attach orders shop-api      # adds DATABASE_URL to shop-api
+skiff bucket create media
+skiff bucket attach media shop-api   # adds S3_ENDPOINT, S3_BUCKET and its keys
+skiff worker set shop-api queue --command "node queue.js" --replicas 2
+skiff job add shop-api report --schedule "0 3 * * *" --command "node report.js"
+skiff job run shop-api report        # runs it now and prints its output
+```
+
+Commands that delete data, like `skiff db rm` and `skiff bucket rm`, need `--yes`. The same actions are in the [API](/api).
+
+## What Skiff doesn't do yet
+
+- **Raw TCP or UDP from outside.** The router speaks HTTP and gRPC, and a deploy needs an answer in one of them to pass its health check.
+- **More than one server.** Replicas and autoscaling work within your server. There's no failover if it goes down, and no database replicas.

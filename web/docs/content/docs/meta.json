@@ -1,0 +1,30 @@
+{
+  "title": "Skiff",
+  "pages": [
+    "---Getting started---",
+    "[Overview](/)",
+    "self-hosting",
+    "---Deploy---",
+    "images",
+    "compose",
+    "previews",
+    "github-actions",
+    "one-click-apps",
+    "---Run---",
+    "backends",
+    "volumes",
+    "debugging",
+    "---Data---",
+    "backups",
+    "---Watch---",
+    "log-drains",
+    "status-pages",
+    "---More---",
+    "email-forwarding",
+    "agents",
+    "---Reference---",
+    "skiff-toml",
+    "cli",
+    "api"
+  ]
+}

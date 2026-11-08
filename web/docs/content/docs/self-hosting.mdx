@@ -1,0 +1,92 @@
+---
+title: Self-hosting
+description: "One command turns a fresh Linux server into your own deploy platform — the web dashboard, an edge router with automatic HTTPS, and everything needed to push apps to it."
+---
+
+## What you'll need
+
+- A fresh **Ubuntu or Debian** server with a public IP and root SSH access (a $5/mo VPS is plenty to start).
+- A **domain** you can add DNS records to. Apps are served at `<app>.yourdomain.com` and the dashboard at `dash.yourdomain.com`.
+
+## Install
+
+SSH into your server and run this as root — replace `example.com` with your domain:
+
+```sh title="on your server"
+curl -fsSL https://useskiff.xyz/install | sh -s -- --domain example.com
+```
+
+The installer:
+
+- installs Docker (if it isn't already),
+- downloads the latest `skiff` binary,
+- sets up systemd services for the **edge router** (binds :80 / :443 with Let's Encrypt) and the **control panel** (zero-downtime, blue-green),
+- generates a one-time setup key and prints your dashboard URL.
+
+<Callout>
+
+It finishes by printing your DNS records, dashboard URL, and setup key. Keep that key — you need it for the first login.
+
+</Callout>
+
+## Point your DNS
+
+Add these records at your DNS provider, pointing at your server's IP (the installer prints it). The wildcard covers every app and the dashboard in one record:
+
+```text title="dns"
+A    *.example.com    <your-server-ip>
+A    example.com      <your-server-ip>    (optional — apex / marketing site)
+```
+
+Certificates are issued automatically on the first HTTPS request, so there's nothing to configure — just wait for DNS to propagate (usually a few minutes).
+
+## First login
+
+<Steps>
+<Step>
+### Open your dashboard
+
+Visit `https://dash.example.com` once DNS resolves. The first visit asks you to create the owner account.
+</Step>
+<Step>
+### Enter the setup key
+
+Paste the setup key the installer printed, then set your email and password. That's the owner account — teammates join later by invite.
+</Step>
+<Step>
+### Deploy your first app
+
+Click **Deploy**, paste a Git repository URL (or connect GitHub), pick a name and port, and Skiff builds and runs it at `<name>.example.com` with its own certificate.
+</Step>
+</Steps>
+
+## Connect GitHub (optional)
+
+For push-to-deploy — a `git push` rebuilds and ships automatically, and branches can spin up preview environments — install the Skiff GitHub App from **Settings → Integrations** in the dashboard and pick which repos it can access. Without it, you can still deploy any public repo (or a private one with a token) by pasting its URL.
+
+## Updating
+
+Re-run the installer any time to update to the latest release. Your data, apps, and setup key are preserved — it swaps the binary and restarts the services:
+
+```sh title="on your server"
+curl -fsSL https://useskiff.xyz/install | sh -s -- --domain example.com
+```
+
+## Troubleshooting
+
+Check the services and their logs over SSH:
+
+```sh title="on your server"
+systemctl status skiff-router skiff-panel@7070
+journalctl -u skiff-router -n 50 --no-pager
+journalctl -u skiff-panel@7070 -n 50 --no-pager
+```
+
+- **Dashboard won't load / no certificate:** confirm `dash.example.com` resolves to your server's IP. Certs issue on the first request once DNS is correct.
+- **An app 404s:** check it's running under **Server** in the dashboard, and that `<app>.example.com` is covered by your wildcard record.
+- **Ports 80/443 in use:** make sure nothing else (nginx, Apache, Caddy) is bound to them — the Skiff router needs both.
+- **Locked out by two-factor:** if you've lost both your authenticator and your recovery codes, turn two-factor off for your account from the server, then sign in with your password and set it up again:
+
+  ```sh title="on your server"
+  skiff server reset-2fa you@example.com
+  ```

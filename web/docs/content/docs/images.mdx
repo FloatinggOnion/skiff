@@ -1,0 +1,69 @@
+---
+title: Prebuilt images
+description: "Skiff can run an image that's already built instead of building from source: one your CI pushes to a registry, or an off-the-shelf app like Uptime Kuma or n8n. Health checks, volumes, replicas, domains and rollback work the same as for an app Skiff builds."
+---
+
+## From the dashboard
+
+<Steps>
+<Step>
+### Choose New project → Deploy a Docker image
+
+Enter the image, like `louislam/uptime-kuma:1` or `ghcr.io/you/api:latest`, and a name for the app.
+</Step>
+<Step>
+### Leave the port empty, or set it
+
+With no port, Skiff uses the one the image exposes, and falls back to 8080 if it doesn't expose any. Set it if your app listens somewhere else.
+</Step>
+<Step>
+### Add credentials if the image is private
+
+A username and a password or access token for the registry. For GitHub Container Registry, that's your GitHub username and a token with `read:packages`. You can change them later under the project's **Settings**.
+</Step>
+</Steps>
+
+**Redeploy** pulls the image again, so a tag that moves, like `latest`, picks up its new version. To switch to another tag, change the image in **Settings** and redeploy.
+
+## Or in skiff.toml
+
+Set `image` under `[build]` and `skiff deploy` pulls it instead of building:
+
+```toml title="skiff.toml"
+name = "kuma"
+
+[build]
+image = "louislam/uptime-kuma:1"
+# port = 3001   # optional: defaults to the port the image exposes
+
+[[volumes]]
+name = "data"
+path = "/app/data"
+```
+
+For a private image, sign in with `docker login` on the machine that deploys, or set `SKIFF_REGISTRY_USER` and `SKIFF_REGISTRY_PASSWORD`, which are used for that one pull and never saved.
+
+## Deploy a new tag from CI
+
+After your pipeline pushes an image, point the project at it and deploy in one call. Create a token under **Settings → Integrations**, then:
+
+```sh title="shell"
+curl -X POST https://dash.example.com/api/v1/apps/api/deploy \
+  -H "Authorization: Bearer $SKIFF_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"image": "ghcr.io/you/api:'"$GITHUB_SHA"'"}'
+```
+
+The response has the deploy's `id`; poll `/api/v1/deploys/<id>` for its status. Leave out the body to redeploy the image the project already runs.
+
+## What's different
+
+- **No previews.** Previews deploy a branch of a repository, so an image project doesn't have them. The [preview environments](/previews) guide covers projects that build from Git.
+- **Environment variables** are all set when the container starts. There's no build step to pass them to.
+- **Rollback** keeps the last five images you deployed, so it works even after a tag has moved on in the registry.
+
+<Callout>
+
+The release command, jobs and workers run with `sh -c` inside the image. Images without a shell, such as distroless ones, can serve traffic but can't run those.
+
+</Callout>

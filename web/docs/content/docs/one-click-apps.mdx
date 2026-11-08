@@ -1,0 +1,49 @@
+---
+title: One-click apps
+description: "Install a ready-made app on your server. Skiff picks a tested version and sets up its storage, its secrets and any database it needs."
+---
+
+## Install one
+
+<Steps>
+<Step>
+### Choose New project → One-click apps
+
+Pick an app and give it a name. The name becomes its address, like `blog.yourdomain.com`.
+</Step>
+<Step>
+### Install, and wait for its first start
+
+The first install downloads the image, so it can take a few minutes. The log shows how far along it is.
+</Step>
+<Step>
+### Do its first-run step straight away
+
+The project page shows what to do until you mark it done.
+</Step>
+</Steps>
+
+<Callout>
+
+Don't skip the first-run step. These apps are on the public internet from the moment they start, and on most of them the first visitor becomes the admin. Umami starts with a well-known password, and Vaultwarden lets anyone sign up until you turn that off.
+
+</Callout>
+
+## What's available
+
+| App | What it is | Needs about | First-run step |
+| --- | --- | --- | --- |
+| Uptime Kuma | Status pages and uptime monitoring | 256 MB | Create the admin account |
+| n8n | Workflow automation | 512 MB | Create the owner account |
+| Ghost | Blog and newsletters, with MySQL | 1 GB | Open /ghost and create the owner account |
+| Umami | Website analytics, with Postgres | 512 MB | Sign in as admin / umami and change the password |
+| Vaultwarden | Password manager for the Bitwarden apps | 128 MB | Create your account, then turn off sign-ups |
+| Gitea | Git hosting with issues and pull requests | 256 MB | Finish the install screen and create the admin |
+
+## After installing
+
+- **It's a normal project.** Logs, metrics, domains, limits and rollback all work, and its settings are yours to change.
+- **Files and databases stay across deploys.** App data sits on a [persistent volume](/volumes) or in a managed database. Back up anything you can't lose: managed databases get daily backups, and volumes don't.
+- **Upgrades are up to you.** The version is pinned, so an app only changes when you change its image under **Settings** and redeploy. Check the app's release notes first.
+- **Adding a custom domain?** Ghost, n8n, Vaultwarden and Gitea store their address in an environment variable, such as `url`, `WEBHOOK_URL`, `DOMAIN` or `GITEA__server__ROOT_URL`. Update it under **Environment** and redeploy.
+- **Deleting the project keeps its database.** Delete that separately under **Databases** when you're sure you don't need the data.

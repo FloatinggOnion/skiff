@@ -1,0 +1,44 @@
+---
+title: Status pages
+description: "Give the people who use your apps one place to check whether they're up. Skiff already checks each project every minute, so a status page only needs turning on."
+---
+
+## Publish one
+
+<Steps>
+<Step>
+### Open Settings → Team → Public status page
+
+Only team owners can change it.
+</Step>
+<Step>
+### Choose what to show
+
+Give it a title, tick the projects to list and turn on **Publish the status page**.
+</Step>
+<Step>
+### Share the link
+
+It's at `status.yourdomain.com/your-team`. If only one team on the server has a page, `status.yourdomain.com` shows it too. The link stays the same if you rename the team.
+</Step>
+</Steps>
+
+## On your own domain
+
+Enter a domain like `status.example.com` and point its DNS at your server. The certificate is issued automatically. That domain serves only the status page.
+
+## What it shows
+
+- **Current state** of each project you chose. An app that's asleep counts as operational, since the next visit wakes it.
+- **30 days of uptime**, day by day, and the overall percentage.
+- **Recent incidents**, with when they started and how long they lasted.
+
+<Callout>
+
+Nothing is public until you publish, and only the projects you choose appear. Previews, other teams' projects and the error behind an incident are never shown, because those can name internal hosts. Project names are shown as they are, so rename anything you wouldn't want public before listing it.
+
+</Callout>
+
+## How current it is
+
+Projects are checked every minute, the page is refreshed at most every 30 seconds and it reloads itself every minute. If there are no checks for ten minutes, a project shows **No recent data** rather than claiming it's up.

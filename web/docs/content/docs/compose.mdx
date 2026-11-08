@@ -1,0 +1,94 @@
+---
+title: Docker Compose
+description: "Bring an API, a worker, a database and Redis onto Skiff from the Compose file you already have. Skiff turns each service into a project, worker or managed database, so your stack gets backups, rollbacks and the dashboard. Services keep finding each other by the same names, so db:5432 in your config keeps working."
+---
+
+## Check a file first
+
+This shows what your file would become, and changes nothing:
+
+```sh title="terminal"
+skiff compose plan
+skiff compose plan -f deploy/compose.yml --name shop
+```
+
+## Create a stack
+
+<Steps>
+<Step>
+### Open Stacks in the dashboard
+
+Choose **New stack**, then give a repository or paste your file. Services that build from source need a repository.
+</Step>
+<Step>
+### Check the file
+
+Skiff lists what it will create, what will work differently and anything to fix first.
+</Step>
+<Step>
+### Fill in missing values
+
+Values like `${DB_PASSWORD}` come from what you enter here, then from a `.env` file beside the Compose file. Check again after filling them in.
+</Step>
+<Step>
+### Create it
+
+Databases start first, then apps deploy in `depends_on` order.
+</Step>
+</Steps>
+
+## Change a stack
+
+For a stack from a GitHub repository, push your Compose file. Safe changes apply on their own, and only the services that changed are redeployed. A push that would delete data, or that has a problem, waits for you: the stack shows why, you get an alert, and new code still deploys with the current settings. Review those with **Update**. For a pasted file, or another Git host, use **Update** for every change. Values you entered earlier are remembered, encrypted, so it only asks for new ones.
+
+- **Deleting data needs your OK.** Removing a database, a volume or an app with a volume is only applied once you confirm it.
+- **Database images and credentials can't be changed this way.** A new password or major version doesn't apply to existing data, so Skiff refuses the update and explains why. To change one, back up and restore into a new database service.
+- **Your file wins.** Settings or environment variables you changed in the dashboard are replaced if they differ from the file, and the update lists them first.
+
+## What each service becomes
+
+- **Stock Postgres, MySQL, MongoDB and Redis images** become managed databases with daily backups, using your file's image, username, password and database name. They stay private. Other images, like `pgvector/pgvector`, run as ordinary private apps, and their data is covered by volume backups. So does a stock image that mounts its own setup scripts into `/docker-entrypoint-initdb.d`, so the scripts still run, and one your file leaves without a password, like MongoDB with no root user, so apps that connect without one still can.
+- **Services that publish a port** become public apps with HTTPS. Skiff serves one port per app, so only the first web port is used. Ports that browsers can't open, such as 5432 for Postgres or 6379 for Redis, stay inside the stack. To reach one from outside, open a public TCP port in the project's settings.
+- **Services with no published port** stay private, and only the stack can reach them.
+- **A service with the same build, environment and volumes as an app**, but its own command and no port, becomes that app's worker.
+
+## What's different from Compose
+
+- **Files and folders from your repository**, like `./nginx.conf:/etc/nginx.conf`, are built into the service's image, so changes reach it on the next deploy. A writable folder also becomes a volume that starts with the repository's copy and keeps its own changes. Pasted Compose files have no repository, so they can't mount files.
+- **Paths the repository doesn't have**, like `./data` or `/opt/data`, become volumes that start empty.
+- **The server's own files** aren't shared with apps. System folders like `/etc` and the Docker socket are refused.
+- **Shared volumes** are held by the first service that uses them, which also keeps their backups. That service has to keep mounting a volume while others use it. Managed databases keep their data to themselves, so they can't share one.
+- **Health checks** are used when they make an HTTP request. Otherwise a private service counts as ready once its port opens.
+- **Secrets and configs** are built into the service's image as read-only files: secrets at `/run/secrets/<name>`, configs at `/<name>`, or wherever `target` says. Secrets come from a `file` in the repository. Configs can also be written with `content` or taken from a variable with `environment`. A managed database reads its password from a secret through variables like `POSTGRES_PASSWORD_FILE`.
+- **extends** works for a service in the same file.
+- **Not supported:** `privileged`, `network_mode`, `devices`, `extends` from another file, secrets taken from an environment variable, and external secrets and configs. Keys like `restart` and `networks` are ignored, and so are permission settings like `cap_add` and `sysctls`.
+- **Services behind a profile** are left out, as they are in a plain `docker compose up`.
+- **Managed databases** ignore settings like `user` and `entrypoint`, because Skiff chooses how they start.
+
+## Use your team's databases and buckets
+
+A stack is on its own private network, so it can't see the rest of your team. To share a database or bucket with a service, open it in the dashboard and attach it to that service, then redeploy the service to pick up the connection variables.
+
+The database or bucket then joins the stack's network, so every service in the stack can reach its address, though they still need its password or keys. It leaves again when you detach the last service using it. Other private services on your team stay out of reach.
+
+## Previews for pull requests
+
+A stack from a GitHub repository can give each pull request its own copy of every service, with its own private network and databases. Choose what it starts with on the stack's card under **Stacks**:
+
+- **Off**, the default: pull requests start nothing.
+- **Empty databases:** new databases with no data.
+- **A copy of the latest backups:** each database starts with its own copy, matched by service name. If a copy can't be made, the preview is removed and the stack's card says why, so it never starts with the wrong data.
+
+Pushing to the branch updates its preview, and closing or merging the pull request removes it, along with its data. A preview's data isn't backed up. Up to 3 can run at once per stack, because each one runs every service on your server. To preview a branch with no pull request, enter it on the same card, then delete that preview yourself if it has no pull request to close.
+
+<Callout>
+
+Previews use the values you entered for the stack, so a real API key is a real API key there too. If you copy data, set a preview password, because anyone who can open a preview can reach what its apps show. Pull requests from forks don't get previews.
+
+</Callout>
+
+<Callout>
+
+Pushes only reach Skiff with GitHub connected, and an access token is only used when you create or update the stack, so connect GitHub for private repositories.
+
+</Callout>
