@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nuelScript/skiff/internal/config"
@@ -81,7 +82,13 @@ func toWorker(w workerRow, containers []string) Worker {
 	}
 }
 
+var workerLocks sync.Map // app → *sync.Mutex
+
+// reconcileWorkers replaces the app's worker containers with what its rows ask for. A deploy and a change to a worker can both ask at once, and each removes every worker before starting its own, so one runs at a time per app.
 func (p *Panel) reconcileWorkers(app string) {
+	mu, _ := workerLocks.LoadOrStore(app, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
 	src, ok := getSource(app)
 	if !ok {
 		return
