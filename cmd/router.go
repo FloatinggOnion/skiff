@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/nuelScript/skiff/internal/docker"
@@ -16,7 +17,7 @@ import (
 )
 
 func newRouterCmd() *cobra.Command {
-	var domain, httpAddr, panel, panelPointer, siteApp, domainsFile, metricsFile, requestsDir, mailFile, smtpAddr string
+	var domain, httpAddr, panel, panelPointer, siteApp, domainsFile, metricsFile, requestsDir, mailFile, smtpAddr, certsDir string
 	cmd := &cobra.Command{
 		Use:   "router",
 		Short: "Run the edge router (subdomain routing + auto HTTPS) — runs on the server",
@@ -39,6 +40,9 @@ func newRouterCmd() *cobra.Command {
 			}
 			if mailFile == "" {
 				mailFile = filepath.Join(home, ".skiff", "mail.json")
+			}
+			if certsDir == "" {
+				certsDir = defaultCertsDir(runtime.GOOS, home)
 			}
 			if httpAddr != "" && !cmd.Flags().Changed("smtp-addr") {
 				smtpAddr = ""
@@ -78,7 +82,7 @@ func newRouterCmd() *cobra.Command {
 			}
 			ui.Note("serving :80 (ACME) + :443 (auto HTTPS)")
 			fmt.Println()
-			return rt.ServeTLS("/var/lib/skiff/certs")
+			return rt.ServeTLS(certsDir)
 		},
 	}
 	cmd.Flags().StringVar(&domain, "domain", "", "base domain — apps served at <app>.<domain>")
@@ -91,5 +95,14 @@ func newRouterCmd() *cobra.Command {
 	cmd.Flags().StringVar(&requestsDir, "requests-dir", "", "directory for the per-request log (default ~/.skiff/requests)")
 	cmd.Flags().StringVar(&mailFile, "mail-file", "", "file of email forwarding rules (default ~/.skiff/mail.json)")
 	cmd.Flags().StringVar(&smtpAddr, "smtp-addr", ":25", "address to receive forwarded email on (empty disables)")
+	cmd.Flags().StringVar(&certsDir, "certs-dir", "", "directory for issued certificates (default /var/lib/skiff/certs on Linux, ~/.skiff/certs elsewhere)")
 	return cmd
+}
+
+// defaultCertsDir keeps certificates where the Linux installer has always put them. Elsewhere (a Mac, where the router runs as the logged-in user) there is no /var/lib to write to.
+func defaultCertsDir(goos, home string) string {
+	if goos == "linux" {
+		return "/var/lib/skiff/certs"
+	}
+	return filepath.Join(home, ".skiff", "certs")
 }
