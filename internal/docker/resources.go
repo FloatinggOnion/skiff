@@ -22,7 +22,7 @@ type DBRunSpec struct {
 	Entrypoint string            // optional --entrypoint override (e.g. "sh" to fix TLS cert perms)
 	Aliases    []string          // extra names on the network, such as a Compose service name
 	Binds      []string          // extra bind mounts, "host:container[:ro]" (e.g. the TLS cert dir)
-	Memory     string            // optional memory limit
+	Memory     string            // optional memory limit; otherwise the safety cap
 }
 
 // RunDatabase (re)creates a managed database container, returning the published host port when Publish is set (0 otherwise); reusing the same name + volume preserves the data.
@@ -33,9 +33,8 @@ func (e *Engine) RunDatabase(s DBRunSpec) (int, error) {
 	if s.Entrypoint != "" {
 		args = append(args, "--entrypoint", s.Entrypoint)
 	}
-	if s.Memory != "" {
-		args = append(args, "--memory", s.Memory)
-	}
+	args = append(args, e.limitArgs()...)
+	args = append(args, "--memory", e.memoryOr(s.Memory))
 	for _, k := range sortedKeys(s.Labels) {
 		args = append(args, "--label", k+"="+s.Labels[k])
 	}
@@ -88,17 +87,9 @@ func (e *Engine) PullImage(image string) error {
 	return nil
 }
 
-// RunOnce runs a throwaway container executing a shell command (sh -c), for release commands (migrations) and scheduled jobs.
-func (e *Engine) RunOnce(ctx context.Context, image string, env map[string]string, network string, volumes []Mount, cmd string) (string, error) {
-	args := []string{"run", "--rm", "--memory", e.memoryOr("")}
-	args = append(args, e.limitArgs()...)
-	if network != "" {
-		args = append(args, "--network", network)
-	}
-	args = append(args, mountArgs(volumes)...)
-	for _, k := range sortedKeys(env) {
-		args = append(args, "-e", fmt.Sprintf("%s=%s", k, env[k]))
-	}
+// RunOnce runs a throwaway container executing a shell command (sh -c), for release commands (migrations) and scheduled jobs, with the same settings as the app it belongs to.
+func (e *Engine) RunOnce(ctx context.Context, image, cmd string, s Settings) (string, error) {
+	args := append([]string{"run", "--rm"}, e.settingsArgs(s)...)
 	args = append(args, image, "sh", "-c", cmd)
 	out, err := e.contextCommand(ctx, args...).CombinedOutput()
 	return string(out), err

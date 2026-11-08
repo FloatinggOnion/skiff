@@ -10,21 +10,43 @@ import (
 	"github.com/nuelScript/skiff/internal/config"
 )
 
+// Settings are what every container Skiff starts for an app shares, whatever it's for: what it can use, what it sees and how it starts.
+type Settings struct {
+	Memory  string // optional, e.g. "512m"; otherwise the safety cap
+	CPU     string // optional, e.g. "0.5"
+	Env     map[string]string
+	Network string // optional docker network to join (for reaching managed resources by name)
+	Volumes []Mount
+	Options config.RunOptions
+}
+
+// settingsArgs is the one place Settings become docker flags, so a limit or start setting means the same for an app, its workers, its jobs and its release command.
+func (e *Engine) settingsArgs(s Settings) []string {
+	args := e.limitArgs()
+	args = append(args, "--memory", e.memoryOr(s.Memory))
+	if s.CPU != "" {
+		args = append(args, "--cpus", s.CPU)
+	}
+	if s.Network != "" {
+		args = append(args, "--network", s.Network)
+	}
+	args = append(args, mountArgs(s.Volumes)...)
+	for _, k := range sortedKeys(s.Env) {
+		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
+	}
+	return append(args, s.Options.DockerArgs()...)
+}
+
 type RunSpec struct {
+	Settings
 	Public        bool // on all interfaces, for a box with no router in front of its apps
 	Name          string
 	App           string // app name, for the skiff.app route label
 	Image         string
 	ContainerPort int
-	Memory        string // optional, e.g. "512m"
-	CPU           string // optional, e.g. "0.5"
-	Env           map[string]string
-	Network       string // optional docker network to join (for reaching managed resources by name)
 	Labels        map[string]string
-	Volumes       []Mount
 	Aliases       []string // extra names on the network, such as a Compose service name
 	Command       []string // replaces the image's default command
-	Options       config.RunOptions
 }
 
 type Route struct {
@@ -98,10 +120,8 @@ func (e *Engine) runArgs(s RunSpec) []string {
 		"--name", s.Name,
 		"--restart", "unless-stopped",
 		"--label", "skiff=1",
-		"-e", fmt.Sprintf("PORT=%d", s.ContainerPort),
 		"-p", fmt.Sprintf("%s::%d", bind, s.ContainerPort),
 	}
-	args = append(args, e.limitArgs()...)
 	if s.App != "" {
 		args = append(args, "--label", "skiff.app="+s.App, "--label", fmt.Sprintf("skiff.port=%d", s.ContainerPort))
 	}
@@ -110,9 +130,8 @@ func (e *Engine) runArgs(s RunSpec) []string {
 			args = append(args, "--label", k+"="+s.Labels[k])
 		}
 	}
+	// A stable name for other services on the network; docker spreads lookups across replicas.
 	if s.Network != "" {
-		args = append(args, "--network", s.Network)
-		// A stable name for other services on the network; docker spreads lookups across replicas.
 		if s.App != "" {
 			args = append(args, "--network-alias", s.App)
 		}
@@ -120,15 +139,8 @@ func (e *Engine) runArgs(s RunSpec) []string {
 			args = append(args, "--network-alias", a)
 		}
 	}
-	args = append(args, "--memory", e.memoryOr(s.Memory))
-	if s.CPU != "" {
-		args = append(args, "--cpus", s.CPU)
-	}
-	args = append(args, mountArgs(s.Volumes)...)
-	for _, k := range sortedKeys(s.Env) {
-		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
-	}
-	args = append(args, s.Options.DockerArgs()...)
+	args = append(args, "-e", fmt.Sprintf("PORT=%d", s.ContainerPort))
+	args = append(args, e.settingsArgs(s.Settings)...)
 	args = append(args, s.Image)
 	return append(args, s.Options.Command(s.Command)...)
 }
@@ -143,37 +155,20 @@ func (e *Engine) waitHostPort(name string, containerPort int) (int, error) {
 	return port, err
 }
 
-// WorkerSpec runs a long-lived background process with no published port or routing labels, so the edge router never targets it.
+// WorkerSpec runs a long-lived background process with no published port, routing labels or network aliases, so nothing routes to it.
 type WorkerSpec struct {
+	Settings
 	Name    string
 	App     string
 	Image   string
 	Command string // run via sh -c
-	Env     map[string]string
-	Network string
-	Volumes []Mount
-	Memory  string
-	CPU     string
-	Options config.RunOptions
 }
 
 func (e *Engine) RunWorker(s WorkerSpec) error {
 	_ = e.command("rm", "-f", s.Name).Run()
 	args := []string{"run", "-d", "--name", s.Name, "--restart", "unless-stopped",
-		"--label", "skiff.kind=worker", "--label", "skiff.worker.app=" + s.App,
-		"--memory", e.memoryOr(s.Memory)}
-	args = append(args, e.limitArgs()...)
-	if s.CPU != "" {
-		args = append(args, "--cpus", s.CPU)
-	}
-	if s.Network != "" {
-		args = append(args, "--network", s.Network)
-	}
-	args = append(args, mountArgs(s.Volumes)...)
-	for _, k := range sortedKeys(s.Env) {
-		args = append(args, "-e", fmt.Sprintf("%s=%s", k, s.Env[k]))
-	}
-	args = append(args, s.Options.DockerArgs()...)
+		"--label", "skiff.kind=worker", "--label", "skiff.worker.app=" + s.App}
+	args = append(args, e.settingsArgs(s.Settings)...)
 	args = append(args, s.Image, "sh", "-c", s.Command)
 	if out, err := e.command(args...).CombinedOutput(); err != nil {
 		return cmdErr(out, err)

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nuelScript/skiff/internal/config"
 	"github.com/nuelScript/skiff/internal/docker"
 )
 
@@ -100,9 +99,7 @@ func (p *Panel) reconcileWorkers(app string) {
 	if !p.eng.ImageExists(image) {
 		return
 	}
-	env, net := p.appRuntime(src)
-	_ = p.eng.EnsureNetwork(net)
-	mounts := p.appMounts(src)
+	settings := p.appSettings(src)
 	for _, w := range listWorkers(app) {
 		reps := w.Replicas
 		if reps < 1 {
@@ -110,10 +107,7 @@ func (p *Panel) reconcileWorkers(app string) {
 		}
 		for range reps {
 			name := workerPrefix(app, w.Name) + replicaSuffix()
-			_ = p.eng.RunWorker(docker.WorkerSpec{
-				Name: name, App: app, Image: image, Command: w.Command, Env: env, Network: net, Volumes: mounts,
-				Memory: healthOf(src).Memory, CPU: healthOf(src).CPU, Options: config.DecodeRunOptions(src.RunOptions),
-			})
+			_ = p.eng.RunWorker(docker.WorkerSpec{Settings: settings, Name: name, App: app, Image: image, Command: w.Command})
 		}
 	}
 }

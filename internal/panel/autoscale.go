@@ -167,14 +167,12 @@ func (p *Panel) scaleUp(app registry.App, src Source, count int) int {
 			App:           app.Name,
 			Image:         image,
 			ContainerPort: app.Port,
-			Env:           env,
-			Network:       net,
-			Volumes:       mounts,
-			Memory:        memory,
-			CPU:           cpu,
-			Aliases:       stackAliases(src),
-			Command:       stackCommand(src),
-			Options:       config.DecodeRunOptions(src.RunOptions),
+			Settings: docker.Settings{
+				Env: env, Network: net, Volumes: mounts, Memory: memory, CPU: cpu,
+				Options: config.DecodeRunOptions(src.RunOptions),
+			},
+			Aliases: stackAliases(src),
+			Command: stackCommand(src),
 		})
 		if err != nil {
 			break

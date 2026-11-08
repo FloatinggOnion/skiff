@@ -315,11 +315,16 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 		mounts = append(mounts, docker.Mount{Name: name, Destination: v.Path})
 	}
 
+	settings := docker.Settings{
+		Memory: cfg.Resources.Memory, CPU: cfg.Resources.CPU, Env: runtimeEnv, Network: network, Volumes: mounts,
+		Options: config.DecodeRunOptions(cfg.Deploy.RunOptions),
+	}
+
 	// Release command (e.g. migrations) runs once before the new version goes live; on failure abort — the old version keeps serving.
 	if rel := strings.TrimSpace(cfg.Deploy.Release); rel != "" {
 		ui.Step("Running release command")
 		rctx, cancel := context.WithTimeout(context.Background(), timeout)
-		out, err := eng.RunOnce(rctx, image, runtimeEnv, network, mounts, rel)
+		out, err := eng.RunOnce(rctx, image, rel, settings)
 		cancel()
 		if err != nil {
 			ui.Fail("Release command failed — deploy aborted, old version still serving")
@@ -379,15 +384,10 @@ func releaseImage(eng *docker.Engine, cfg *config.Config, spec releaseSpec) erro
 			Image:         image,
 			ContainerPort: cfg.Build.Port,
 			Public:        direct,
-			Memory:        cfg.Resources.Memory,
-			CPU:           cfg.Resources.CPU,
-			Env:           runtimeEnv,
-			Network:       network,
+			Settings:      settings,
 			Labels:        labels,
-			Volumes:       mounts,
 			Aliases:       cfg.Deploy.Aliases,
 			Command:       cfg.Deploy.Command,
-			Options:       config.DecodeRunOptions(cfg.Deploy.RunOptions),
 		})
 		if err != nil {
 			crashed := keptExiting(eng, container)

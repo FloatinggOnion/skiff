@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nuelScript/skiff/internal/config"
 )
 
 func TestParsePercent(t *testing.T) {
@@ -149,7 +151,7 @@ func TestSortDeployTagsNewestFirst(t *testing.T) {
 }
 
 func TestAppContainersAreLimitedAndLocal(t *testing.T) {
-	args := strings.Join((&Engine{}).runArgs(RunSpec{Name: "a-1", App: "a", Image: "img", ContainerPort: 3000, Memory: "256m"}), " ")
+	args := strings.Join((&Engine{}).runArgs(RunSpec{Name: "a-1", App: "a", Image: "img", ContainerPort: 3000, Settings: Settings{Memory: "256m"}}), " ")
 	for _, want := range []string{
 		"--pids-limit 4096", "-p 127.0.0.1::3000",
 	} {
@@ -172,5 +174,23 @@ func TestRunBindsLoopbackUnlessPublic(t *testing.T) {
 	}
 	if got := strings.Join(e.runArgs(RunSpec{Name: "a", Image: "i", ContainerPort: 3000, Public: true}), " "); !strings.Contains(got, "-p 0.0.0.0::3000") {
 		t.Errorf("public bind: %s", got)
+	}
+}
+
+func TestSettingsMeanTheSameEverywhere(t *testing.T) {
+	e := &Engine{}
+	s := Settings{
+		Memory: "256m", CPU: "0.5", Network: "net", Env: map[string]string{"A": "1"},
+		Volumes: []Mount{{Name: "vol", Destination: "/data"}},
+		Options: config.RunOptions{User: "app", WorkingDir: "/srv"},
+	}
+	shared := strings.Join(e.settingsArgs(s), " ")
+	for _, want := range []string{"--pids-limit 4096", "--memory 256m", "--cpus 0.5", "--network net", "-e A=1", "--user app", "--workdir /srv", "/data"} {
+		if !strings.Contains(shared, want) {
+			t.Errorf("missing %q in: %s", want, shared)
+		}
+	}
+	if app := strings.Join(e.runArgs(RunSpec{Settings: s, Name: "a", App: "a", Image: "i", ContainerPort: 3000}), " "); !strings.Contains(app, shared) {
+		t.Errorf("an app's container doesn't get the shared settings:\n%s\nwant %s", app, shared)
 	}
 }

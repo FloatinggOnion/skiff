@@ -125,11 +125,9 @@ func (p *Panel) execJob(j jobRow) (string, error) {
 	if !p.eng.ImageExists(image) {
 		return "", fmt.Errorf("deploy the app before running jobs")
 	}
-	env, net := p.appRuntime(src)
-	_ = p.eng.EnsureNetwork(net)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	out, err := p.eng.RunOnce(ctx, image, env, net, p.appMounts(src), j.Command)
+	out, err := p.eng.RunOnce(ctx, image, j.Command, p.appSettings(src))
 	setJobRun(j.ID, time.Now().Unix(), err == nil)
 	return out, err
 }
