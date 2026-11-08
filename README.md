@@ -69,7 +69,7 @@ No Dockerfile required — Skiff detects the stack and generates the build:
 | Stack | Detected by |
 |---|---|
 | **Node.js** | `package.json` — framework-aware (Next, Vite, Astro, SvelteKit, Remix, Nuxt, …) |
-| **Python** | `requirements.txt` / `*.py` |
+| **Python** | `requirements.txt`, `uv.lock`, `poetry.lock`, `Pipfile`, `pyproject.toml` / `*.py` |
 | **Go** | `go.mod` → multi-stage, tiny image |
 | **Rust** | `Cargo.toml` → multi-stage |
 | **Ruby** | `Gemfile` |
@@ -78,6 +78,14 @@ No Dockerfile required — Skiff detects the stack and generates the build:
 | **.NET** | `*.csproj` |
 | **PHP** | `index.php` |
 | **Static** | `index.html` |
+
+For Python, dependencies install from the first of `requirements.txt`, `uv.lock`,
+`poetry.lock`, `Pipfile.lock` / `Pipfile`, or `pyproject.toml` (`pip install .`).
+It starts the `Procfile` `web:` command, else `main.py` / `app.py` / `server.py`,
+else the console script in `[project.scripts]` or `[tool.poetry.scripts]` (the
+only one, or the one named after the project). The Python version comes from
+`.python-version`; for uv and Poetry also from `requires-python`, and for Pipenv
+from the Pipfile. Otherwise it's the latest `python:3`.
 
 Have a `Dockerfile`? Skiff uses it instead. Need to tweak a step? Set `[build]`
 commands in `skiff.toml` — the escape hatch short of a full Dockerfile. Already

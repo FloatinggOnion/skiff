@@ -1,0 +1,4 @@
+name = "python-pyproject"
+
+[build]
+port = 8000
