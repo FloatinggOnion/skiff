@@ -227,8 +227,6 @@ EOF
        A   *.$DOMAIN     $ip
        A   $DOMAIN       $ip     (optional — for the apex/marketing site)
 
-     MX  $DOMAIN       10 mx.$DOMAIN  (optional — for email forwarding)
-
   2. Forward ports 80 and 443 on your router to this Mac. (Behind home
      broadband that is how the internet reaches it.)
 

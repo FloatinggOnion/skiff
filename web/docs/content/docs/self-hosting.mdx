@@ -138,6 +138,8 @@ What differs from a Linux server:
 | Logs | `journalctl -u skiff-router` | `~/.skiff/logs/router.log` and `panel.log` |
 | Update | re-run the installer | re-run the installer |
 
+On a Mac, `~/.skiff/skiff.env` is read by the shell, not as plain `KEY=value` lines. Wrap any value with spaces, or characters such as `$`, `;`, `<` or quotes, in single quotes, for example `SKIFF_SMTP_PASS='p@ss word'`. To put a single quote inside a value, write it as `'\''`. Otherwise the shell reads the value differently, or drops it.
+
 Not supported on a Mac yet: the panel updating itself from its own repository, `skiff db connect`, deploying to the Mac from another machine over SSH (`[server] host`), and the CPU, memory and uptime on the **Server** page.
 
 To remove Skiff, run the installer with `--uninstall`. It stops the agents and deletes the binary. Your apps keep running in Docker, and your data stays in `~/.skiff` until you delete it:
